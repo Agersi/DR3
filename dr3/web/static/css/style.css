@@ -22,6 +22,8 @@
   --body: 'Barlow', system-ui, -apple-system, sans-serif;
   --mono: ui-monospace, 'Cascadia Mono', Consolas, 'Courier New', monospace;
   --shadow: rgba(0, 0, 0, 0.45);
+  /* Content column: full width on small screens, capped + centered on big ones */
+  --page-max: 1440px;
 }
 
 * { box-sizing: border-box; }
@@ -46,13 +48,13 @@ body {
 a { color: var(--muted); }
 a:hover { color: var(--text); }
 
-main { max-width: 960px; width: 100%; margin: 0 auto; padding: 0 1.25rem 2rem; flex: 1 0 auto; }
+main { max-width: var(--page-max); width: 100%; margin: 0 auto; padding: 0 1.25rem 2rem; flex: 1 0 auto; }
 
 /* ── Header ─────────────────────────────────────────── */
 
 .site-header { background: var(--bg); color: var(--text); border-bottom: 2px solid var(--line); }
 .header-inner {
-  max-width: 1080px; margin: 0 auto; padding: 0.85rem 1.25rem;
+  max-width: var(--page-max); margin: 0 auto; padding: 0.85rem 1.25rem;
   display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;
 }
 .brand { display: flex; align-items: center; gap: 0.65rem; margin-right: auto; text-decoration: none; color: var(--text); }
@@ -81,7 +83,7 @@ main { max-width: 960px; width: 100%; margin: 0 auto; padding: 0 1.25rem 2rem; f
 
 .site-footer { background: var(--bg); color: var(--text); margin-top: auto; border-top: 2px solid var(--line); }
 .footer-inner {
-  max-width: 1080px; margin: 0 auto; padding: 0.9rem 1.25rem;
+  max-width: var(--page-max); margin: 0 auto; padding: 0.9rem 1.25rem;
   display: flex; gap: 1rem; justify-content: space-between; flex-wrap: wrap;
   font-size: 0.9rem; letter-spacing: 0.03em;
 }
@@ -138,6 +140,9 @@ hr {
 .club-card .title-link { color: var(--text); text-decoration: none; }
 .club-card .title-link:hover { color: var(--text); text-decoration: underline; }
 .club-card .desc { color: var(--muted); font-size: 0.95rem; flex: 1; }
+
+.grid-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.1rem; margin: 1.1rem 0; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.1rem; margin: 1.1rem 0; }
 
 .stat-card {
   background: var(--card); border: 2px solid var(--line);
@@ -321,6 +326,11 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
 .token-box { display: flex; gap: 0.6rem; align-items: stretch; flex-wrap: wrap; }
 .token-box code { flex: 1 1 260px; margin: 0; background: var(--bg); color: var(--text); border: 2px solid var(--line); padding: 0.55rem 0.7rem; font-size: 0.95rem; }
 .token-box button { flex: none; align-self: center; margin-top: 0; }
+
+@media (max-width: 900px) {
+  .grid-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-3 { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 640px) {
   html { font-size: 18px; }
