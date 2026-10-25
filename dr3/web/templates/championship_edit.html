@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}Edit Championship — {{ club.name }}{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="{{ url_for('clubs.clubs_list') }}">Clubs</a> / <a href="{{ url_for('clubs.club_detail', club_id=club.id) }}">{{ club.name }}</a></p>
+<h1>Edit Championship</h1>
+
+<form id="championshipForm" method="post" action="{{ url_for('clubs.championship_edit', club_id=club.id, draft_id=draft.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  {% for event in draft.events %}
+  {%- set ei = loop.index0 -%}
+  <div class="panel" id="event-{{ ei }}">
+    <h2>Event {{ ei + 1 }} of {{ draft.events|length }}</h2>
+
+    <label>Location</label>
+    <select name="events[{{ ei }}][location]" class="champ-location" data-event="{{ ei }}" required>
+      <option value="">Select location...</option>
+      <optgroup label="Rally">
+        {% for loc in rally_locs %}<option value="{{ loc }}" {% if event.location == loc %}selected{% endif %}>{{ loc }}</option>{% endfor %}
+      </optgroup>
+      <optgroup label="Rallycross">
+        {% for loc in rx_locs %}<option value="{{ loc }}" {% if event.location == loc %}selected{% endif %}>{{ loc }}</option>{% endfor %}
+      </optgroup>
+    </select>
+
+    {% if draft.mode != 'season' and ei > 0 %}
+    <label>Vehicle class</label>
+    <p class="meta">Same as Event 1 — car damage and tyre state carry over between rallies, so the whole championship runs one vehicle class.</p>
+    {% else %}
+    <label>Vehicle class — rally and rallycross cars are both allowed on any track type{% if draft.mode == 'season' %}; each rally may use its own class{% endif %}</label>
+    <select name="events[{{ ei }}][car_class]" required>
+      <option value="">Select class...</option>
+      {% for cls in car_classes %}<option value="{{ cls }}" {% if event.car_class == cls %}selected{% endif %}>{{ cls }}</option>{% endfor %}
+    </select>
+    {% endif %}
+
+    {% if draft.mode == 'season' or ei == 0 %}
+    <label>{% if draft.mode != 'season' %}Championship duration — all rallies run in this one shared window{% else %}Rally duration{% endif %}</label>
+    <div class="duration-row">
+      <select name="events[{{ ei }}][duration_days]">
+        {% for d in range(0, max_event_days + 1) %}<option value="{{ d }}" {% if event.duration.days == d %}selected{% endif %}>{{ d }} day{{ 's' if d != 1 }}</option>{% endfor %}
+      </select>
+      <select name="events[{{ ei }}][duration_hours]">
+        {% for h in range(0, 24) %}<option value="{{ h }}" {% if event.duration.hours == h %}selected{% endif %}>{{ h }} hour{{ 's' if h != 1 }}</option>{% endfor %}
+      </select>
+      <select name="events[{{ ei }}][duration_mins]">
+        {% for m in [0, 15, 30, 45] %}<option value="{{ m }}" {% if event.duration.mins == m %}selected{% endif %}>{{ m }} min</option>{% endfor %}
+      </select>
+    </div>
+    <p class="meta">{% if draft.mode != 'season' and draft.events|length > 1 %}Rallies {{ ei + 2 }}–{{ draft.events|length }} run on this same timer.{% elif draft.mode == 'season' %}This rally opens when the previous one's window ends and closes when its own duration runs out.{% endif %}</p>
+    {% endif %}
+
+    <div class="rx-laps-row" data-event="{{ ei }}" {% if event.location not in rx_locs %}hidden{% endif %}>
+      <label>Laps per stage — rallycross circuit</label>
+      <select name="events[{{ ei }}][rx_laps]">
+        <option value="">Default (heats 4, knockout 6)</option>
+        {% for n in range(min_rx_laps, max_rx_laps + 1) %}
+        <option value="{{ n }}" {% if event.rx_laps == n %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+      <p class="meta">Applies to every stage of this rallycross event. "Default" keeps the standard format.</p>
+    </div>
+
+    <div class="table-wrap">
+      <table class="champ-stages">
+        <tr><th>#</th><th>Route</th><th>Time of day / conditions</th><th>Surface deg.</th><th>Service area</th><th></th></tr>
+        {% for stage in event.stages %}
+        {%- set sj = loop.index0 -%}
+        {%- set ev_routes = stage_routes.get(event.location, []) -%}
+        <tr class="champ-stage-row" data-event="{{ ei }}">
+          <td class="num">{{ '%02d'|format(sj + 1) }}</td>
+          <td>
+            <select name="events[{{ ei }}][stages][{{ sj }}][route]" class="champ-route" data-event="{{ ei }}">
+              <option value="">{% if ev_routes %}Select route...{% else %}Select a location first{% endif %}</option>
+              {% for tid, rname, km in ev_routes %}
+              <option value="{{ tid }}" {% if stage.track_id == tid or ev_routes|length == 1 %}selected{% endif %}>{{ rname }} — {{ '%.2f'|format(km) }} km</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <select name="events[{{ ei }}][stages][{{ sj }}][conditions]" class="champ-conditions" data-event="{{ ei }}">
+              {% if not conditions_by_location.get(event.location) %}<option value="">Select a location first</option>{% endif %}
+              {% set valid_ids = conditions_by_location.get(event.location, [])|map(attribute=0)|list %}
+              {% for cid, label in conditions_by_location.get(event.location, []) %}
+              <option value="{{ cid }}"
+                      {% if stage.conditions_id == cid or (stage.conditions_id not in valid_ids and loop.first) %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <select name="events[{{ ei }}][stages][{{ sj }}][surface_deg]">
+              {% for opt in surface_deg_options %}<option value="{{ opt }}" {% if stage.surface_deg == opt %}selected{% endif %}>{{ opt }}</option>{% endfor %}
+            </select>
+          </td>
+          <td>
+            <select name="events[{{ ei }}][stages][{{ sj }}][service_area]">
+              {% for opt in service_area_options %}<option value="{{ opt }}" {% if stage.service_area == opt %}selected{% endif %}>{{ opt }}</option>{% endfor %}
+            </select>
+          </td>
+          <td>
+            <button type="submit" name="action" value="delete_stage:{{ ei }}:{{ sj }}" class="ghost small">Remove</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+
+    <button type="submit" name="action" value="add_stage:{{ ei }}" class="ghost small">+ Add stage</button>
+    <span class="champ-stage-hint meta" data-event="{{ ei }}"></span>
+    <button type="submit" name="action" value="add_event" class="small">+ Add new event</button>
+    <button type="submit" name="action" value="delete_event:{{ ei }}" {% if draft.events|length == 1 %}disabled{% endif %} class="danger small">Delete event</button>
+  </div>
+  {% endfor %}
+
+  <div class="panel actions-row">
+    <button type="submit" name="action" value="save" class="ghost">Save draft</button>
+    <button type="submit" name="action" value="preview">Continue to preview</button>
+    <button type="submit" form="discardDraftForm" class="danger">Discard draft</button>
+  </div>
+</form>
+
+<form id="discardDraftForm" method="post" action="{{ url_for('clubs.championship_discard', club_id=club.id, draft_id=draft.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+
+<script type="application/json" id="routesByLocation">{{ stage_routes|tojson }}</script>
+<script type="application/json" id="stageCaps">{{ stage_caps|tojson }}</script>
+<script type="application/json" id="conditionsByLocation">{{ conditions_by_location|tojson }}</script>
+<script type="application/json" id="rxLocs">{{ rx_locs|tojson }}</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var routesByLoc = JSON.parse(document.getElementById('routesByLocation').textContent);
+  var caps = JSON.parse(document.getElementById('stageCaps').textContent);
+  var condsByLoc = JSON.parse(document.getElementById('conditionsByLocation').textContent);
+  var rxLocs = JSON.parse(document.getElementById('rxLocs').textContent);
+
+  function optionsHtml(pairs, selected, placeholder) {
+    var html = '<option value="">' + placeholder + '</option>';
+    pairs.forEach(function (p) {
+      var sel = String(p[0]) === String(selected) ? ' selected' : '';
+      var label;
+      if (p.length === 3) label = p[1] + ' — ' + p[2].toFixed(2) + ' km';
+      else label = p[1];
+      html += '<option value="' + p[0] + '"' + sel + '>' + label + '</option>';
+    });
+    return html;
+  }
+
+  function updateStageHint(eventIndex) {
+    var hint = document.querySelector('.champ-stage-hint[data-event="' + eventIndex + '"]');
+    if (!hint) return;
+    var locSel = document.querySelector('.champ-location[data-event="' + eventIndex + '"]');
+    var cap = locSel ? caps[locSel.value] : null;
+    var rows = document.querySelectorAll('.champ-stage-row[data-event="' + eventIndex + '"]').length;
+    if (cap && rows >= cap) hint.textContent = ' (' + locSel.value + ' supports at most ' + cap + ' stages)';
+    else hint.textContent = '';
+  }
+
+  document.querySelectorAll('.champ-location').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      var ei = sel.getAttribute('data-event');
+      var routes = routesByLoc[sel.value] || [];
+      var conds = condsByLoc[sel.value] || [];
+      var autoRoute = routes.length === 1 ? routes[0][0] : '';
+      document.querySelectorAll('.champ-route[data-event="' + ei + '"]').forEach(function (r) {
+        r.innerHTML = optionsHtml(routes, autoRoute, sel.value ? 'Select route...' : 'Select a location first');
+      });
+      document.querySelectorAll('.champ-conditions[data-event="' + ei + '"]').forEach(function (c) {
+        if (!conds.length) c.innerHTML = '<option value="">Select a location first</option>';
+        else c.innerHTML = optionsHtml(conds, '', '');
+      });
+      var lapsRow = document.querySelector('.rx-laps-row[data-event="' + ei + '"]');
+      if (lapsRow) {
+        var isRx = rxLocs.indexOf(sel.value) !== -1;
+        lapsRow.hidden = !isRx;
+        if (!isRx) lapsRow.querySelector('select').value = '';
+      }
+      updateStageHint(ei);
+    });
+  });
+
+  document.querySelectorAll('.champ-stage-row').forEach(function (row) {
+    updateStageHint(row.getAttribute('data-event'));
+  });
+});
+</script>
+{% endblock %}

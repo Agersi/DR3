@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Delete {{ event['name'] }} — {{ club.name }}{% endblock %}
+{% block content %}
+{% set n_rallies = event['events']|length if event.get('events') else 1 %}
+<p class="crumbs"><a href="{{ url_for('clubs.clubs_list') }}">Clubs</a> / <a href="{{ url_for('clubs.club_detail', club_id=club.id) }}">{{ club.name }}</a></p>
+<h1>Delete Championship</h1>
+
+<div class="panel">
+  <h2>{{ event['name'] }}</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Rallies</th><td class="num">{{ n_rallies }}</td></tr>
+      <tr><th>Vehicle class</th><td>{{ event.get('car_class') or '' }}</td></tr>
+      <tr><th>Status</th><td>{% if is_live %}<span class="chip chip-accent">Live — ends in {{ event['end_time'] | countdown }}</span>{% else %}Not live{% endif %}</td></tr>
+      <tr><th>Drivers with results</th><td class="num">{{ driver_count }}</td></tr>
+    </table>
+  </div>
+
+  {% if is_live %}
+  <div class="flash warning">This championship is live right now. Deleting it pulls it out of the game immediately, and anyone part-way through a stage loses their run.</div>
+  {% endif %}
+  {% if driver_count %}
+  <div class="flash error">{{ driver_count }} {{ 'driver has' if driver_count == 1 else 'drivers have' }} posted times. Their results are deleted with the championship and cannot be recovered.</div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('clubs.championship_delete', club_id=club.id, event_id=event['id']) }}" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="danger">Delete championship</button>
+  </form>
+  <a class="btn ghost" href="{{ url_for('clubs.club_detail', club_id=club.id) }}">Cancel</a>
+</div>
+{% endblock %}

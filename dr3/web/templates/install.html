@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Install — Dirt Rally 3.0{% endblock %}
+{% block content %}
+<h1>Installing the local game server</h1>
+<p class="meta">DR3 runs a small local server on your PC that connects DiRT Rally 2.0 to this site. One-time setup takes about two minutes.</p>
+
+<ol class="steps">
+  <li><strong>Download the DR3 client:</strong>
+      <a href="{{ url_for('pages.download_client') }}">DR3-windows.zip</a>.
+      Extract it anywhere — keep the <code>DR3</code> folder intact.</li>
+  <li><strong>Run <code>DR3\DR3.exe</code></strong> and press <strong>START</strong>.
+      Easy Setup (on by default) asks for admin rights once and configures everything:
+      the hosts redirect + a self-signed certificate for the game's online domains.</li>
+  <li><a href="{{ url_for('pages.register') }}">Register</a> on this site and verify your email.</li>
+  <li>Generate a game token on your <a href="{{ url_for('pages.dashboard') }}">dashboard</a>.</li>
+  <li>Paste the token into the DR3 app, press <strong>Save</strong>, then <strong>START</strong>.
+       Launch DiRT Rally 2.0 — club championships and results sync to this site, while official game content stays on the normal game servers.</li>
+</ol>
+
+<div class="panel" id="manual">
+  <h2>Manual setup (Easy Setup off)</h2>
+  <p>If you switch off Easy Setup Mode in the app, do these steps yourself instead.
+     Everything below lives inside the extracted <code>DR3</code> folder.</p>
+  <ol class="steps">
+    <li><strong>Redirect the game's online domains</strong> to your PC.
+        Run as administrator:
+        <pre><code>powershell -ExecutionPolicy Bypass -File scripts\setup_windows_redirect.ps1</code></pre>
+        This adds a marked block to <code>C:\Windows\System32\drivers\etc\hosts</code>
+        pointing the game's EgoNet domains at 127.0.0.1.</li>
+    <li><strong>Generate and trust a local TLS certificate:</strong>
+        <pre><code>python scripts\generate_dev_cert.py --cert runtime\certs\dr2server-cert.pem --key runtime\certs\dr2server-key.pem
+powershell -ExecutionPolicy Bypass -File scripts\install_dev_cert.ps1</code></pre></li>
+    <li><strong>Run the server headless:</strong>
+        <pre><code>python -m dr2server.httpd --data-dir data --ssl-cert runtime\certs\dr2server-cert.pem --ssl-key runtime\certs\dr2server-key.pem --api-url https://byagersi.com/rally --api-token df_...</code></pre></li>
+  </ol>
+  <p class="meta">To undo the redirect later:
+    <code>powershell -ExecutionPolicy Bypass -File scripts\remove_windows_redirect.ps1</code></p>
+</div>
+
+<div class="panel">
+  <h2>Known limitations</h2>
+  <ul class="steps">
+    <li><strong>Rallycross Tires screen:</strong> If using Rally cars on rallycross circuits the game shows a
+        tire selection screen. Clicking this tire button WILL crash the game — this is a DiRT Rally 2.0 bug
+        that can not be fixed by this mod. If you do happen to click the tires button, don't worry, you can
+        simply restart the game and rejoin the club where you left off.</li>
+  </ul>
+</div>
+{% endblock %}

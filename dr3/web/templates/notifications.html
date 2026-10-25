@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Notifications — Dirt Rally 3.0{% endblock %}
+{% block content %}
+<h1>Notifications</h1>
+{% if items %}
+<div class="table-wrap">
+  <table>
+    <tr><th>When</th><th>Type</th><th>Detail</th></tr>
+    {% for n in items %}
+    <tr>
+      <td class="num">{{ n.created_at.strftime('%Y-%m-%d %H:%M') if n.created_at else '' }}</td>
+      <td><span class="chip">{{ n.kind }}</span></td>
+      <td>{{ n.payload_json }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% else %}
+<p>Nothing yet.</p>
+{% endif %}
+{% endblock %}

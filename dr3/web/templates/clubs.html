@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Clubs — Dirt Rally 3.0{% endblock %}
+{% block content %}
+<h1>Clubs</h1>
+
+<div class="panel">
+  <form method="get" action="{{ url_for('clubs.clubs_list') }}" class="inline-search">
+    <input type="search" name="q" value="{{ query or '' }}" placeholder="Search clubs by name or description">
+    <button type="submit">Search</button>
+  </form>
+</div>
+
+{% if logged_in %}
+<div class="panel">
+  <h2>Create a club</h2>
+  <form method="post" action="{{ url_for('clubs.create_club') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="club_name">Name</label>
+    <input id="club_name" name="name" maxlength="40" required placeholder="e.g. Gravel Gods">
+    <label for="club_desc">Description</label>
+    <textarea id="club_desc" name="description" rows="3" placeholder="What is this club about?"></textarea>
+    <label for="club_vis">Visibility</label>
+    <select id="club_vis" name="visibility">
+      <option value="public">Public — anyone can find and view the club</option>
+      <option value="private">Private — only members, admins and invited users can see it</option>
+    </select>
+    <label for="club_policy">Join policy</label>
+    <select id="club_policy" name="join_policy">
+      <option value="open">Open — anyone can join immediately</option>
+      <option value="approval">Approval — members must request to join and be approved</option>
+    </select>
+    <button type="submit">Create club</button>
+  </form>
+</div>
+{% endif %}
+
+<h2>{% if query %}Results for “{{ query }}”{% else %}All clubs{% endif %}</h2>
+{% if clubs %}
+<div class="grid">
+  {% for c in clubs %}
+  {%- set info = event_by_club.get(c.id) -%}
+  <div class="club-card">
+    <h3><a class="title-link" href="{{ url_for('clubs.club_detail', club_id=c.id) }}">{{ c.name }}</a></h3>
+    <p class="desc">{{ c.description or 'No description yet.' }}</p>
+    <div class="chips-row">
+      <span class="chip chip-warn">{{ c.members|length }} members</span>
+      {% if info %}
+        {% if info.live %}
+        <span class="chip chip-ok">Live — ends in {{ info.end | countdown }}</span>
+        {% else %}
+        <span class="chip chip-accent">Starts in {{ info.event['start_time'] | countdown }}</span>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p>No clubs found.</p>
+{% endif %}
+{% endblock %}

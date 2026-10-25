@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Dirt Rally 3.0 — Home{% endblock %}
+{% block content %}
+<div class="hero">
+  <div class="hero-copy">
+    <h1>Dirt Rally 3.0</h1>
+    <p class="tagline">Community club championship server for DiRT Rally 2.0 — create clubs, run championships, and sync results from the game.</p>
+    {% if session.get('user_id') %}
+      <a class="btn" href="{{ url_for('pages.dashboard') }}">Open dashboard</a>
+      <a class="btn ghost" href="{{ url_for('clubs.clubs_list') }}">Browse clubs</a>
+    {% else %}
+      <a class="btn" href="{{ url_for('pages.register') }}">Join now</a>
+      <a class="btn ghost" href="{{ url_for('pages.install') }}">How it works</a>
+    {% endif %}
+  </div>
+</div>
+
+<h2>Get started</h2>
+<ol class="steps">
+  <li><a href="{{ url_for('pages.register') }}">Register</a> and verify your email.</li>
+  <li><a href="{{ url_for('pages.install') }}">Install the local game server</a>.</li>
+  <li>Generate your game token on the <a href="{{ url_for('pages.dashboard') }}">dashboard</a>, create or join a club, and start playing.</li>
+</ol>
+{% endblock %}

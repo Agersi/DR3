@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ target.display_name }} — Dirt Rally 3.0{% endblock %}
+{% block content %}
+<div class="panel">
+  <h1>{{ target.display_name }}</h1>
+  <p class="meta">@{{ target.username }}{% if target.country %} · {{ target.country }}{% endif %}</p>
+  {% if target.bio %}<p>{{ target.bio }}</p>{% endif %}
+</div>
+{% endblock %}

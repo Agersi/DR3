@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block title %}{{ club.name }} — Dirt Rally 3.0{% endblock %}
+{% block content %}
+<h1>{{ club.name }}</h1>
+<div class="chips-row">
+  <span class="chip {% if visibility == 'public' %}chip-ok{% else %}chip-warn{% endif %}">{{ visibility }}</span>
+  <span class="chip">{% if join_policy == 'approval' %}Approval to join{% else %}Open join{% endif %}</span>
+</div>
+{% if club.description %}<p>{{ club.description }}</p>{% endif %}
+
+{% set logged_in = session.get('user_id') %}
+
+{# ── Membership actions ─────────────────────────────── #}
+<div class="panel">
+  <h2>Your status</h2>
+  {% if is_member %}
+    <p>You are a member{% if is_owner %} and the owner{% elif is_admin %} (admin){% endif %}.</p>
+    {% if not is_owner %}
+    <form method="post" action="{{ url_for('clubs.leave_club', club_id=club.id) }}" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="warn">Leave club</button>
+    </form>
+    {% endif %}
+  {% elif has_pending_invite %}
+    <p>You have a pending invite to this club.</p>
+    <form method="post" action="{{ url_for('clubs.accept_invite', club_id=club.id) }}" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit">Accept invite</button>
+    </form>
+    <form method="post" action="{{ url_for('clubs.decline_invite', club_id=club.id) }}" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="ghost">Decline</button>
+    </form>
+  {% elif has_pending_request %}
+    <p>Your join request is pending approval.</p>
+    <form method="post" action="{{ url_for('clubs.cancel_join_request', club_id=club.id) }}" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="ghost">Cancel request</button>
+    </form>
+  {% elif not logged_in %}
+    <p><a href="{{ url_for('pages.login', next=request.path) }}">Log in</a> to join this club.</p>
+  {% elif join_policy == 'approval' %}
+    <form method="post" action="{{ url_for('clubs.request_join_club', club_id=club.id) }}" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit">Request to join</button>
+    </form>
+  {% else %}
+    <form method="post" action="{{ url_for('clubs.join_club', club_id=club.id) }}" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit">Join club</button>
+    </form>
+  {% endif %}
+</div>
+
+{# ── Pending join requests (admins) ─────────────────── #}
+{% if is_admin and pending_users %}
+<h2>Pending join requests</h2>
+<div class="table-wrap">
+  <table>
+    <tr><th>User</th><th>Requested</th><th></th></tr>
+    {% for p in pending_users %}
+    <tr>
+      <td>{{ p.user.display_name }} ({{ p.user.username }})</td>
+      <td class="num">{{ p.requested_at | timeago }}</td>
+      <td>
+        <form method="post" action="{{ url_for('clubs.approve_join_request', club_id=club.id, username=p.user.username) }}" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="small">Approve</button>
+        </form>
+        <form method="post" action="{{ url_for('clubs.deny_join_request', club_id=club.id, username=p.user.username) }}" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="ghost small">Deny</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{# ── Members ────────────────────────────────────────── #}
+<h2>Members ({{ members|length }})</h2>
+<div class="table-wrap">
+  <table>
+    <tr><th>User</th><th>Display name</th><th>Role</th>{% if is_owner %}<th></th>{% endif %}</tr>
+    {% for m in members %}
+    <tr>
+      <td>{{ m.user.username }}</td>
+      <td>{{ m.user.display_name or '' }}</td>
+      <td>
+        {% if m.role == 'owner' %}<span class="chip chip-accent">Owner</span>
+        {% elif m.role == 'admin' %}<span class="chip chip-warn">Admin</span>
+        {% else %}<span class="chip">Member</span>{% endif %}
+      </td>
+      {% if is_owner %}
+      <td>
+        {% if m.role == 'member' %}
+        <form method="post" action="{{ url_for('clubs.promote_club_admin', club_id=club.id, username=m.user.username) }}" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="small">Make admin</button>
+        </form>
+        {% elif m.role == 'admin' %}
+        <form method="post" action="{{ url_for('clubs.demote_club_admin', club_id=club.id, username=m.user.username) }}" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="ghost small">Remove admin</button>
+        </form>
+        {% endif %}
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+{# ── Invites (admins) ───────────────────────────────── #}
+{% if is_admin %}
+<div class="panel">
+  <h2>Invites</h2>
+  <form method="post" action="{{ url_for('clubs.invite_to_club', club_id=club.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="invite_user">Invite a user by username</label>
+    <input id="invite_user" name="username" placeholder="username" required>
+    <button type="submit">Send invite</button>
+  </form>
+  {% if pending_invites %}
+  <div class="table-wrap">
+    <table>
+      <tr><th>User</th><th>Invited</th><th></th></tr>
+      {% for i in pending_invites %}
+      <tr>
+        <td>{{ i.user.username }}</td>
+        <td class="num">{{ i.created_at | timeago }}</td>
+        <td>
+          <form method="post" action="{{ url_for('clubs.cancel_invite', club_id=club.id, username=i.user.username) }}" class="inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="ghost small">Cancel</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
+  <h2>Invite links</h2>
+  <form method="post" action="{{ url_for('clubs.create_invite_link', club_id=club.id) }}" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit">Create invite link</button>
+  </form>
+  {% if invite_links %}
+  <div class="table-wrap">
+    <table>
+      <tr><th>Link</th><th>Created</th><th></th></tr>
+      {% for link in invite_links %}
+      <tr>
+        <td><code>{{ url_for('clubs.join_via_invite_link', club_id=club.id, token=link.token) }}</code></td>
+        <td class="num">{{ link.created_at | timeago }}</td>
+        <td>
+          <form method="post" action="{{ url_for('clubs.revoke_invite_link', club_id=club.id, token=link.token) }}" class="inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="ghost small">Revoke</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ── Events / championships + results ───────────────── #}
+<h2>Events</h2>
+{% if live_event %}
+<div class="flash info"><strong>{{ live_event['name'] }}</strong> is live now — ends in {{ live_ends | countdown }}.</div>
+{% endif %}
+
+{% if championships %}
+  {% for c in championships %}
+  <div class="panel">
+    <h2><a href="{{ url_for('pages.event_detail', event_id=c.event['id']) }}">{{ c.event['name'] }}</a></h2>
+    <div class="chips-row">
+      <span class="chip">{{ c.mode_label }}</span>
+      <span class="chip chip-accent">{{ c.scoring_label }} points</span>
+      {% if c.power_stage %}<span class="chip chip-warn">Power stage</span>{% endif %}
+      {% if c.status == 'live' %}
+        <span class="chip chip-ok">Live — ends in {{ c.ends_in | countdown }}</span>
+      {% elif c.status == 'upcoming' %}
+        <span class="chip">Starts in {{ c.event['start_time'] | countdown }}</span>
+      {% else %}
+        <span class="chip chip-warn">Ended</span>
+      {% endif %}
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <tr><th>#</th><th>Rally</th><th>Class</th><th>Stages</th><th>Window</th><th>Status</th></tr>
+        {% for r in c.rounds %}
+        <tr>
+          <td class="num">{{ '%02d'|format(r.index + 1) }}</td>
+          <td><a href="{{ url_for('pages.event_detail', event_id=c.event['id']) }}#round-{{ r.index }}">{{ r.location or '(none)' }}</a></td>
+          <td>{{ r.car_class or '' }}</td>
+          <td class="num">{{ r.count }}</td>
+          <td class="num">{{ r.window_text }}</td>
+          <td>
+            {% if r.status == 'live' %}<span class="chip chip-ok">Live</span>
+            {% elif r.status == 'upcoming' %}<span class="chip">Upcoming</span>
+            {% else %}<span class="chip chip-warn">Ended</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+
+    <h3>Standings</h3>
+    {% if c.standings %}
+    <div class="table-wrap">
+      <table>
+        <tr><th>#</th><th>Driver</th><th>Car</th><th>Points</th><th>Time</th><th>Gap</th></tr>
+        {% for s in c.standings %}
+        <tr>
+          <td class="num">{{ loop.index }}</td>
+          <td>{{ s.username }}</td>
+          <td>{{ s.car or '' }}</td>
+          <td class="num">{{ s.points }}</td>
+          <td class="num">{{ s.time_text }}</td>
+          <td class="num">{{ s.gap_str }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% else %}
+    <p>No results yet.</p>
+    {% endif %}
+
+    {% if is_admin %}
+    <a class="btn danger small" href="{{ url_for('clubs.championship_delete_confirm', club_id=club.id, event_id=c.event['id']) }}">Delete</a>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+<p>No events yet.</p>
+{% endif %}
+
+{% if is_admin %}
+<div class="panel">
+  <h2>Championships</h2>
+  <p>Schedule a championship that runs over days or weeks. Pick the type (Multi-Location Rally or Rally Season), the points system and the power-stage option on the next screen.</p>
+  <p>
+    <a class="btn ghost" href="{{ url_for('clubs.championship_new', club_id=club.id) }}">Create Championship</a>
+  </p>
+</div>
+{% endif %}
+{% endblock %}

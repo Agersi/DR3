@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Invite to {{ club.name }} — Dirt Rally 3.0{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <div class="panel">
+    <h1>Invitation</h1>
+    <p>You've been invited to join <strong>{{ club.name }}</strong>.</p>
+    <div class="chips-row">
+      <span class="chip {% if visibility == 'public' %}chip-ok{% else %}chip-warn{% endif %}">{{ visibility }}</span>
+      <span class="chip">{% if club.join_policy == 'approval' %}Approval to join{% else %}Open join{% endif %}</span>
+    </div>
+    {% if club.description %}<p>{{ club.description }}</p>{% endif %}
+
+    {% if not current_user_obj %}
+    <p>Sign in to accept this invite.</p>
+    <a class="btn" href="{{ url_for('pages.login', next=url_for('clubs.join_via_invite_link', club_id=club.id, token=token)) }}">Log in</a>
+    {% elif not current_user_obj.email_verified %}
+    <p>Please verify your email before joining clubs.</p>
+    <a class="btn ghost" href="{{ url_for('pages.account') }}">Go to account settings</a>
+    {% else %}
+    <form method="post" action="{{ url_for('clubs.join_via_invite_link', club_id=club.id, token=token) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit">Accept invite and join {{ club.name }}</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

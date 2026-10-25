@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}{{ event['name'] }} — Dirt Rally 3.0{% endblock %}
+{% block content %}
+<h1>{{ event['name'] }}</h1>
+<div class="chips-row">
+  <span class="chip">{{ mode_label }}</span>
+  <span class="chip chip-accent">{{ scoring_label }} points</span>
+  {% if power_stage %}<span class="chip chip-warn">Power stage</span>{% endif %}
+  {% if status == 'live' %}
+    <span class="chip chip-ok">Live — ends in {{ ends_in | countdown }}</span>
+  {% elif status == 'upcoming' %}
+    <span class="chip">Starts in {{ event['start_time'] | countdown }}</span>
+  {% else %}
+    <span class="chip chip-warn">Ended</span>
+  {% endif %}
+</div>
+
+<h2>Championship standings</h2>
+{% if standings %}
+<div class="table-wrap">
+  <table>
+    <tr><th>#</th><th>Driver</th><th>Car</th><th>Points</th><th>Time</th><th>Gap</th></tr>
+    {% for s in standings %}
+    <tr>
+      <td class="num">{{ loop.index }}</td>
+      <td>{{ s.username }}</td>
+      <td>{{ s.car or '' }}</td>
+      <td class="num">{{ s.points }}</td>
+      <td class="num">{{ s.time_text }}</td>
+      <td class="num">{{ s.gap_str }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% else %}
+<p>No results yet.</p>
+{% endif %}
+
+{% for r in rounds %}
+<h2 id="round-{{ r.index }}">Round {{ r.index + 1 }} — {{ r.location or '(none)' }}</h2>
+<div class="chips-row">
+  {% if r.car_class %}<span class="chip chip-accent">{{ r.car_class }}</span>{% endif %}
+  <span class="chip">{{ r.count }} stage{{ 's' if r.count != 1 }}</span>
+  {% if r.window_text %}<span class="chip">{{ r.window_text }}</span>{% endif %}
+  {% if r.status == 'live' %}<span class="chip chip-ok">Live</span>
+  {% elif r.status == 'upcoming' %}<span class="chip">Upcoming</span>
+  {% else %}<span class="chip chip-warn">Ended</span>{% endif %}
+</div>
+
+{% set rr = per_round[r.index] %}
+<h3>Classification</h3>
+{% if rr.standings %}
+<div class="table-wrap">
+  <table>
+    <tr><th>#</th><th>Driver</th><th>Car</th><th>Time</th></tr>
+    {% for s in rr.standings %}
+    <tr>
+      <td class="num">{{ loop.index }}</td>
+      <td>{{ s.username }}{% if s.dnf_stages %} <span class="chip chip-warn">DNF ×{{ s.dnf_stages }}</span>{% endif %}</td>
+      <td>{{ s.car or '' }}</td>
+      <td class="num">{{ s.time_text }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% else %}
+<p>No results for this round yet.</p>
+{% endif %}
+
+{% for st in rr.stages %}
+<h3>Stage {{ loop.index }}{% if st.stage.get('name') %} — {{ st.stage['name'] }}{% endif %}</h3>
+<div class="chips-row">
+  {% if st.stage.get('distance_km') %}<span class="chip">{{ '%.2f' | format(st.stage['distance_km']) }} km</span>{% endif %}
+  {% if st.stage.get('conditions') %}<span class="chip">{{ st.stage['conditions'] }}</span>{% endif %}
+</div>
+{% if st.results %}
+<div class="table-wrap">
+  <table>
+    <tr><th>#</th><th>Driver</th><th>Car</th><th>Time</th><th>Gap</th></tr>
+    {% for x in st.results %}
+    <tr>
+      <td class="num">{{ x.pos }}</td>
+      <td>{{ x.username }}</td>
+      <td>{{ x.car or '' }}</td>
+      <td class="num">{{ x.time_text }}</td>
+      <td class="num">{{ x.gap_str }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% else %}
+<p>No results for this stage yet.</p>
+{% endif %}
+{% endfor %}
+{% endfor %}
+
+{% if is_rx %}
+<div class="flash warning"><strong>Rallycross Tires screen:</strong> If using Rally cars on rallycross circuits the game shows a
+tire selection screen. Clicking this tire button WILL crash the game — this is a DiRT Rally 2.0 bug that can not be
+fixed by this mod. If you do happen to click the tires button, don't worry, you can simply restart the game and
+rejoin the club where you left off.</div>
+{% endif %}
+{% endblock %}

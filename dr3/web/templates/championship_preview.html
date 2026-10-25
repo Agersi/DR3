@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Championship Preview — {{ club.name }}{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="{{ url_for('clubs.clubs_list') }}">Clubs</a> / <a href="{{ url_for('clubs.club_detail', club_id=club.id) }}">{{ club.name }}</a> / <a href="{{ url_for('clubs.championship_edit', club_id=club.id, draft_id=draft.id) }}">Back to edit</a></p>
+<h1>Championship Preview</h1>
+
+<form method="post" action="{{ url_for('clubs.championship_submit', club_id=club.id, draft_id=draft.id) }}" id="championshipPreview">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="panel">
+    <label for="start_at">Set start date and time</label>
+    <input type="datetime-local" id="start_at" name="start_at"
+           min="{{ min_iso }}" value="{{ draft.start_at or min_iso }}"
+           data-total-seconds="{{ total_seconds }}"
+           data-min-epoch="{{ min_epoch }}" data-start-epoch="{{ start_epoch }}">
+    <input type="hidden" id="start_at_epoch" name="start_at_epoch" value="">
+    {% if busy_for %}
+    <div class="flash warning">This club already has a championship running for another {{ busy_for }}. The game shows one championship per club at a time, so this one must start after that finishes.</div>
+    {% endif %}
+    <p id="startAtZone" class="meta"></p>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>#</th><th>Location</th>{% if mode == 'season' %}<th>Vehicle class</th>{% endif %}<th>Stages</th>{% if has_rx %}<th>Laps</th>{% endif %}{% if mode == 'season' %}<th>Duration</th><th>Window (from start)</th>{% endif %}</tr>
+      {% for row in summary_rows %}
+      <tr>
+        <td class="num">{{ loop.index }}</td>
+        <td>{{ row.location }}</td>
+        {% if mode == 'season' %}<td>{{ row.car_class or '(none)' }}</td>{% endif %}
+        <td class="num">{{ row.stages }}</td>
+        {% if has_rx %}<td class="num">{% if row.rx is defined %}{{ row.laps }}{% endif %}</td>{% endif %}
+        {% if mode == 'season' %}
+        <td>{{ row.duration_label }}</td>
+        <td class="num">{{ row.window }}</td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  {% if mode != 'season' %}
+  <p>All {{ summary_rows|length }} rallies run in one shared window of <strong>{{ total_label }}</strong>.</p>
+  {% endif %}
+
+  {% set scoring_labels = {'wrc': 'WRC', 'groupb': 'Group B', 'codemasters': 'Codemasters'} %}
+  <p class="meta">Scoring system: <strong>{{ scoring_labels.get(scoring, 'WRC') }}</strong>{% if power_stage %} — power stage points enabled (top five finishers of each rally's final stage get +5 / +4 / +3 / +2 / +1){% endif %}</p>
+
+  {% if end_display %}
+  <p>Championship ends on <strong id="endsOn">{{ end_display }}</strong></p>
+  {% endif %}
+
+  <div class="panel">
+    <h3>Advanced settings</h3>
+    <label class="checkrow"><input type="checkbox" name="adv_hardcore_damage" value="1" {% if draft.settings.hardcore_damage %}checked{% endif %}> Use Hardcore Damage</label>
+    <label class="checkrow"><input type="checkbox" name="adv_unexpected_moments" value="1" {% if draft.settings.unexpected_moments %}checked{% endif %}> Use Unexpected Moments</label>
+    <label class="checkrow"><input type="checkbox" name="adv_force_cockpit" value="1" {% if draft.settings.force_cockpit_camera %}checked{% endif %}> Force Cockpit Camera</label>
+    <label class="checkrow"><input type="checkbox" name="adv_allow_assists" value="1" {% if draft.settings.allow_assists %}checked{% endif %}> Allow Assists</label>
+  </div>
+
+  <div class="actions-row">
+    <button type="submit">Submit championship</button>
+    <a class="btn ghost" href="{{ url_for('clubs.championship_edit', club_id=club.id, draft_id=draft.id) }}">Back to edit</a>
+    <button type="submit" form="discardDraftForm" class="danger">Discard draft</button>
+  </div>
+</form>
+
+<form id="discardDraftForm" method="post" action="{{ url_for('clubs.championship_discard', club_id=club.id, draft_id=draft.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var input = document.getElementById('start_at');
+  if (!input) return;
+  var endsOn = document.getElementById('endsOn');
+  var epochField = document.getElementById('start_at_epoch');
+  var zoneNote = document.getElementById('startAtZone');
+  var totalSeconds = parseInt(input.getAttribute('data-total-seconds'), 10);
+
+  function toLocalInputValue(date) {
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' +
+        pad(date.getDate()) + 'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+  }
+
+  var minEpoch = parseInt(input.getAttribute('data-min-epoch'), 10);
+  var startEpoch = parseInt(input.getAttribute('data-start-epoch'), 10);
+  if (!isNaN(minEpoch)) input.min = toLocalInputValue(new Date(minEpoch * 1000));
+  if (!isNaN(startEpoch)) input.value = toLocalInputValue(new Date(startEpoch * 1000));
+
+  if (zoneNote) {
+    var zone = '';
+    try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (err) {}
+    var offsetLabel = new Date().toLocaleTimeString(undefined, { timeZoneName: 'short' }).split(' ').pop();
+    zoneNote.textContent = 'Times shown in your local timezone' +
+        (zone ? ' (' + zone + ', ' + offsetLabel + ')' : ' (' + offsetLabel + ')') + '.';
+  }
+
+  function update() {
+    var start = input.value ? new Date(input.value) : null;
+    if (!start || isNaN(start.getTime())) return;
+    if (epochField) epochField.value = String(Math.floor(start.getTime() / 1000));
+    if (!endsOn || isNaN(totalSeconds) || totalSeconds <= 0) return;
+    var end = new Date(start.getTime() + totalSeconds * 1000);
+    endsOn.textContent = end.toLocaleString(undefined, {
+      weekday: 'short', day: '2-digit', month: 'short',
+      year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+    });
+  }
+  input.addEventListener('change', update);
+  input.addEventListener('input', update);
+  update();
+});
+</script>
+{% endblock %}

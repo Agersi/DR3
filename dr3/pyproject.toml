@@ -1,0 +1,20 @@
+[project]
+name = "dr3"
+version = "0.1.8"
+description = "DR3 - DiRT Rally 2.0 community server (local player server)"
+requires-python = ">=3.11"
+dependencies = [
+    "cryptography>=42.0",
+]
+
+[tool.setuptools]
+packages = ["dr2server"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.6",
+]

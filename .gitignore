@@ -1,0 +1,22 @@
+# Secrets — never commit
+.env
+build/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+dr3/.venv-build/
+dr3/web/.venv/
+dr3/build/
+dr3/dist/
+dr3/captures/
+dr3/web/smoke.db
+dr3/DR3.spec
+
+# Not part of the public repo
+AGENTS.md
+reference/
+docs/
+user notes/
+tools/bin/

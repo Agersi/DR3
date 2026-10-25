@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Account — Dirt Rally 3.0{% endblock %}
+{% block content %}
+<h1>Account</h1>
+<p>Signed in as <strong>{{ g.user.username }}</strong>
+  {% if verified %}<span class="chip chip-ok">Email verified</span>
+  {% else %}<span class="chip chip-warn">Email not verified</span>{% endif %}
+</p>
+
+<div class="panel">
+  <h2>Profile</h2>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="profile">
+    <label for="display_name">Display name</label>
+    <input id="display_name" name="display_name" value="{{ g.user.display_name }}">
+    <label for="country">Country</label>
+    <input id="country" name="country" value="{{ g.user.country or '' }}">
+    <label for="bio">Bio</label>
+    <textarea id="bio" name="bio" rows="3">{{ g.user.bio or '' }}</textarea>
+    <button type="submit">Save profile</button>
+  </form>
+</div>
+
+<div class="panel">
+  <h2>Password</h2>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="password">
+    <label for="current">Current password</label>
+    <input id="current" name="current" type="password" required>
+    <label for="new">New password (min 8 chars)</label>
+    <input id="new" name="new" type="password" required>
+    <button type="submit">Change password</button>
+  </form>
+</div>
+
+{% if not verified %}
+<div class="panel">
+  <h2>Email verification</h2>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="resend">
+    <button type="submit">Resend verification email</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2>Game token</h2>
+  {% if token %}
+  <p>Your game token (put this in the local server's <code>--api-token</code>):</p>
+  <div class="token-box"><code>{{ token }}</code></div>
+  <form method="post" action="{{ url_for('game_api.api_token_revoke') }}" onsubmit="return confirm('Revoke this token?');" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="danger small">Revoke token</button>
+  </form>
+  {% else %}
+  <form method="post" action="{{ url_for('game_api.api_token_generate') }}" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit">Generate game token</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}
