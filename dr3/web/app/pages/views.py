@@ -1,6 +1,7 @@
 """Web pages (session auth). Functional first pass — visual redesign at M4."""
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -25,8 +26,17 @@ from ..auth import (
     verified_required,
 )
 from ..db import db
-from ..events import event_is_active, get_all_events, sort_events
-from ..models import ClubMember, GameToken, Notification, User
+from ..events import event_is_active, event_is_upcoming, get_all_events, sort_events
+from ..models import (
+    Club,
+    ClubMember,
+    Event,
+    GameToken,
+    Notification,
+    Result,
+    User,
+    utcnow,
+)
 
 pages_bp = Blueprint('pages', __name__)
 
@@ -43,9 +53,61 @@ def _reset_link(user: User) -> str:
     return f"{base}/reset_password/{user.reset_token}"
 
 
+def _home_stats(now) -> dict:
+    """Site-wide stats for the front page (backlog #29): driver/club counts,
+    total completed stages, and the most recent stage times players posted."""
+    from ..results_view import format_ms
+    from ..scoring import car_label
+
+    club_name = {c.id: c.name for c in Club.query.all()}
+    display_name = {u.username: u.display_name for u in User.query.all()}
+    events = Event.query.all()
+    event_of = {e.id: e for e in events}
+
+    active_clubs = set()
+    for e in events:
+        if not e.club_id:
+            continue
+        ed = e.to_dict()
+        if event_is_active(ed, now) or event_is_upcoming(ed, now):
+            active_clubs.add(e.club_id)
+
+    stages_done = 0
+    recent = []
+    for r in Result.query.all():
+        best_at, best_time = None, 0
+        for s in json.loads(r.stages_json or '[]'):
+            t = int(s.get('time_ms', 0) or 0)
+            if t <= 0:
+                continue
+            stages_done += 1
+            sa = s.get('submitted_at')
+            if sa and (best_at is None or sa > best_at):
+                best_at, best_time = sa, t
+        if not best_at:
+            continue
+        ev = event_of.get(r.event_id)
+        recent.append({
+            'driver': display_name.get(r.username, r.username),
+            'club': club_name.get(ev.club_id, '') if ev and ev.club_id else '',
+            'car': car_label({'vehicle_id': r.vehicle_id, 'car': r.car}),
+            'time_text': format_ms(best_time),
+            'at': best_at,
+        })
+    recent.sort(key=lambda x: x['at'], reverse=True)
+
+    return {
+        'drivers': User.query.count(),
+        'clubs': Club.query.count(),
+        'active_clubs': len(active_clubs),
+        'stages_done': stages_done,
+        'recent': recent[:8],
+    }
+
+
 @pages_bp.route('/')
 def home():
-    return render_template('home.html')
+    return render_template('home.html', stats=_home_stats(utcnow()))
 
 
 # ── Auth ─────────────────────────────────────────────────

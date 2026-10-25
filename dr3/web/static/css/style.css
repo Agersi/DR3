@@ -26,6 +26,10 @@
 
 * { box-sizing: border-box; }
 
+/* The design is rem-based; 24px root = what the site looked like at 150%
+   browser zoom on a 16px default, so no zooming is needed (backlog #30). */
+html { font-size: 24px; }
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -85,6 +89,8 @@ main { max-width: 960px; width: 100%; margin: 0 auto; padding: 0 1.25rem 2rem; f
 .site-footer a:hover { color: var(--text); }
 .footer-brand { display: inline-flex; align-items: center; gap: 0.55rem; line-height: 24px; }
 .footer-logo { width: 24px; height: 24px; flex: none; object-fit: contain; }
+.footer-inner + .footer-inner { border-top: 1px solid var(--line); }
+.footer-open { color: var(--muted); }
 
 /* ── Headings ───────────────────────────────────────── */
 
@@ -132,6 +138,14 @@ hr {
 .club-card .title-link { color: var(--text); text-decoration: none; }
 .club-card .title-link:hover { color: var(--text); text-decoration: underline; }
 .club-card .desc { color: var(--muted); font-size: 0.95rem; flex: 1; }
+
+.stat-card {
+  background: var(--card); border: 2px solid var(--line);
+  box-shadow: 4px 4px 0 var(--shadow);
+  padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.35rem;
+}
+.stat-num { font-family: var(--display); font-weight: 700; font-size: 2rem; line-height: 1; color: var(--accent); }
+.stat-label { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.85rem; color: var(--muted); }
 
 /* ── Hero (home) ────────────────────────────────────── */
 
@@ -309,6 +323,7 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
 .token-box button { flex: none; align-self: center; margin-top: 0; }
 
 @media (max-width: 640px) {
+  html { font-size: 18px; }
   .header-inner { gap: 0.8rem; }
   .hero { padding: 1.6rem 1.3rem 1.5rem 2rem; }
   main { padding: 0 0.9rem 2rem; }

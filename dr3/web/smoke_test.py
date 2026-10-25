@@ -755,6 +755,30 @@ def main() -> int:
           and game_names.index('Order Beta') < game_names.index('Order Season')
           < game_names.index('Order Alpha'), str(game_names))
 
+    # 23. home page: site stats + footer social links (backlog #25-#29)
+    r = client.get('/')
+    html = r.get_data(as_text=True)
+    check('home renders', r.status_code == 200, f'status={r.status_code}')
+    check('footer links: github/ko-fi/twitch',
+          'github.com/Agersi/DR3' in html and 'ko-fi.com/agersi' in html
+          and 'twitch.tv/agersi' in html)
+    check('footer shows open-source line + donate',
+          'open source' in html and 'Donate' in html)
+    with app.app_context():
+        from app.models import Result as _Result2
+        n_drivers = User.query.count()
+        n_clubs = Club.query.count()
+        n_stages = sum(1 for rr in _Result2.query.all()
+                       for s in json.loads(rr.stages_json or '[]')
+                       if int(s.get('time_ms', 0) or 0) > 0)
+    nums = {label: num for num, label in _re.findall(
+        r'stat-num">(\d+)</span><span class="stat-label">([^<]+)<', html)}
+    check('home stat cards match DB counts',
+          nums.get('Drivers') == str(n_drivers) and nums.get('Clubs') == str(n_clubs)
+          and nums.get('Stages completed') == str(n_stages), str(nums))
+    check('home lists recent stage time (smokedriver 6:59.000)',
+          'Smoke Driver' in html and '6:59.000' in html)
+
     # 22. subpath deployment (production serves under /rally; nginx strips the
     #     prefix so routes stay root-level, but url_for must emit prefixed URLs)
     from app import _apply_subpath

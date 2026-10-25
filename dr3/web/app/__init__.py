@@ -10,6 +10,13 @@ from flask_wtf import CSRFProtect
 
 csrf = CSRFProtect()
 
+# External project links (footer + home page). DISCORD_URL is empty until the
+# community server exists — set it here when it does.
+GITHUB_URL = 'https://github.com/Agersi/DR3'
+TWITCH_URL = 'https://www.twitch.tv/agersi'
+KO_FI_URL = 'https://ko-fi.com/agersi'
+DISCORD_URL = ''
+
 
 def _parse_dt(value):
     if value is None:
@@ -82,6 +89,11 @@ def create_app() -> Flask:
     def countdown_filter(value):
         dt = _parse_dt(value)
         return _countdown(dt) if dt else (value or '')
+
+    @app.context_processor
+    def inject_site_links():
+        return {'GITHUB_URL': GITHUB_URL, 'TWITCH_URL': TWITCH_URL,
+                'KO_FI_URL': KO_FI_URL, 'DISCORD_URL': DISCORD_URL}
 
     from .game_api import game_api_bp
     from .pages import register_page_blueprints

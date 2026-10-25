@@ -15,10 +15,59 @@
   </div>
 </div>
 
+<h2>DR3 in numbers</h2>
+<div class="grid">
+  <div class="stat-card"><span class="stat-num">{{ stats.drivers }}</span><span class="stat-label">Drivers</span></div>
+  <div class="stat-card"><span class="stat-num">{{ stats.clubs }}</span><span class="stat-label">Clubs</span></div>
+  <div class="stat-card"><span class="stat-num">{{ stats.active_clubs }}</span><span class="stat-label">Active clubs</span></div>
+  <div class="stat-card"><span class="stat-num">{{ stats.stages_done }}</span><span class="stat-label">Stages completed</span></div>
+</div>
+
+{% if stats.recent %}
+<h2>Latest stage times</h2>
+<div class="table-wrap">
+  <table class="table">
+    <thead>
+      <tr><th>Driver</th><th>Club</th><th>Car</th><th>Time</th><th>Posted</th></tr>
+    </thead>
+    <tbody>
+      {% for row in stats.recent %}
+      <tr>
+        <td>{{ row.driver }}</td>
+        <td>{{ row.club or '—' }}</td>
+        <td>{{ row.car or '—' }}</td>
+        <td class="num">{{ row.time_text }}</td>
+        <td class="meta">{{ row.at|timeago }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 <h2>Get started</h2>
 <ol class="steps">
   <li><a href="{{ url_for('pages.register') }}">Register</a> and verify your email.</li>
   <li><a href="{{ url_for('pages.install') }}">Install the local game server</a>.</li>
   <li>Generate your game token on the <a href="{{ url_for('pages.dashboard') }}">dashboard</a>, create or join a club, and start playing.</li>
 </ol>
+
+<h2>Support the project</h2>
+<div class="grid">
+  <div class="club-card">
+    <h3>Open source</h3>
+    <span class="desc">DR3 is open source and free to use — check out the code on GitHub.</span>
+    <a class="btn ghost" href="{{ GITHUB_URL }}" target="_blank" rel="noopener">View on GitHub</a>
+  </div>
+  <div class="club-card">
+    <h3>Watch &amp; follow</h3>
+    <span class="desc">Follow us on Twitch — it's a free way to support the project.</span>
+    <a class="btn ghost" href="{{ TWITCH_URL }}" target="_blank" rel="noopener">Follow on Twitch</a>
+  </div>
+  <div class="club-card">
+    <h3>Donate</h3>
+    <span class="desc">Enjoy DR3? Keep the server running with a donation.</span>
+    <a class="btn" href="{{ KO_FI_URL }}" target="_blank" rel="noopener">Donate on Ko-fi</a>
+  </div>
+</div>
 {% endblock %}
