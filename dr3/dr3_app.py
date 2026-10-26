@@ -578,6 +578,19 @@ def _is_pyinstaller_bundle() -> bool:
     return hasattr(sys, "_MEIPASS") or getattr(sys, "frozen", False)
 
 
+def _install_dir() -> Optional[Path]:
+    """The folder holding DR3.exe in an installed (bundled) build.
+
+    None for source runs (`python dr3_app.py`) or any unexpected layout, so
+    uninstall can never point at a repo checkout or a foreign directory."""
+    if not _is_pyinstaller_bundle():
+        return None
+    exe = Path(sys.executable)
+    if exe.name.lower() != "dr3.exe":
+        return None
+    return exe.parent
+
+
 def _elevation_target_binary() -> Path:
     """The binary that needs cap_net_bind_service.
 
@@ -1101,8 +1114,13 @@ def run_gui():
     footer = tk.Frame(main_tab, bg=BG)
     footer.pack(fill="x", padx=20, pady=(0, 12))
 
+    uninstall_link = tk.Label(footer, text="Uninstall DR3", font=(UI_FONT, 8, "underline"),
+                              fg=ACCENT, bg=BG, cursor="hand2")
+    uninstall_link.pack(side="left")
+    uninstall_link.bind("<Button-1>", lambda e: on_uninstall())
+
     dash_link = tk.Label(footer, text="byagersi.com/rally/dashboard", font=(UI_FONT, 8, "underline"),
-                         fg=ACCENT, bg=BG, cursor="hand2")
+                          fg=ACCENT, bg=BG, cursor="hand2")
     dash_link.pack(side="right")
     dash_link.bind("<Button-1>", lambda e: webbrowser.open(DASHBOARD_URL))
 
@@ -1727,6 +1745,51 @@ def run_gui():
                 root.after(0, lambda: set_status(False, "Hosts restored"))
 
         threading.Thread(target=cleanup, daemon=True).start()
+
+    def on_uninstall():
+        install_dir = _install_dir()
+        if install_dir is None:
+            log("Uninstall is only available in the installed DR3.exe build.")
+            return
+        if server_running.is_set():
+            log("Press STOP first, then uninstall.")
+            return
+        hosts_note = ""
+        if easy_setup_var.get() and hosts_configured():
+            hosts_note = (
+                "\n\nNote: your hosts file still points the game at DR3. "
+                "Press STOP to restore it (or run scripts\\remove_windows_redirect.ps1 "
+                "as administrator)."
+            )
+        if not messagebox.askyesno(
+                "DR3",
+                f"This removes:\n\n"
+                f"  {install_dir}\n"
+                f"  {DR3_DIR}   (settings, logs, captures)\n"
+                f"{hosts_note}\n\nUninstall DR3?",
+                icon="warning",
+                default="no",
+        ):
+            return
+        if not IS_WIN:
+            log("Automatic uninstall is only available on Windows — delete the DR3 folder "
+                f"and {DR3_DIR} manually.")
+            return
+        # The exe is still running from install_dir, so a detached cmd removes
+        # both folders shortly after this process exits.
+        script = (f'timeout /t 2 >nul & rmdir /s /q "{install_dir}" '
+                  f'& rmdir /s /q "{DR3_DIR}"')
+        try:
+            subprocess.Popen(
+                ["cmd", "/c", script],
+                creationflags=0x00000008 | 0x00000200,  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        except Exception as exc:
+            log(f"Uninstall failed to start: {exc}")
+            return
+        log("Uninstalling — the DR3 folders will be removed in a few seconds.")
+        root.destroy()
 
     start_btn.configure(command=on_start)
     stop_btn.configure(command=on_stop)

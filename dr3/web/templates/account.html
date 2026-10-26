@@ -62,4 +62,10 @@
   </form>
   {% endif %}
 </div>
+
+<div class="panel">
+  <h2>Delete account</h2>
+  <p>Permanently remove your profile, club memberships, results and game tokens.</p>
+  <a class="btn danger" href="{{ url_for('pages.account_delete') }}">Delete my account</a>
+</div>
 {% endblock %}

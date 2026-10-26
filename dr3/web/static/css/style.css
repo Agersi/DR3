@@ -93,6 +93,7 @@ main { max-width: var(--page-max); width: 100%; margin: 0 auto; padding: 0 1.25r
 .footer-logo { width: 24px; height: 24px; flex: none; object-fit: contain; }
 .footer-inner + .footer-inner { border-top: 1px solid var(--line); }
 .footer-open { color: var(--muted); }
+.footer-legal { max-width: var(--page-max); margin: 0 auto; padding: 0.6rem 1.25rem 0.9rem; color: var(--muted); font-size: 0.72rem; letter-spacing: 0.03em; }
 
 /* ── Headings ───────────────────────────────────────── */
 

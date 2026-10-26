@@ -764,6 +764,9 @@ def main() -> int:
           and 'twitch.tv/agersi' in html)
     check('footer shows open-source line + donate',
           'open source' in html and 'Donate' in html)
+    check('footer shows trademark notice',
+          'trademark of Codemasters' in html
+          and 'not affiliated with Codemasters or EA' in html)
     with app.app_context():
         from app.models import Result as _Result2
         n_drivers = User.query.count()
@@ -817,6 +820,70 @@ def main() -> int:
     # The name still appears in the success flash, so assert on the card link.
     r = client.get('/clubs')
     check('deleted club gone from list', f'/clubs/{doomed_id}' not in r.get_data(as_text=True))
+
+    # 25. account delete: confirm page, owner-block, full cascade
+    client5 = app.test_client()
+    client5.post('/register', data={
+        'username': 'doomedpilot', 'email': 'doomed@example.com',
+        'password': 'password123', 'confirm': 'password123',
+        'display_name': 'Doomed Pilot', 'country': 'Norway',
+    })
+    with app.app_context():
+        u5 = User.query.filter_by(username='doomedpilot').first()
+        v5 = u5.verify_token if u5 else ''
+        pilot_uid = u5.id if u5 else 0
+    client5.get(f'/verify_email/{v5}', follow_redirects=True)
+
+    r = client5.post('/clubs', data={
+        'name': 'Pilot Club', 'description': '',
+        'visibility': 'public', 'join_policy': 'open',
+    }, follow_redirects=False)
+    check('account-delete fixture club created', r.status_code == 302, f'status={r.status_code}')
+    pilot_id = r.headers.get('Location', '').rstrip('/').split('/')[-1]
+
+    with app.app_context():
+        from datetime import timedelta as _td5
+        from app.models import ChampionshipDraft as _Draft, Result as _Res5, utcnow as _utcnow5
+        now5 = _utcnow5()
+        db.session.add(Event(id='evt-smoke-pilot', name='Pilot Champ', club_id=club_id,
+                             start_time=now5 - _td5(hours=1), end_time=now5 + _td5(days=2),
+                             active=True))
+        db.session.add(_Res5(event_id='evt-smoke-pilot', username='doomedpilot',
+                             car='Test Car', total_time_ms=60000,
+                             stages_json=json.dumps([{'time_ms': 30000, 'penalties_ms': 0}])))
+        db.session.add(_Draft(id='draft-smoke-pilot', club_id=club_id, owner='doomedpilot',
+                              data_json='{}'))
+        db.session.commit()
+    r = client5.post(f'/clubs/{club_id}/join', follow_redirects=False)
+    check('account-delete fixture joined main club', r.status_code == 302, f'status={r.status_code}')
+
+    r = client5.get('/account/delete')
+    html = r.get_data(as_text=True)
+    check('account delete confirm renders',
+          r.status_code == 200 and 'Delete Account' in html and 'Pilot Club' in html,
+          f'status={r.status_code}')
+
+    r = client5.post('/account/delete', follow_redirects=False)
+    check('delete blocked while owning a club',
+          r.status_code == 302 and '/account/delete' in r.headers.get('Location', ''),
+          f"loc={r.headers.get('Location')}")
+    with app.app_context():
+        check('user still exists after blocked delete',
+              User.query.filter_by(username='doomedpilot').first() is not None, '')
+
+    r = client5.post(f'/clubs/{pilot_id}/delete', follow_redirects=False)
+    check('owned club deleted first', r.status_code == 302, f'status={r.status_code}')
+
+    r = client5.post('/account/delete', follow_redirects=False)
+    check('account delete redirects to login',
+          r.status_code == 302 and '/login' in r.headers.get('Location', ''),
+          f"loc={r.headers.get('Location')}")
+    with app.app_context():
+        check('user row deleted', User.query.filter_by(username='doomedpilot').first() is None, '')
+        check('memberships removed', ClubMember.query.filter_by(user_id=pilot_uid).count() == 0, '')
+        check('results deleted', _Res5.query.filter_by(username='doomedpilot').count() == 0, '')
+        check('drafts deleted', _Draft.query.filter_by(owner='doomedpilot').count() == 0, '')
+        check('owned club gone', db.session.get(Club, pilot_id) is None, '')
 
     # 22. subpath deployment (production serves under /rally; nginx strips the
     #     prefix so routes stay root-level, but url_for must emit prefixed URLs)

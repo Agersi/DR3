@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Delete account — Dirt Rally 3.0{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="{{ url_for('pages.account') }}">Account</a></p>
+<h1>Delete Account</h1>
+
+<div class="panel">
+  <h2>{{ user.username }}</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Clubs you own</th><td>{% if owned_clubs %}{{ owned_clubs | map(attribute='name') | join(', ') }}{% else %}None{% endif %}</td></tr>
+      <tr><th>Other club memberships</th><td class="num">{{ other_clubs | length }}</td></tr>
+      <tr><th>Posted results</th><td class="num">{{ result_count }}</td></tr>
+      <tr><th>Active game tokens</th><td class="num">{{ token_count }}</td></tr>
+    </table>
+  </div>
+
+  {% if owned_clubs %}
+  <div class="flash error">You own {{ owned_clubs | length }} club{{ 's' if owned_clubs | length != 1 }} — delete them first, then come back here to finish deleting your account.</div>
+  {% else %}
+  <div class="flash error">This permanently deletes your account, all club memberships, posted results, championship drafts and game tokens. This cannot be recovered.</div>
+  <form method="post" action="{{ url_for('pages.account_delete') }}" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="danger">Delete account</button>
+  </form>
+  {% endif %}
+  <a class="btn ghost" href="{{ url_for('pages.account') }}">Cancel</a>
+</div>
+{% endblock %}

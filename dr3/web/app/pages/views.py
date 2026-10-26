@@ -25,15 +25,27 @@ from ..auth import (
     send_email,
     verified_required,
 )
+from ..clubs import (
+    clear_cooldown,
+    club_admins,
+    club_invites,
+    pending_requests,
+    set_club_admins,
+    set_club_invites,
+    set_pending_requests,
+)
 from ..db import db
 from ..events import event_is_active, event_is_upcoming, get_all_events, sort_events
 from ..models import (
+    ChampionshipDraft,
     Club,
+    ClubInvite,
     ClubMember,
     Event,
     GameToken,
     Notification,
     Result,
+    TimeTrialEntry,
     User,
     utcnow,
 )
@@ -285,6 +297,64 @@ def account():
         token=active_token.token if active_token else '',
         unread=unread,
     )
+
+
+@pages_bp.route('/account/delete', methods=['GET', 'POST'])
+@login_required
+def account_delete():
+    if request.method == 'POST':
+        return _delete_account(g.user)
+    memberships = ClubMember.query.filter_by(user_id=g.user.id).all()
+    owned_ids = {c.id for c in Club.query.filter_by(created_by=g.user.id).all()}
+    member_clubs = [m.club for m in memberships if m.club is not None]
+    return render_template(
+        'account_delete.html',
+        user=g.user,
+        owned_clubs=[c for c in member_clubs if c.id in owned_ids],
+        other_clubs=[c for c in member_clubs if c.id not in owned_ids],
+        result_count=Result.query.filter_by(username=g.user.username).count(),
+        token_count=len([t for t in g.user.tokens if t.revoked_at is None]),
+    )
+
+
+def _delete_account(user: User):
+    owned = Club.query.filter_by(created_by=user.id).all()
+    if owned:
+        names = ', '.join(c.name for c in owned)
+        flash(
+            f'You still own {len(owned)} club{"s" if len(owned) != 1 else ""} '
+            f'({names}) — delete those clubs first.',
+            'error',
+        )
+        return redirect(url_for('pages.account_delete'))
+    for club in Club.query.all():
+        admins = club_admins(club)
+        if user.username in admins:
+            set_club_admins(club, [a for a in admins if a != user.username])
+        reqs = pending_requests(club)
+        if any(r.get('username') == user.username for r in reqs):
+            set_pending_requests(
+                club, [r for r in reqs if r.get('username') != user.username])
+        invs = club_invites(club)
+        if any(i.get('username') == user.username for i in invs):
+            set_club_invites(
+                club, [i for i in invs if i.get('username') != user.username])
+        clear_cooldown(club, user.username)
+    for m in ClubMember.query.filter_by(user_id=user.id).all():
+        db.session.delete(m)
+    for r in Result.query.filter_by(username=user.username).all():
+        db.session.delete(r)
+    for t in TimeTrialEntry.query.filter_by(username=user.username).all():
+        db.session.delete(t)
+    for d in ChampionshipDraft.query.filter_by(owner=user.username).all():
+        db.session.delete(d)
+    for inv in ClubInvite.query.filter_by(created_by=user.id).all():
+        db.session.delete(inv)
+    session.pop('user_id', None)
+    db.session.delete(user)
+    db.session.commit()
+    flash('Your account has been deleted.', 'success')
+    return redirect(url_for('pages.login'))
 
 
 def user_tokens(user: User) -> list[GameToken]:
