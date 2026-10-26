@@ -779,6 +779,45 @@ def main() -> int:
     check('home lists recent stage time (smokedriver 6:59.000)',
           'Smoke Driver' in html and '6:59.000' in html)
 
+    # 24. club delete: confirm page, owner-only, destructive cascade
+    r = client.post('/clubs', data={
+        'name': 'Doomed Club', 'description': '',
+        'visibility': 'public', 'join_policy': 'open',
+    }, follow_redirects=False)
+    check('delete fixture club created', r.status_code == 302, f'status={r.status_code}')
+    doomed_id = r.headers.get('Location', '').rstrip('/').split('/')[-1]
+    with app.app_context():
+        from datetime import timedelta as _td3
+        from app.models import Result as _ResD, utcnow as _utcnow_d
+        nowd = _utcnow_d()
+        db.session.add(Event(id='evt-smoke-doomed', name='Doomed Champ', club_id=doomed_id,
+                             start_time=nowd - _td3(hours=1), end_time=nowd + _td3(days=2),
+                             active=True))
+        db.session.add(_ResD(event_id='evt-smoke-doomed', username='smokedriver',
+                             car='Test Car', total_time_ms=90000,
+                             stages_json=json.dumps([{'time_ms': 45000, 'penalties_ms': 0}])))
+        db.session.commit()
+    r = client.get(f'/clubs/{doomed_id}/delete')
+    check('club delete confirm renders',
+          r.status_code == 200 and b'Delete Club' in r.data and b'Doomed Club' in r.data,
+          f'status={r.status_code}')
+    client2.post('/login', data={'username': 'secondpilot', 'password': 'password123'},
+                 follow_redirects=False)
+    r = client2.get(f'/clubs/{doomed_id}/delete')
+    check('non-owner club delete rejected', r.status_code == 403, f'status={r.status_code}')
+    r = client.post(f'/clubs/{doomed_id}/delete', follow_redirects=False)
+    check('club delete redirects to club list',
+          r.status_code == 302 and r.headers.get('Location', '').rstrip('/') == '/clubs',
+          f"loc={r.headers.get('Location')}")
+    with app.app_context():
+        check('club row deleted', db.session.get(Club, doomed_id) is None, '')
+        check('club events deleted', Event.query.filter_by(club_id=doomed_id).count() == 0, '')
+        check('club results deleted', _ResD.query.filter_by(event_id='evt-smoke-doomed').count() == 0, '')
+        check('club members removed', ClubMember.query.filter_by(club_id=doomed_id).count() == 0, '')
+    # The name still appears in the success flash, so assert on the card link.
+    r = client.get('/clubs')
+    check('deleted club gone from list', f'/clubs/{doomed_id}' not in r.get_data(as_text=True))
+
     # 22. subpath deployment (production serves under /rally; nginx strips the
     #     prefix so routes stay root-level, but url_for must emit prefixed URLs)
     from app import _apply_subpath

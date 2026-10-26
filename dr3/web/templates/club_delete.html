@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Delete {{ club.name }} — Dirt Rally 3.0{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="{{ url_for('clubs.clubs_list') }}">Clubs</a> / <a href="{{ url_for('clubs.club_detail', club_id=club.id) }}">{{ club.name }}</a></p>
+<h1>Delete Club</h1>
+
+<div class="panel">
+  <h2>{{ club.name }}</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Members</th><td class="num">{{ member_count }}</td></tr>
+      <tr><th>Championships</th><td class="num">{{ event_count }}</td></tr>
+      <tr><th>Status</th><td>{% if is_live %}<span class="chip chip-accent">Live now</span>{% else %}Not live{% endif %}</td></tr>
+      <tr><th>Drivers with results</th><td class="num">{{ driver_count }}</td></tr>
+    </table>
+  </div>
+
+  {% if is_live %}
+  <div class="flash warning">This club has a championship live right now. Deleting the club pulls it out of the game immediately, and anyone part-way through a stage loses their run.</div>
+  {% endif %}
+  <div class="flash error">This permanently deletes the club, its {{ event_count }} {{ 'championship' if event_count == 1 else 'championships' }}{% if driver_count %}, all posted results{% endif %}, membership and invite links. This cannot be recovered.</div>
+
+  <form method="post" action="{{ url_for('clubs.club_delete', club_id=club.id) }}" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="danger">Delete club</button>
+  </form>
+  <a class="btn ghost" href="{{ url_for('clubs.club_detail', club_id=club.id) }}">Cancel</a>
+</div>
+{% endblock %}

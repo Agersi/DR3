@@ -70,7 +70,7 @@ from ..events import (
     get_all_events,
     sort_events,
 )
-from ..models import Club, ClubInvite, Event, Result, User, utcnow
+from ..models import ChampionshipDraft, Club, ClubInvite, Event, Result, User, utcnow
 from ..results_view import (
     championship_rounds,
     effective_end,
@@ -127,6 +127,13 @@ def _load_club(club_id: str) -> Club:
 def _require_club_admin(club_id: str) -> Club:
     club = _load_club(club_id)
     if not user_is_admin(club, g.user.username):
+        abort(403)
+    return club
+
+
+def _require_club_owner(club_id: str) -> Club:
+    club = _load_club(club_id)
+    if not user_is_owner(club, g.user.username):
         abort(403)
     return club
 
@@ -1151,6 +1158,47 @@ def championship_delete(club_id: str, event_id: str):
     db.session.commit()
     flash(f'Championship "{event.get("name", event_id)}" deleted.', 'info')
     return redirect(url_for('clubs.club_detail', club_id=club.id))
+
+
+@clubs_bp.route('/clubs/<club_id>/delete', methods=['GET'])
+@verified_required
+def club_delete_confirm(club_id: str):
+    club = _require_club_owner(club_id)
+    events = [e for e in get_all_events() if e.get('club_id') == club_id]
+    drivers: set[str] = set()
+    for e in events:
+        for entry in entries_for_event(e['id']):
+            if entry.get('username'):
+                drivers.add(entry['username'])
+    return render_template(
+        'club_delete.html', club=club,
+        member_count=len(club.members),
+        event_count=len(events),
+        driver_count=len(drivers),
+        is_live=any(event_is_active(e) for e in events),
+    )
+
+
+@clubs_bp.route('/clubs/<club_id>/delete', methods=['POST'])
+@verified_required
+def club_delete(club_id: str):
+    club = _require_club_owner(club_id)
+    # Children first: results, events, drafts and invite links point at the
+    # club (or its events) with plain FKs; members cascade via Club.members.
+    event_ids = [e.id for e in Event.query.filter_by(club_id=club.id).all()]
+    if event_ids:
+        for r in Result.query.filter(Result.event_id.in_(event_ids)).all():
+            db.session.delete(r)
+    for e in Event.query.filter_by(club_id=club.id).all():
+        db.session.delete(e)
+    for d in ChampionshipDraft.query.filter_by(club_id=club.id).all():
+        db.session.delete(d)
+    for inv in ClubInvite.query.filter_by(club_id=club.id).all():
+        db.session.delete(inv)
+    db.session.delete(club)
+    db.session.commit()
+    flash(f'Club "{club.name}" deleted.', 'info')
+    return redirect(url_for('clubs.clubs_list'))
 
 
 @clubs_bp.route('/clubs/<club_id>/championship/<draft_id>/discard', methods=['POST'])

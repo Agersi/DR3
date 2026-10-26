@@ -251,4 +251,12 @@
   </p>
 </div>
 {% endif %}
+
+{% if is_owner %}
+<div class="panel">
+  <h2>Delete club</h2>
+  <p>Permanently remove this club, its championships and all results. This cannot be undone.</p>
+  <a class="btn danger" href="{{ url_for('clubs.club_delete_confirm', club_id=club.id) }}">Delete club</a>
+</div>
+{% endif %}
 {% endblock %}
