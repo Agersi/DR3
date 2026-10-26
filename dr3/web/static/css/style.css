@@ -84,7 +84,7 @@ main { max-width: var(--page-max); width: 100%; margin: 0 auto; padding: 0 1.25r
 .site-footer { background: var(--bg); color: var(--text); margin-top: auto; border-top: 2px solid var(--line); }
 .footer-inner {
   max-width: var(--page-max); margin: 0 auto; padding: 0.9rem 1.25rem;
-  display: flex; gap: 1rem; justify-content: space-between; flex-wrap: wrap;
+  display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;
   font-size: 0.9rem; letter-spacing: 0.03em;
 }
 .site-footer a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--muted); }
