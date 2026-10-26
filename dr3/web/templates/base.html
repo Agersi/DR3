@@ -48,18 +48,18 @@
       <img class="footer-logo" src="{{ url_for('static', filename='logo.png') }}" alt="" width="24" height="24">
       Dirt Rally 3.0 — community club championship server for DiRT Rally 2.0
     </span>
+  </div>
+  <div class="footer-inner">
     <nav>
       <a href="{{ url_for('pages.about') }}">About</a>
       &nbsp;·&nbsp;
       <a href="{{ url_for('pages.install') }}">Install</a>
-    </nav>
-  </div>
-  <div class="footer-inner">
-    <span class="footer-open">DR3 is open source and free to use — <a href="{{ GITHUB_URL }}" target="_blank" rel="noopener">check out the code on GitHub</a></span>
-    <nav>
+      &nbsp;·&nbsp;
+      <a href="{{ GITHUB_URL }}" target="_blank" rel="noopener">Free and open source</a>
+      &nbsp;·&nbsp;
       <a href="{{ KO_FI_URL }}" target="_blank" rel="noopener">Donate</a>
       &nbsp;·&nbsp;
-      <a href="{{ TWITCH_URL }}" target="_blank" rel="noopener">Follow on Twitch</a>
+      <a href="{{ TWITCH_URL }}" target="_blank" rel="noopener">Follow</a>
       {% if DISCORD_URL %}
       &nbsp;·&nbsp;
       <a href="{{ DISCORD_URL }}" target="_blank" rel="noopener">Join the community</a>
