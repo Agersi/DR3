@@ -186,9 +186,9 @@ DASHBOARD_URL = "https://byagersi.com/rally/dashboard"
 API_URL = "https://byagersi.com/rally"
 UPSTREAM_IP = "159.153.126.42"
 
-# Release channel for the GUI update banner. Empty = disabled: builds
-# are published directly from byagersi.com, not GitHub releases.
-UPDATE_RELEASES_URL = ""
+# Update-banner source: the site's public client-version endpoint (latest
+# version + download link). Empty = disabled.
+VERSION_CHECK_URL = "https://byagersi.com/rally/api/client-version"
 
 
 # ---------------------------------------------------------------------------
@@ -824,27 +824,20 @@ def run_gui():
     def _check_for_updates():
         import urllib.request
         try:
-            if not UPDATE_RELEASES_URL:
+            if not VERSION_CHECK_URL:
                 return
             req = urllib.request.Request(
-                UPDATE_RELEASES_URL,
-                headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "DR3"},
-            )
+                VERSION_CHECK_URL, headers={"User-Agent": "DR3"})
             with urllib.request.urlopen(req, timeout=5) as resp:
                 data = json.loads(resp.read())
-            remote_tag = data.get("tag_name", "").lstrip("v")
-            # Link to the release page rather than a specific asset, so the
-            # banner doesn't depend on asset naming (that coupling is what
-            # made the exe -> zip switch invisible to older installs). Only
-            # require that the release has *some* files, so a half-published
-            # release whose build hasn't finished doesn't trigger it.
-            dl_url = data.get("html_url", "")
-            if not remote_tag or not dl_url or not data.get("assets"):
+            remote_tag = str(data.get("version", "")).lstrip("v")
+            dl_url = data.get("download_url", "")
+            if not remote_tag or not dl_url:
                 return
             # Simple version compare (works for semver with same segment count)
-            remote_parts = [int(x) for x in remote_tag.split(".")]
+            remote_parts = [int(x) for x in remote_tag.split(".") if x.isdigit()]
             local_parts = [int(x) for x in VERSION.split(".") if x.isdigit()]
-            if remote_parts > local_parts:
+            if remote_parts and local_parts and remote_parts > local_parts:
                 def show():
                     update_label.configure(
                         text=f"Update available: v{remote_tag}  —  click to download")

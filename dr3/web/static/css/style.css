@@ -241,6 +241,7 @@ input[type='checkbox'] { width: auto; max-width: none; }
 /* ── Tables ─────────────────────────────────────────── */
 
 .table-wrap { overflow-x: auto; background: var(--card); border: 2px solid var(--line); box-shadow: 4px 4px 0 var(--shadow); margin: 1rem 0; }
+.recent-box { max-height: 360px; overflow-y: auto; }
 table.table, .table-wrap table { width: 100%; border-collapse: collapse; background: var(--card); margin: 0; }
 .table th, .table-wrap th {
   font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em;

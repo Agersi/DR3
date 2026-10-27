@@ -14,7 +14,8 @@ local handler at unit level:
     the running cumulative carried forward;
   - unstarted leg -> all State=0 / zero times;
   - multi-event championship (sub_index > 0) -> only that leg's stages are
-    covered and CumulTimeMs restarts at 0 for the leg (per-leg model);
+    covered; Multi-Location Rally seeds CumulTimeMs with the earlier legs'
+    totals (running championship total), Rally Season restarts at 0 per leg;
   - unknown challenge id -> empty Recap (safe default);
   - wire roundtrip: encode_stream/decode_stream preserves values and the
     ui32 typing of the time fields.
@@ -140,7 +141,7 @@ def main():
     api.events["evtM"] = {"events": [
         {"stages": [1, 1]},
         {"stages": [1, 1, 1]},
-    ]}
+    ], "settings": {"mode": "multi"}}
     base_m = _stable_int_id("evtM", base=200000)
     chal_m1 = base_m + 1  # leg 1 sub-event id (base + sub_index, per _serve_multi_event_club)
     api.progress["events"] = [
@@ -160,9 +161,39 @@ def main():
         check("multi leg1: EventIndex all 0", [e["EventIndex"] for e in r], [0, 0, 0])
         check("multi leg1: StageIndex 0..2", [e["StageIndex"] for e in r], [0, 1, 2])
         check("multi leg1: states [2,0,0]", [e["State"] for e in r], [2, 0, 0])
-        check("multi leg1: per-leg cumulative restarts at 0",
+        check("multi leg1: championship-wide cumulative (seeded with leg0)",
+              [unwrap(e["CumulTimeMs"]) for e in r], [18000, 18000, 18000])
+
+    # Season mode keeps per-leg timers: same legs and progress, but the
+    # cumulative restarts at 0 for each leg (backlog 38 gate).
+    api.events["evtS"] = {"events": [
+        {"stages": [1, 1]},
+        {"stages": [1, 1, 1]},
+    ], "settings": {"mode": "season"}}
+    api.progress["events"] = [
+        {"event_id": "evtS", "completed_stages": [
+            {"stage_index": 0, "time_ms": 5000},   # leg0 s0
+            {"stage_index": 1, "time_ms": 6000},   # leg0 s1
+            {"stage_index": 2, "time_ms": 7000},   # leg1 s0 (gidx 2)
+        ]}
+    ]
+    base_s = _stable_int_id("evtS", base=200000)
+    chal_s1 = base_s + 1
+    d._challenge_event_map[chal_s1] = "evtS"
+    d._challenge_subevent_map[chal_s1] = 1
+    r = recap(d, chal_s1)
+    check("season leg1: entry count", len(r), 3)
+    if len(r) == 3:
+        check("season leg1: per-leg cumulative restarts at 0",
               [unwrap(e["CumulTimeMs"]) for e in r], [7000, 7000, 7000])
 
+    api.progress["events"] = [
+        {"event_id": "evtM", "completed_stages": [
+            {"stage_index": 0, "time_ms": 5000},   # leg0 s0
+            {"stage_index": 1, "time_ms": 6000},   # leg0 s1
+            {"stage_index": 2, "time_ms": 7000},   # leg1 s0 (gidx 2)
+        ]}
+    ]
     chal_m0 = base_m + 0
     d._challenge_event_map[chal_m0] = "evtM"
     d._challenge_subevent_map[chal_m0] = 0

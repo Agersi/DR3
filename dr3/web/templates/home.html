@@ -25,12 +25,15 @@
 
 {% if stats.recent %}
 <h2>Latest stage times</h2>
-<div class="table-wrap">
+<div class="table-wrap recent-box" id="recent-times-box">
   <table class="table">
     <thead>
       <tr><th>Driver</th><th>Club</th><th>Car</th><th>Time</th><th>Posted</th></tr>
     </thead>
-    <tbody>
+    <tbody id="recent-times-body"
+           data-url="{{ url_for('pages.home_recent_times') }}"
+           data-offset="{{ stats.recent|length }}"
+           data-limit="25">
       {% for row in stats.recent %}
       <tr>
         <td>{{ row.driver }}</td>
@@ -43,6 +46,54 @@
     </tbody>
   </table>
 </div>
+<script>
+(function () {
+  var box = document.getElementById('recent-times-box');
+  var tbody = document.getElementById('recent-times-body');
+  if (!box || !tbody) return;
+  var url = tbody.dataset.url;
+  var offset = parseInt(tbody.dataset.offset, 10);
+  var limit = parseInt(tbody.dataset.limit, 10);
+  var loading = false;
+  var done = false;
+
+  function cell(text, cls) {
+    var td = document.createElement('td');
+    td.textContent = text || '—';
+    if (cls) td.className = cls;
+    return td;
+  }
+
+  function loadMore() {
+    if (loading || done) return;
+    loading = true;
+    fetch(url + '?offset=' + offset + '&limit=' + limit,
+          { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var rows = data.rows || [];
+        if (!rows.length) { done = true; return; }
+        rows.forEach(function (row) {
+          var tr = document.createElement('tr');
+          tr.appendChild(cell(row.driver));
+          tr.appendChild(cell(row.club));
+          tr.appendChild(cell(row.car));
+          tr.appendChild(cell(row.time_text, 'num'));
+          tr.appendChild(cell(row.at_text, 'meta'));
+          tbody.appendChild(tr);
+        });
+        offset += rows.length;
+        if (rows.length < limit) done = true;
+      })
+      .catch(function () { done = true; })
+      .then(function () { loading = false; });
+  }
+
+  box.addEventListener('scroll', function () {
+    if (box.scrollTop + box.clientHeight >= box.scrollHeight - 40) loadMore();
+  });
+})();
+</script>
 {% endif %}
 
 <h2>Get started</h2>

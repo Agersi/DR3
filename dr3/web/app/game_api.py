@@ -8,8 +8,9 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime
+from pathlib import Path
 
-from flask import Blueprint, g, jsonify, redirect, request, session, url_for
+from flask import Blueprint, current_app, g, jsonify, redirect, request, session, url_for
 
 from . import csrf
 from .auth import (
@@ -21,6 +22,7 @@ from .auth import (
 from .db import db
 from .events import (
     entries_for_event,
+    entry_nationality,
     event_is_active,
     event_is_upcoming,
     get_all_events,
@@ -45,6 +47,29 @@ def _stable_int_id(string_id: str, base: int = 100000) -> int:
     """Derive a stable positive integer from a string (md5-based)."""
     h = int.from_bytes(hashlib.md5(string_id.encode()).digest()[:4], 'little')
     return base + (h % 90000)
+
+
+def _client_version_file() -> Path:
+    """VERSION.txt next to the served client zip (dr3/dist/)."""
+    return Path(__file__).resolve().parents[2] / 'dist' / 'VERSION.txt'
+
+
+@game_api_bp.route('/api/client-version')
+def api_client_version():
+    """Latest Windows client version + download link. Public: the client's
+    update banner polls this before login."""
+    try:
+        version = _client_version_file().read_text(encoding='utf-8').strip()
+    except OSError:
+        return _api_error('no client build published', 404)
+    if not version:
+        return _api_error('no client build published', 404)
+    site = current_app.config['SITE_URL'].rstrip('/')
+    return jsonify({
+        'ok': True,
+        'version': version,
+        'download_url': f'{site}/download/DR3-windows.zip',
+    })
 
 
 def _club_dict(club: Club, user_id: int) -> dict:
@@ -424,6 +449,7 @@ def api_game_leaderboard(event_id: str):
             'vehicle_id': e.get('vehicle_id'),
             'total_time_ms': e['total_time_ms'],
             'points': points.get(e['username'], 0),
+            'nationality_id': entry_nationality(e),
             'stages': e.get('stages', []),
         })
     return jsonify({'ok': True, 'entries': out, 'total': len(out)})

@@ -45,6 +45,15 @@ def main() -> int:
         r = client.get(path)
         check(f'anon GET {path}', r.status_code == want, f'status={r.status_code}')
 
+    # home recent-times box (backlog #42): server-rendered first page +
+    # infinite-scroll JS wired to the public endpoint
+    html = client.get('/').get_data(as_text=True)
+    check('home: recent-times box with rows + scroll JS',
+          'recent-times-box' in html and 'recent-times-body' in html
+          and 'Smoke Driver' in html
+          and 'data-url="/api/home/recent-times"' in html
+          and "addEventListener('scroll'" in html, '')
+
     zip_path = HERE.parent / 'dist' / 'DR3-windows.zip'
     want_dl = 200 if zip_path.is_file() else 404
     r = client.get('/download/DR3-windows.zip')

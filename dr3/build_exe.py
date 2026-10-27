@@ -302,6 +302,13 @@ def build() -> None:
         zip_mb = Path(zip_path).stat().st_size / (1024 * 1024)
         print(f"[build] Zipped   {zip_path}  ({zip_mb:.1f} MB)")
 
+        # Version marker next to the zip: the site's /api/client-version
+        # endpoint serves it for the client's update banner.
+        version_text = (ROOT / "VERSION").read_text().strip()
+        (ROOT / "dist" / "VERSION.txt").write_text(
+            version_text + "\n", encoding="utf-8")
+        print(f"[build] Version  dist/VERSION.txt -> {version_text}")
+
 
 if __name__ == "__main__":
     build()

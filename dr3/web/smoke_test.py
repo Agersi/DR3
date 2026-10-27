@@ -151,11 +151,51 @@ def main() -> int:
           st0.get('tuning_setup_b64') == 'dHVuaW5n', str(st0))
     check('leaderboard: best time kept (419000+5000=424000)',
           e0.get('total_time_ms') == 424000, str(e0.get('total_time_ms')))
+    check('leaderboard: entry-level nationality_id from stage-begin',
+          e0.get('nationality_id') == 1, str(e0.get('nationality_id')))
 
     r = client.get('/api/game/my-progress', headers=headers)
     j = r.get_json() or {}
     check('my-progress has event', any(x['event_id'] == eid for x in j.get('events', [])),
           str(j)[:200])
+
+    # 7b. client-version endpoint (source of the client's update banner)
+    ver_file = HERE.parent / 'dist' / 'VERSION.txt'
+    had_ver = ver_file.is_file()
+    saved_ver = ver_file.read_text(encoding='utf-8') if had_ver else None
+    try:
+        if had_ver:
+            ver_file.unlink()
+        r = client.get('/api/client-version')
+        check('client-version 404 without VERSION.txt',
+              r.status_code == 404, f'status={r.status_code}')
+        ver_file.parent.mkdir(parents=True, exist_ok=True)
+        ver_file.write_text('9.9.9\n', encoding='utf-8')
+        r = client.get('/api/client-version')
+        j = r.get_json() or {}
+        check('client-version serves published version + download link',
+              r.status_code == 200 and j.get('version') == '9.9.9'
+              and str(j.get('download_url', '')).endswith('/download/DR3-windows.zip'),
+              str(j))
+    finally:
+        if had_ver:
+            ver_file.write_text(saved_ver, encoding='utf-8')
+        elif ver_file.is_file():
+            ver_file.unlink()
+
+    # 7c. home recent-times endpoint (front page infinite-scroll source)
+    r = client.get('/api/home/recent-times?offset=0&limit=25')
+    j = r.get_json() or {}
+    rows = j.get('rows') or []
+    check('recent-times returns the posted stage time',
+          r.status_code == 200 and len(rows) == 1
+          and rows[0].get('driver') == 'Smoke Driver'
+          and rows[0].get('time_text')
+          and rows[0].get('at_text'), str(j)[:300])
+    r = client.get('/api/home/recent-times?offset=1&limit=25')
+    j = r.get_json() or {}
+    check('recent-times short page signals end of list',
+          (j.get('rows') or []) == [], str(j))
 
     # 8. local time-trial endpoints are removed
     r = client.post('/api/game/time-trial-submit', headers=headers, json={})

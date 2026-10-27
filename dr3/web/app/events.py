@@ -137,6 +137,17 @@ def entry_to_dict(r: Result) -> dict:
     }
 
 
+def entry_nationality(entry: dict) -> int:
+    """The player's most recently reported nationality id (game ids are
+    passed through as-is; the game renders its own flag from them). 0 when
+    never reported."""
+    for s in reversed(entry.get('stages') or []):
+        nat = int((s or {}).get('nationality_id', 0) or 0)
+        if nat:
+            return nat
+    return 0
+
+
 def entries_for_event(event_id: str) -> list[dict]:
     rows = Result.query.filter_by(event_id=event_id).order_by(Result.id).all()
     return [entry_to_dict(r) for r in rows]

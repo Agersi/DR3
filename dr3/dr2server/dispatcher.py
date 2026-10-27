@@ -1014,6 +1014,7 @@ class RpcDispatcher:
             active_chal_id, layout, active, ep,
             carry_over=(mode == "multi"),
             prev_was_rx=prev_was_rx,
+            championship_time=(mode == "multi"),
         )
         return club_egonet, challenge_egonet, progress_egonet
 
@@ -1021,6 +1022,7 @@ class RpcDispatcher:
         self, challenge_id: int, layout: List[int], active: int,
         ep: Optional[Dict[str, Any]], carry_over: bool = False,
         prev_was_rx: bool = False,
+        championship_time: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """Progress entry for the active event of a multi-event championship,
         keyed to the currently-served challenge id.
@@ -1042,6 +1044,10 @@ class RpcDispatcher:
         rally leg with them makes the game's Tires button crash.  After an RX
         leg the seed falls back to the same defaults upstream RaceNet seeds
         multi-rally entries with (TyreCompound 7 / TyresRemaining 2).
+
+        With ``championship_time`` (Multi-Location Rally), ChampTimeMs is the
+        running championship total instead of this leg's own stages (backlog
+        38) — consistent with the StageBegin/StageComplete responses.
         """
         completed = (ep or {}).get("completed_stages", [])
         completed_count = len(completed)
@@ -1072,7 +1078,8 @@ class RpcDispatcher:
                 vehicle_id=vehicle_id,
                 livery_id=livery_id,
                 meters_driven=0,
-                champ_time_ms=0,
+                champ_time_ms=(self._time_in_range(completed, 0, None)
+                               if championship_time else 0),
                 has_repaired=bool(last.get("has_repaired", False)),
                 repair_penalty_ms=int(last.get("repair_penalty_ms", 0) or 0),
                 vehicle_damage=self._damage_from_dict(last.get("vehicle_damage")),
@@ -1098,7 +1105,10 @@ class RpcDispatcher:
             vehicle_id=vehicle_id,
             livery_id=livery_id,
             meters_driven=last.get("meters_driven", 0) or 0,
-            champ_time_ms=self._time_in_range(completed, offset, event_stage_count),
+            champ_time_ms=(self._time_in_range(completed, 0, None)
+                           if championship_time
+                           else self._time_in_range(
+                               completed, offset, event_stage_count)),
             has_repaired=bool(last.get("has_repaired", False)),
             repair_penalty_ms=int(last.get("repair_penalty_ms", 0) or 0),
             vehicle_damage=self._damage_from_dict(last.get("vehicle_damage")),
@@ -1939,6 +1949,13 @@ class RpcDispatcher:
             return {"ok": True, "TotalEntries": 0, "Entries": [],
                     "PlayerRank": 0}
 
+        # Multi-Location Rally boards show running championship totals: sum
+        # from flat stage 0 and cap at the player's overall progress instead
+        # of this leg's range (backlog 38). The cutoff logic below then works
+        # unchanged with the whole flat list as its range.
+        if self._event_mode(event_id) == "multi":
+            range_start, range_count = 0, None
+
         # Pre-persist the player's just-completed stage time, if any.
         # The game queries this leaderboard AFTER the stage finishes but
         # BEFORE RaceNetChallenges.StageComplete fires (the player views
@@ -2044,7 +2061,9 @@ class RpcDispatcher:
                 "VehicleId":      UInt32(vehicle_id),
                 "IsFounder":      False,
                 "IsVIP":          False,
-                "Nationality":    UInt32(0),
+                # Game nationality ids are passed through as-is: the game
+                # renders its own flag from them (backlog 40).
+                "Nationality":    UInt32(int(e.get("nationality_id", 0) or 0)),
                 "GhostAvailable": False,
                 "LiveryId":       UInt32(0),
             })
@@ -2595,6 +2614,27 @@ class RpcDispatcher:
             return [len(ev.get("stages", []) or []) for ev in evs]
         return [len(evt.get("stages", []) or [])]
 
+    def _event_mode(self, event_id: str) -> str:
+        """Championship mode ('multi'/'season') for an event id.
+
+        Reads the cached clubs snapshot first (no network); falls back to a
+        web-API fetch. Unknown/legacy events default to 'multi', matching
+        normalize_championship on the web side."""
+        if event_id and self._clubs_snapshot:
+            for evt in self._clubs_snapshot.get("events", []) or []:
+                if evt.get("id") == event_id:
+                    mode = evt.get("mode")
+                    return mode if mode in ("multi", "season") else "multi"
+        if event_id and self.api_client is not None:
+            try:
+                evt = self.api_client.get_event(event_id) or {}
+            except Exception as exc:
+                print(f"[STAGE] get_event({event_id}) for mode raised: {exc}")
+                return "multi"
+            mode = (evt.get("settings") or {}).get("mode")
+            return mode if mode in ("multi", "season") else "multi"
+        return "multi"
+
     def _stage_offset(self, event_id: str, event_index: int) -> int:
         """Flat-ordinal offset for the first stage of sub-event ``event_index``.
 
@@ -2730,8 +2770,9 @@ class RpcDispatcher:
         # (Vehicle/Livery/Tyres/Tuning).
         ep = self._user_progress_for_event(event_id) if event_id else None
         completed_stages = (ep or {}).get("completed_stages", []) if ep else []
-        # Only THIS rally's earlier stages count: each rally of a championship
-        # is its own challenge, so its time (and damage) starts from zero.
+        # Earlier stages' state for the stage-start UI. In non-multi modes only
+        # THIS rally's stages count: each rally is its own challenge, so its
+        # damage starts from zero. Multi mode sums championship-wide below.
         rally_offset = gidx - req.stage_index
         prior_completed = [
             s for s in completed_stages
@@ -2752,10 +2793,17 @@ class RpcDispatcher:
 
         if last_prior is not None:
             vehicle_damage = self._damage_from_dict(last_prior.get("vehicle_damage"))
-            champ_time_ms = sum(int(s.get("time_ms", 0) or 0) for s in prior_completed)
         else:
             vehicle_damage = self._damage_from_dict(None)  # all zeros
-            champ_time_ms = 0
+        # Multi-Location Rally shows the running championship total on every
+        # leg (backlog 38); other modes keep per-rally timers.
+        if self._event_mode(event_id) == "multi":
+            champ_time_ms = sum(
+                int(s.get("time_ms", 0) or 0) for s in completed_stages
+                if int(s.get("stage_index", 0) or 0) < gidx
+            )
+        else:
+            champ_time_ms = sum(int(s.get("time_ms", 0) or 0) for s in prior_completed)
 
         progress = self._build_progress_dict(
             challenge_id=req.challenge_id,
@@ -2873,15 +2921,19 @@ class RpcDispatcher:
             target_stage_index = req.stage_index + 1
             state_out = 0  # between stages, ready for next StageBegin
 
-        # ChampTimeMs: this rally's stages only (each rally is its own
-        # challenge). Add this stage's time if the web fetch hasn't seen the
-        # submission yet.
+        # ChampTimeMs: Multi-Location Rally totals the whole championship
+        # (backlog 38); other modes total this rally's stages only (each
+        # rally is its own challenge). Add this stage's time if the web fetch
+        # hasn't seen the submission yet.
         if req.challenge_id in self._challenge_subevent_map and event_id:
             rally_offset, rally_count = self._subevent_range(event_id, sub_index, _layout)
         else:
             rally_offset, rally_count = 0, None
         gidx = rally_offset + req.stage_index
-        champ_time_ms = self._time_in_range(completed_stages, rally_offset, rally_count)
+        if self._event_mode(event_id) == "multi":
+            champ_time_ms = self._time_in_range(completed_stages, 0, None)
+        else:
+            champ_time_ms = self._time_in_range(completed_stages, rally_offset, rally_count)
         if req.race_status == 0 and not any(
             int(s.get("stage_index", 0) or 0) == gidx for s in completed_stages
         ):
@@ -2934,9 +2986,9 @@ class RpcDispatcher:
         StageIndex) with State 0=unstarted / 2=finished plus the stage time and
         a running CumulTimeMs.  Each club championship leg is served as its own
         single-event challenge (see _serve_multi_event_club), so the recap
-        covers exactly that leg's stages with EventIndex=0 and per-leg
-        cumulative times — consistent with the per-leg ChampTimeMs the
-        StageBegin/StageComplete responses report.
+        covers exactly that leg's stages with EventIndex=0 and cumulative
+        times — per-leg for season mode, seeded with the earlier legs' totals
+        (running championship total) for Multi-Location Rally.
         """
         raw = params.get("ChallengeId") or params.get("ChallengeID")
         try:
@@ -2963,7 +3015,12 @@ class RpcDispatcher:
             times_by_gidx[gidx] = int(s.get("time_ms", 0) or 0)
 
         recap: List[Dict[str, Any]] = []
-        cumul = 0
+        # Multi-Location Rally recaps carry the running championship total:
+        # seed with every completed stage before this leg (backlog 38).
+        if self._event_mode(event_id) == "multi":
+            cumul = sum(t for idx, t in times_by_gidx.items() if idx < offset)
+        else:
+            cumul = 0
         for j in range(count):
             t = times_by_gidx.get(offset + j)
             if t is not None:

@@ -10,6 +10,7 @@ from flask import (
     current_app,
     flash,
     g,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -65,16 +66,45 @@ def _reset_link(user: User) -> str:
     return f"{base}/reset_password/{user.reset_token}"
 
 
-def _home_stats(now) -> dict:
-    """Site-wide stats for the front page (backlog #29): driver/club counts,
-    total completed stages, and the most recent stage times players posted."""
+def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]:
+    """Every posted stage time as one row, newest first (backlog #42).
+
+    Each row is a single submitted stage slot (the latest submission for that
+    stage), so the front page's recent-times box can page through all of them."""
     from ..results_view import format_ms
     from ..scoring import car_label
 
     club_name = {c.id: c.name for c in Club.query.all()}
     display_name = {u.username: u.display_name for u in User.query.all()}
+    event_of = {e.id: e for e in Event.query.all()}
+
+    rows = []
+    for r in Result.query.all():
+        ev = event_of.get(r.event_id)
+        club = club_name.get(ev.club_id, '') if ev and ev.club_id else ''
+        car = car_label({'vehicle_id': r.vehicle_id, 'car': r.car})
+        for s in json.loads(r.stages_json or '[]'):
+            t = int(s.get('time_ms', 0) or 0)
+            sa = s.get('submitted_at')
+            if t <= 0 or not sa:
+                continue
+            rows.append({
+                'driver': display_name.get(r.username, r.username),
+                'club': club,
+                'car': car,
+                'time_text': format_ms(t),
+                'at': sa,
+            })
+    rows.sort(key=lambda x: x['at'], reverse=True)
+    if limit is not None:
+        return rows[offset:offset + limit]
+    return rows[offset:]
+
+
+def _home_stats(now) -> dict:
+    """Site-wide stats for the front page (backlog #29): driver/club counts,
+    total completed stages, and the most recent stage times players posted."""
     events = Event.query.all()
-    event_of = {e.id: e for e in events}
 
     active_clubs = set()
     for e in events:
@@ -85,41 +115,48 @@ def _home_stats(now) -> dict:
             active_clubs.add(e.club_id)
 
     stages_done = 0
-    recent = []
     for r in Result.query.all():
-        best_at, best_time = None, 0
         for s in json.loads(r.stages_json or '[]'):
-            t = int(s.get('time_ms', 0) or 0)
-            if t <= 0:
-                continue
-            stages_done += 1
-            sa = s.get('submitted_at')
-            if sa and (best_at is None or sa > best_at):
-                best_at, best_time = sa, t
-        if not best_at:
-            continue
-        ev = event_of.get(r.event_id)
-        recent.append({
-            'driver': display_name.get(r.username, r.username),
-            'club': club_name.get(ev.club_id, '') if ev and ev.club_id else '',
-            'car': car_label({'vehicle_id': r.vehicle_id, 'car': r.car}),
-            'time_text': format_ms(best_time),
-            'at': best_at,
-        })
-    recent.sort(key=lambda x: x['at'], reverse=True)
+            if int(s.get('time_ms', 0) or 0) > 0:
+                stages_done += 1
 
     return {
         'drivers': User.query.count(),
         'clubs': Club.query.count(),
         'active_clubs': len(active_clubs),
         'stages_done': stages_done,
-        'recent': recent[:8],
+        'recent': _recent_stage_times(0, 10),
     }
 
 
 @pages_bp.route('/')
 def home():
     return render_template('home.html', stats=_home_stats(utcnow()))
+
+
+@pages_bp.route('/api/home/recent-times')
+def home_recent_times():
+    """Most recent posted stage times for the front page's infinite-scroll
+    box (public). ``offset``/``limit`` paginate rows; a short last page is
+    the end-of-list signal."""
+    from .. import _parse_dt, _timeago
+
+    try:
+        offset = max(int(request.args.get('offset', 0)), 0)
+        limit = min(max(int(request.args.get('limit', 25)), 1), 100)
+    except ValueError:
+        offset, limit = 0, 25
+    rows = []
+    for row in _recent_stage_times(offset, limit):
+        dt = _parse_dt(row['at'])
+        rows.append({
+            'driver': row['driver'],
+            'club': row['club'],
+            'car': row['car'],
+            'time_text': row['time_text'],
+            'at_text': _timeago(dt) if dt else '',
+        })
+    return jsonify({'ok': True, 'rows': rows})
 
 
 # ── Auth ─────────────────────────────────────────────────
