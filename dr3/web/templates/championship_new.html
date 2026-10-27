@@ -10,14 +10,14 @@
     <label>Championship type</label>
     <div class="opt-grid">
       <label class="opt">
-        <input type="radio" name="mode" value="multi" {% if mode == 'multi' %}checked{% endif %}>
-        <span class="opt-title">Multi-Location Rally</span>
-        <span class="opt-desc">All rallies are available at once in one shared window — the duration is set on the first rally only.</span>
-      </label>
-      <label class="opt">
         <input type="radio" name="mode" value="season" {% if mode == 'season' %}checked{% endif %}>
         <span class="opt-title">Rally Season</span>
         <span class="opt-desc">Each rally has its own duration and opens one after another, back-to-back.</span>
+      </label>
+      <label class="opt">
+        <input type="radio" name="mode" value="multi" {% if mode == 'multi' %}checked{% endif %}>
+        <span class="opt-title">Multi-Location Rally</span>
+        <span class="opt-desc">All rallies are available at once in one shared window — the duration is set on the first rally only.</span>
       </label>
     </div>
 
@@ -38,12 +38,19 @@
       <label class="opt">
         <input type="radio" name="scoring" value="codemasters" {% if scoring == 'codemasters' %}checked{% endif %}>
         <span class="opt-title">Codemasters</span>
-        <span class="opt-desc">Field-size formula — the leader scores P points (P = participants), each position below drops by a shrinking step, minimum 1 point.</span>
+        <span class="opt-desc">The original scoring system, based on amount of drivers in the club, minimum 1 point for taking part.</span>
       </label>
     </div>
     <p class="meta">Points are awarded per rally for the classification position; a driver must finish every stage of the rally to score for it.</p>
 
-    <label class="checkrow"><input type="checkbox" name="power_stage" value="1" {% if power_stage %}checked{% endif %}> Power stage points — the top five finishers of each rally's final stage get +5 / +4 / +3 / +2 / +1 extra points</label>
+    <label>Power stage</label>
+    <div class="opt-grid">
+      <label class="opt">
+        <input type="checkbox" name="power_stage" value="1" {% if power_stage %}checked{% endif %}>
+        <span class="opt-title">Power stage points</span>
+        <span class="opt-desc">The top five finishers of each rally's final stage get +5 / +4 / +3 / +2 / +1 extra points.</span>
+      </label>
+    </div>
 
     <label for="num_events">Number of events</label>
     <input id="num_events" name="num_events" type="number" min="1" max="{{ max_events }}" value="3" required>

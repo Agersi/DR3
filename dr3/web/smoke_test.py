@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -307,6 +308,22 @@ def main() -> int:
           f"loc={r.headers.get('Location')}")
     draft_id = r.headers.get('Location', '').rstrip('/').split('/')[-1]
 
+    # Draft editor defaults: 7-day rally duration + a pre-selected conditions
+    # pick (the per-location Daytime/Clear/Dry default, or its nearest twin).
+    r = client.get(f'/clubs/{club_id}/championship/{draft_id}')
+    conds_html = ''
+    m = re.search(r'name="events\[0\]\[stages\]\[0\]\[conditions\]".*?</select>',
+                  r.data.decode(), re.S)
+    if m:
+        sel = re.search(r'<option value="(\d+)"\s+selected', m.group(0))
+        conds_html = m.group(0)
+        conds_picked = bool(sel and sel.group(1))
+    else:
+        conds_picked = False
+    check('edit page defaults: 7-day duration + pre-selected conditions',
+          r.status_code == 200 and b'value="7" selected' in r.data and conds_picked,
+          f'status={r.status_code} conds={conds_html[:120]!r}')
+
     # fill the single event's fields then preview
     routes = STAGE_ROUTES.get(qloc, []) if qloc else []
     edit_form = {
@@ -539,6 +556,11 @@ def main() -> int:
           and b'name="scoring" value="groupb"' in r.data
           and b'name="scoring" value="codemasters"' in r.data
           and b'name="power_stage"' in r.data, f'status={r.status_code}')
+    check('new screen defaults to rally season (listed first) + power stage card',
+          b'name="mode" value="season" checked' in r.data
+          and r.data.index(b'value="season"') < r.data.index(b'value="multi"')
+          and b'The original scoring system, based on amount of drivers in the club' in r.data
+          and b'>Power stage points<' in r.data, f'status={r.status_code}')
     r = client.post(f'/clubs/{club_id}/championship/new', data={
         'num_events': '1', 'num_stages': '1', 'mode': 'multi',
         'scoring': 'codemasters', 'power_stage': '1',

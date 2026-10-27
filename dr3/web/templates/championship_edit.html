@@ -81,9 +81,10 @@
             <select name="events[{{ ei }}][stages][{{ sj }}][conditions]" class="champ-conditions" data-event="{{ ei }}">
               {% if not conditions_by_location.get(event.location) %}<option value="">Select a location first</option>{% endif %}
               {% set valid_ids = conditions_by_location.get(event.location, [])|map(attribute=0)|list %}
+              {% set loc_default = default_condition_by_location.get(event.location) %}
               {% for cid, label in conditions_by_location.get(event.location, []) %}
               <option value="{{ cid }}"
-                      {% if stage.conditions_id == cid or (stage.conditions_id not in valid_ids and loop.first) %}selected{% endif %}>{{ label }}</option>
+                      {% if stage.conditions_id == cid or (stage.conditions_id not in valid_ids and cid == loc_default) %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
           </td>
@@ -126,12 +127,14 @@
 <script type="application/json" id="routesByLocation">{{ stage_routes|tojson }}</script>
 <script type="application/json" id="stageCaps">{{ stage_caps|tojson }}</script>
 <script type="application/json" id="conditionsByLocation">{{ conditions_by_location|tojson }}</script>
+<script type="application/json" id="defaultConditionByLocation">{{ default_condition_by_location|tojson }}</script>
 <script type="application/json" id="rxLocs">{{ rx_locs|tojson }}</script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   var routesByLoc = JSON.parse(document.getElementById('routesByLocation').textContent);
   var caps = JSON.parse(document.getElementById('stageCaps').textContent);
   var condsByLoc = JSON.parse(document.getElementById('conditionsByLocation').textContent);
+  var defCondsByLoc = JSON.parse(document.getElementById('defaultConditionByLocation').textContent);
   var rxLocs = JSON.parse(document.getElementById('rxLocs').textContent);
 
   function optionsHtml(pairs, selected, placeholder) {
@@ -167,7 +170,7 @@ document.addEventListener('DOMContentLoaded', function () {
       });
       document.querySelectorAll('.champ-conditions[data-event="' + ei + '"]').forEach(function (c) {
         if (!conds.length) c.innerHTML = '<option value="">Select a location first</option>';
-        else c.innerHTML = optionsHtml(conds, '', '');
+        else c.innerHTML = optionsHtml(conds, defCondsByLoc[sel.value] || '', '');
       });
       var lapsRow = document.querySelector('.rx-laps-row[data-event="' + ei + '"]');
       if (lapsRow) {

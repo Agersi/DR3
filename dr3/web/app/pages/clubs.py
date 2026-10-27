@@ -104,6 +104,7 @@ from ..tables import (
     blank_stage,
     bucket_for_duration,
     championship_duration,
+    default_conditions_id_for_location,
     enrich_stage,
     leg_duration,
     parse_championship_form,
@@ -153,6 +154,11 @@ def _championship_edit_context(club: Club, draft: dict) -> dict:
         # All classes (rally + rallycross) are selectable for every event.
         car_classes=list(ALL_CAR_CLASSES.keys()),
         conditions_by_location=CONDITIONS_BY_LOCATION,
+        # Per-location fallback pick for the conditions dropdown (closest to
+        # Daytime / Clear / Dry that the location ships lighting for).
+        default_condition_by_location={
+            loc: default_conditions_id_for_location(loc) for loc in STAGES
+        },
         surface_deg_options=SURFACE_DEG_OPTIONS,
         service_area_options=SERVICE_AREA_OPTIONS,
         # RX circuits run several lapped stages on their single verified route,
@@ -784,9 +790,9 @@ def join_via_invite_link(club_id: str, token: str):
 @verified_required
 def championship_new(club_id: str):
     club = _require_club_admin(club_id)
-    mode = (request.args.get('mode') or CHAMP_MODE_MULTI).strip().lower()
+    mode = (request.args.get('mode') or CHAMP_MODE_SEASON).strip().lower()
     if mode not in CHAMP_MODES:
-        mode = CHAMP_MODE_MULTI
+        mode = CHAMP_MODE_SEASON
     return render_template('championship_new.html', club=club, mode=mode,
                            scoring=SCORING_WRC, power_stage=False,
                            max_events=MAX_CHAMP_EVENTS, max_stages=MAX_STAGES_PER_EVENT)
@@ -798,9 +804,9 @@ def championship_generate(club_id: str):
     club = _require_club_admin(club_id)
     num_events = to_int_or_zero(request.form.get('num_events'))
     num_stages = to_int_or_zero(request.form.get('num_stages'))
-    mode = (request.form.get('mode') or CHAMP_MODE_MULTI).strip().lower()
+    mode = (request.form.get('mode') or CHAMP_MODE_SEASON).strip().lower()
     if mode not in CHAMP_MODES:
-        mode = CHAMP_MODE_MULTI
+        mode = CHAMP_MODE_SEASON
     scoring = (request.form.get('scoring') or SCORING_WRC).strip().lower()
     if scoring not in SCORING_SYSTEMS:
         scoring = SCORING_WRC

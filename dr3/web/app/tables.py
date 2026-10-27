@@ -18,7 +18,6 @@ from dr2server.game_data import (  # noqa: E402
     get_verified_routes_for_location,
     nearest_stage_conditions_for_location,
     stage_conditions_for_location,
-    stage_conditions_label,
     stage_conditions_options_for_location,
     vehicle_class_id_for_label,
 )
@@ -360,7 +359,7 @@ def blank_event(num_stages: int = 1) -> dict:
     return {
         'location': '',
         'car_class': '',
-        'duration': {'days': 2, 'hours': 0, 'mins': 0},
+        'duration': {'days': 7, 'hours': 0, 'mins': 0},
         'rx_laps': None,
         'stages': [blank_stage(i) for i in range(max(1, num_stages))],
     }
@@ -368,27 +367,16 @@ def blank_event(num_stages: int = 1) -> dict:
 
 _RANDOM_SURFACE_DEG = ['Medium', 'High', 'Max']
 
-
-def _condition_weight(label: str) -> float:
-    parts = [p.strip() for p in label.split('/')]
-    tod = parts[0] if parts else ''
-    wet = parts[2] if len(parts) > 2 else ''
-    weight = 1.0
-    if tod == 'Daytime':
-        weight *= 4.0
-    elif tod in ('Sunset', 'Dusk'):
-        weight *= 1.5
-    if wet == 'Dry':
-        weight *= 3.0
-    return weight
+# What a new stage's conditions default to.  Conditions are per-location, so the
+# label is resolved against each location's own verified set — a location that
+# ships no "Daytime / Clear / Dry" lighting (e.g. the snow-only ones) falls back
+# to its closest daytime-dry option.
+DEFAULT_CONDITION_LABEL = 'Daytime / Clear / Dry'
 
 
-def _random_condition_for(rng, location: str):
-    ids = stage_conditions_for_location(location)
-    if not ids:
-        return None
-    weights = [_condition_weight(stage_conditions_label(cid)) for cid in ids]
-    return rng.choices(ids, weights=weights, k=1)[0]
+def default_conditions_id_for_location(location: str):
+    """The conditions id closest to Daytime/Clear/Dry that ``location`` ships."""
+    return nearest_stage_conditions_for_location(location, label=DEFAULT_CONDITION_LABEL)
 
 
 def random_championship_events(num_events: int, num_stages: int) -> list[dict]:
@@ -418,7 +406,7 @@ def random_championship_events(num_events: int, num_stages: int) -> list[dict]:
         stages = [
             {
                 'track_id': tid,
-                'conditions_id': _random_condition_for(rng, location),
+                'conditions_id': default_conditions_id_for_location(location),
                 'surface_deg': rng.choice(_RANDOM_SURFACE_DEG),
                 'service_area': service_area_for_pos(i),
             }
@@ -428,7 +416,7 @@ def random_championship_events(num_events: int, num_stages: int) -> list[dict]:
         events.append({
             'location': location,
             'car_class': car_class,
-            'duration': {'days': 2, 'hours': 0, 'mins': 0},
+            'duration': {'days': 7, 'hours': 0, 'mins': 0},
             'rx_laps': None,
             'stages': stages,
         })
