@@ -795,6 +795,7 @@ def championship_new(club_id: str):
         mode = CHAMP_MODE_SEASON
     return render_template('championship_new.html', club=club, mode=mode,
                            scoring=SCORING_WRC, power_stage=False,
+                           default_events=3, default_stages=5,
                            max_events=MAX_CHAMP_EVENTS, max_stages=MAX_STAGES_PER_EVENT)
 
 

@@ -52,12 +52,26 @@
       </label>
     </div>
 
-    <label for="num_events">Number of events</label>
-    <input id="num_events" name="num_events" type="number" min="1" max="{{ max_events }}" value="3" required>
+    <label id="numEventsLabel">Number of events</label>
+    <div class="num-grid" role="radiogroup" aria-labelledby="numEventsLabel">
+      {% for n in range(1, max_events + 1) %}
+      <label class="num-tile">
+        <input type="radio" name="num_events" value="{{ n }}" {% if default_events == n %}checked{% endif %}>
+        <span>{{ n }}</span>
+      </label>
+      {% endfor %}
+    </div>
     <p class="meta">Each event is a rally at one location (max {{ max_events }}).</p>
 
-    <label for="num_stages">Stages per event</label>
-    <input id="num_stages" name="num_stages" type="number" min="1" max="{{ max_stages }}" value="5" required>
+    <label id="numStagesLabel">Stages per event</label>
+    <div class="num-grid" role="radiogroup" aria-labelledby="numStagesLabel">
+      {% for n in range(1, max_stages + 1) %}
+      <label class="num-tile">
+        <input type="radio" name="num_stages" value="{{ n }}" {% if default_stages == n %}checked{% endif %}>
+        <span>{{ n }}</span>
+      </label>
+      {% endfor %}
+    </div>
     <p class="meta">Starting stage count for each event — you can tune it per event afterwards.</p>
 
     <button type="submit">Generate championship</button>

@@ -345,6 +345,11 @@ def main() -> int:
           f"loc={r.headers.get('Location')}")
     r = client.get(f'/clubs/{club_id}/championship/{draft_id}/preview')
     check('championship preview renders', r.status_code == 200, f'status={r.status_code}')
+    check('preview advanced defaults: hardcore + cockpit on, unexpected + assists off',
+          b'name="adv_hardcore_damage" value="1" checked' in r.data
+          and b'name="adv_force_cockpit" value="1" checked' in r.data
+          and b'name="adv_unexpected_moments" value="1" checked' not in r.data
+          and b'name="adv_allow_assists" value="1" checked' not in r.data, f'status={r.status_code}')
 
     future_iso = time.strftime('%Y-%m-%dT%H:%M', time.gmtime(time.time() + 3600))
     r = client.post(f'/clubs/{club_id}/championship/{draft_id}/submit', data={
@@ -561,6 +566,11 @@ def main() -> int:
           and r.data.index(b'value="season"') < r.data.index(b'value="multi"')
           and b'The original scoring system, based on amount of drivers in the club' in r.data
           and b'>Power stage points<' in r.data, f'status={r.status_code}')
+    check('new screen: numbered event/stage pickers (12 tiles each, 3/5 preselected)',
+          r.data.count(b'name="num_events" value=') == 12
+          and b'name="num_events" value="3" checked' in r.data
+          and r.data.count(b'name="num_stages" value=') == 12
+          and b'name="num_stages" value="5" checked' in r.data, f'status={r.status_code}')
     r = client.post(f'/clubs/{club_id}/championship/new', data={
         'num_events': '1', 'num_stages': '1', 'mode': 'multi',
         'scoring': 'codemasters', 'power_stage': '1',

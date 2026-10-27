@@ -226,9 +226,9 @@ MAX_CHAMP_DURATION = timedelta(days=180)
 # event, so old events without them normalize to WRC / off.
 DEFAULT_CHAMP_SETTINGS: dict = {
     'hardcore_damage': True,
-    'force_cockpit_camera': False,
-    'allow_assists': True,
-    'unexpected_moments': True,
+    'force_cockpit_camera': True,
+    'allow_assists': False,
+    'unexpected_moments': False,
     'scoring': 'wrc',
     'power_stage': False,
 }

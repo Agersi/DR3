@@ -226,6 +226,18 @@ input[type='checkbox'] { width: auto; max-width: none; }
 .opt:has(input:checked) .opt-points { color: var(--bg); font-weight: 700; }
 .opt:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* Numbered pickers — 1..N radio groups rendered as a strip of square tiles */
+.num-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0.5rem; margin: 0.6rem 0 1rem; }
+.num-tile {
+  position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer;
+  aspect-ratio: 1 / 1; background: var(--bg); border: 2px solid var(--line); box-shadow: 3px 3px 0 var(--shadow);
+  font-family: var(--mono); font-size: 1.05rem; color: var(--text); margin: 0;
+}
+.num-tile input { position: absolute; opacity: 0; pointer-events: none; }
+.num-tile:has(input:checked) { background: var(--accent); border-color: var(--text); color: var(--bg); font-weight: 700; }
+.num-tile:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 640px) { .num-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+
 /* ── Tables ─────────────────────────────────────────── */
 
 .table-wrap { overflow-x: auto; background: var(--card); border: 2px solid var(--line); box-shadow: 4px 4px 0 var(--shadow); margin: 1rem 0; }
