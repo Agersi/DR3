@@ -2843,10 +2843,15 @@ class RpcDispatcher:
         has_repaired = req.recov_to_service or _qr > 0
         time_ms = int(req.stage_time * 1000)
 
-        # Persist if we have a target event AND the stage was finished cleanly.
-        # DNF/restart submissions (race_status != 0) are skipped for the
-        # leaderboard, but we still build a Progress response below.
-        if event_id and self.api_client is not None and req.race_status == 0:
+        # Persist only clean finishes. Two non-finish shapes close a stage
+        # (backlog 32, step 2): race_status != 0 (club terminal-damage
+        # close-out, rs=4) and recov_to_service=True (daily-shape close-out —
+        # the game sends rs=0 with the stage's time limit as StageTime; the
+        # real upstream answers that shape with State=6 DNF, so it must not be
+        # recorded as a completion). Either way we still build a Progress
+        # response below.
+        finished_cleanly = req.race_status == 0 and not req.recov_to_service
+        if event_id and self.api_client is not None and finished_cleanly:
             try:
                 self.api_client.submit_stage(
                     event_id=event_id,
@@ -2871,8 +2876,9 @@ class RpcDispatcher:
                       f"stage={req.stage_index} time_ms={time_ms}")
             except Exception as exc:
                 print(f"[STAGE] api_client.submit_stage() raised: {exc}")
-        elif req.race_status != 0:
-            print(f"[STAGE] Not submitting (race_status={req.race_status}, not finished)")
+        elif not finished_cleanly:
+            print(f"[STAGE] Not submitting (DNF close-out: race_status={req.race_status}, "
+                  f"recov_to_service={bool(req.recov_to_service)})")
         elif not event_id:
             print(f"[STAGE] Cannot submit — no event_id available")
 
@@ -2934,7 +2940,7 @@ class RpcDispatcher:
             champ_time_ms = self._time_in_range(completed_stages, 0, None)
         else:
             champ_time_ms = self._time_in_range(completed_stages, rally_offset, rally_count)
-        if req.race_status == 0 and not any(
+        if finished_cleanly and not any(
             int(s.get("stage_index", 0) or 0) == gidx for s in completed_stages
         ):
             champ_time_ms += time_ms

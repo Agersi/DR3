@@ -18,7 +18,7 @@ from urllib.parse import parse_qs, urlparse
 from .account_store import AccountStore
 from .api_client import UpstreamClient
 from .dispatcher import RpcDispatcher
-from .egonet import decode_stream, encode_stream
+from .egonet import Int64, Timestamp, UInt16, UInt32, UInt8, decode_stream, encode_stream
 
 
 class _UpstreamHTTPSConnection(http.client.HTTPSConnection):
@@ -303,9 +303,57 @@ class RequestHandler(BaseHTTPRequestHandler):
             return True
         return method in self.app.proxy_methods
 
+    def _log_datamining_event(self, payload: Dict[str, Any]) -> None:
+        """Log a DataMining.DataEvent payload locally (backlog 32).
+
+        The game reports terminal damage (and other telemetry) via this method;
+        in default proxy mode it goes straight upstream, so without this line
+        the event would only be visible by digging through capture files. The
+        payload is a columnar vdic: Statistics.Data = {values: [...], keys: [...],
+        event: <name>} — zip them into a flat field map and log the useful bits.
+        """
+        try:
+            data = payload.get("Statistics", {}).get("Data", {})
+            event = str(data.get("event", "?"))
+            keys = data.get("keys")
+            values = data.get("values")
+            fields: Dict[str, Any] = {}
+            if isinstance(keys, list) and isinstance(values, list):
+                fields = dict(zip(keys, values))
+            interesting = {
+                key: self._datamining_display(fields[key])
+                for key in (
+                    "damage_type",
+                    "stage_time_seconds",
+                    "journey_event_id",
+                    "journey_stage_id",
+                    "vehicle_class_id",
+                    "vehicle_id",
+                    "location_id",
+                    "g_country_code",
+                )
+                if key in fields
+            }
+            print(f"[DATA] DataEvent {event} {interesting}")
+        except Exception as exc:  # never let logging break the request path
+            print(f"[DATA] DataEvent (unparseable payload: {exc})")
+
+    @staticmethod
+    def _datamining_display(value: Any) -> Any:
+        if isinstance(value, (Timestamp, UInt32, UInt16, UInt8, Int64)):
+            return value.value
+        return value
+
     def _handle_egonet_rpc(self, method: str, payload: Dict[str, Any], capture_path: Path) -> None:
         is_proxied = self._should_proxy(method, payload)
         print(f"[RPC] {method}{'  [PROXY]' if is_proxied else ''}")
+
+        # Backlog 32 observability: DataMining.DataEvent is proxied upstream in
+        # default mode and would otherwise be invisible in debug.log. Log the
+        # event name + key fields locally before forwarding (zero behavior
+        # change — the proxy path below is untouched).
+        if method == "DataMining.DataEvent":
+            self._log_datamining_event(payload)
 
         # Check if this method should be proxied upstream
         if is_proxied:

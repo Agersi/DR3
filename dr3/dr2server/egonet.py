@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import struct
+import uuid as _uuid
 from typing import Any, Dict, Tuple
 
 
@@ -153,6 +154,13 @@ def _decode_value(payload: bytes, offset: int) -> Tuple[Any, int]:
             return UInt32(struct.unpack_from("<I", payload, offset)[0]), offset + 4
         if value_type == b"i64":
             return struct.unpack_from("<Q", payload, offset)[0], offset + 8
+        # uuid (16 bytes) — used by DataMining.DataEvent payloads; decode to the
+        # standard 8-4-4-4-12 string so captures/logs are readable.
+        if value_type == b"uid":
+            raw = bytes(payload[offset : offset + 16])
+            if len(raw) == 16:
+                return str(_uuid.UUID(bytes=raw)), offset + 16
+            return {"unsupported_type": "uid"}, offset
 
     # Signed integers (marker == b"s")
     if value_type == b"i08":
