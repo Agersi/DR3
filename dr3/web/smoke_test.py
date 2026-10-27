@@ -54,7 +54,8 @@ def main() -> int:
     reg_html = r.get_data(as_text=True)
     check('register page has country select menu',
           '<select id="country"' in reg_html
-          and 'value="Denmark"' in reg_html and 'value="United States"' in reg_html,
+          and 'value="Denmark"' in reg_html and 'value="United States"' in reg_html
+          and 'value="Wales"' in reg_html,
           f'status={r.status_code}')
 
     with app.app_context():
