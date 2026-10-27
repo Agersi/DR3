@@ -1,3 +1,6 @@
+{% macro flag_img(url) -%}
+{%- if url %}<img class="flag" src="{{ url }}" alt="" loading="lazy"> {%- endif -%}
+{%- endmacro %}
 <!doctype html>
 <html lang="en">
 <head>

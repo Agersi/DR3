@@ -60,7 +60,7 @@
     <tr><th>User</th><th>Requested</th><th></th></tr>
     {% for p in pending_users %}
     <tr>
-      <td>{{ p.user.display_name }} ({{ p.user.username }})</td>
+      <td>{{ flag_img(flag_url(p.user.country)) }}{{ p.user.display_name }} ({{ p.user.username }})</td>
       <td class="num">{{ p.requested_at | timeago }}</td>
       <td>
         <form method="post" action="{{ url_for('clubs.approve_join_request', club_id=club.id, username=p.user.username) }}" class="inline">
@@ -85,7 +85,7 @@
     <tr><th>User</th><th>Display name</th><th>Role</th>{% if is_owner %}<th></th>{% endif %}</tr>
     {% for m in members %}
     <tr>
-      <td>{{ m.user.username }}</td>
+      <td>{{ flag_img(flag_url(m.user.country)) }}{{ m.user.username }}</td>
       <td>{{ m.user.display_name or '' }}</td>
       <td>
         {% if m.role == 'owner' %}<span class="chip chip-accent">Owner</span>
@@ -128,7 +128,7 @@
       <tr><th>User</th><th>Invited</th><th></th></tr>
       {% for i in pending_invites %}
       <tr>
-        <td>{{ i.user.username }}</td>
+        <td>{{ flag_img(flag_url(i.user.country)) }}{{ i.user.username }}</td>
         <td class="num">{{ i.created_at | timeago }}</td>
         <td>
           <form method="post" action="{{ url_for('clubs.cancel_invite', club_id=club.id, username=i.user.username) }}" class="inline">
@@ -220,7 +220,7 @@
         {% for s in c.standings %}
         <tr>
           <td class="num">{{ loop.index }}</td>
-          <td>{{ s.username }}</td>
+          <td>{{ flag_img(flag_for(s.username)) }}{{ s.username }}</td>
           <td>{{ s.car or '' }}</td>
           <td class="num">{{ s.points }}</td>
           <td class="num">{{ s.time_text }}</td>

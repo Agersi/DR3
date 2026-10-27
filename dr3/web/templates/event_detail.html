@@ -23,7 +23,7 @@
     {% for s in standings %}
     <tr>
       <td class="num">{{ loop.index }}</td>
-      <td>{{ s.username }}</td>
+      <td>{{ flag_img(flag_for(s.username)) }}{{ s.username }}</td>
       <td>{{ s.car or '' }}</td>
       <td class="num">{{ s.points }}</td>
       <td class="num">{{ s.time_text }}</td>
@@ -56,7 +56,7 @@
     {% for s in rr.standings %}
     <tr>
       <td class="num">{{ loop.index }}</td>
-      <td>{{ s.username }}{% if s.dnf_stages %} <span class="chip chip-warn">DNF ×{{ s.dnf_stages }}</span>{% endif %}</td>
+      <td>{{ flag_img(flag_for(s.username)) }}{{ s.username }}{% if s.dnf_stages %} <span class="chip chip-warn">DNF ×{{ s.dnf_stages }}</span>{% endif %}</td>
       <td>{{ s.car or '' }}</td>
       <td class="num">{{ s.time_text }}</td>
     </tr>
@@ -80,7 +80,7 @@
     {% for x in st.results %}
     <tr>
       <td class="num">{{ x.pos }}</td>
-      <td>{{ x.username }}</td>
+      <td>{{ flag_img(flag_for(x.username)) }}{{ x.username }}</td>
       <td>{{ x.car or '' }}</td>
       <td class="num">{{ x.time_text }}</td>
       <td class="num">{{ x.gap_str }}</td>

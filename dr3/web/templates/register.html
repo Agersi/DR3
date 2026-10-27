@@ -14,7 +14,11 @@
       <label for="display_name">Display name (optional)</label>
       <input id="display_name" name="display_name">
       <label for="country">Country (optional)</label>
-      <input id="country" name="country">
+      <select id="country" name="country">
+        <option value="">—</option>
+        {% for c in countries %}<option value="{{ c }}">{{ c }}</option>
+        {% endfor %}
+      </select>
       <label for="password">Password (min 8 chars)</label>
       <input id="password" name="password" type="password" required>
       <label for="confirm">Confirm password</label>

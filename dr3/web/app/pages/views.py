@@ -71,11 +71,14 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
 
     Each row is a single submitted stage slot (the latest submission for that
     stage), so the front page's recent-times box can page through all of them."""
+    from ..countries import flag_url
     from ..results_view import format_ms
     from ..scoring import car_label
 
     club_name = {c.id: c.name for c in Club.query.all()}
-    display_name = {u.username: u.display_name for u in User.query.all()}
+    users = User.query.all()
+    display_name = {u.username: u.display_name for u in users}
+    country_of = {u.username: (u.country or '') for u in users}
     event_of = {e.id: e for e in Event.query.all()}
 
     rows = []
@@ -90,6 +93,7 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
                 continue
             rows.append({
                 'driver': display_name.get(r.username, r.username),
+                'driver_flag': flag_url(country_of.get(r.username, '')),
                 'club': club,
                 'car': car,
                 'time_text': format_ms(t),
@@ -151,6 +155,7 @@ def home_recent_times():
         dt = _parse_dt(row['at'])
         rows.append({
             'driver': row['driver'],
+            'driver_flag': row.get('driver_flag', ''),
             'club': row['club'],
             'car': row['car'],
             'time_text': row['time_text'],

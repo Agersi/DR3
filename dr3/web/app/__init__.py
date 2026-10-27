@@ -5,7 +5,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from flask import Flask
+from flask import Flask, g
 from flask_wtf import CSRFProtect
 
 csrf = CSRFProtect()
@@ -94,6 +94,35 @@ def create_app() -> Flask:
     def inject_site_links():
         return {'GITHUB_URL': GITHUB_URL, 'TWITCH_URL': TWITCH_URL,
                 'KO_FI_URL': KO_FI_URL, 'DISCORD_URL': DISCORD_URL}
+
+    @app.context_processor
+    def inject_countries():
+        """Country select options + flag helpers for templates (backlog #40).
+
+        ``flag_url(country)`` resolves a self-declared country to its static
+        flag image; ``flag_for(username)`` does the same for a driver looked
+        up by username (request-cached), for result tables that only carry
+        names."""
+        from .countries import COUNTRIES, flag_url
+
+        def flag_for(username: str) -> str:
+            name = (username or '').strip()
+            if not name:
+                return ''
+            cache = getattr(g, '_flag_cache', None)
+            if cache is None:
+                cache = g._flag_cache = {}
+            if name in cache:
+                return cache[name]
+            from .models import User
+            user = User.query.filter(
+                db.func.lower(User.username) == name.lower()
+            ).first()
+            url = flag_url(user.country) if user is not None else ''
+            cache[name] = url
+            return url
+
+        return {'countries': COUNTRIES, 'flag_url': flag_url, 'flag_for': flag_for}
 
     from .game_api import game_api_bp
     from .pages import register_page_blueprints

@@ -49,6 +49,14 @@ def main() -> int:
     }, follow_redirects=False)
     check('register redirects to login', r.status_code == 302, f'status={r.status_code}')
 
+    # 1b. register page offers a country select menu (backlog #40)
+    r = client.get('/register')
+    reg_html = r.get_data(as_text=True)
+    check('register page has country select menu',
+          '<select id="country"' in reg_html
+          and 'value="Denmark"' in reg_html and 'value="United States"' in reg_html,
+          f'status={r.status_code}')
+
     with app.app_context():
         user = User.query.filter_by(username='smokedriver').first()
         check('user row created', user is not None)
@@ -64,6 +72,18 @@ def main() -> int:
                     follow_redirects=False)
     check('login redirects to dashboard', r.status_code == 302 and '/dashboard' in r.headers.get('Location', ''),
           f"loc={r.headers.get('Location')}")
+
+    # 3b. account page: country select preselects the stored value (backlog #40)
+    r = client.get('/account')
+    acc_html = r.get_data(as_text=True)
+    check('account page country select preselects current country',
+          '<option value="Sweden" selected' in acc_html, f'status={r.status_code}')
+
+    r = client.get('/profile/smokedriver')
+    prof_html = r.get_data(as_text=True)
+    check('profile page shows country flag',
+          'sweden-flag.png' in prof_html and 'Sweden' in prof_html,
+          f'status={r.status_code}')
 
     # 4. generate game token
     r = client.post('/api/token/generate', follow_redirects=False)
@@ -153,6 +173,14 @@ def main() -> int:
           e0.get('total_time_ms') == 424000, str(e0.get('total_time_ms')))
     check('leaderboard: entry-level nationality_id from stage-begin',
           e0.get('nationality_id') == 1, str(e0.get('nationality_id')))
+
+    # home recent-times rows carry the driver's flag url (backlog #40)
+    r = client.get('/api/home/recent-times?offset=0&limit=25')
+    j = r.get_json() or {}
+    rows = j.get('rows') or []
+    check('home recent-times row carries driver flag url',
+          any((row.get('driver_flag') or '').endswith('sweden-flag.png') for row in rows),
+          str(rows)[:200])
 
     r = client.get('/api/game/my-progress', headers=headers)
     j = r.get_json() or {}
@@ -681,13 +709,15 @@ def main() -> int:
         check('club detail shows rounds + standings with times',
               r.status_code == 200 and b'Standings' in r.data
               and (qloc or '').encode() in r.data
-              and b'2:30.000' in r.data and b'3:20.000' in r.data,
+              and b'2:30.000' in r.data and b'3:20.000' in r.data
+              and b'sweden-flag.png' in r.data,
               f'status={r.status_code}')
         r = client.get(f'/event/{eid2}')
         check('event detail shows rounds + classification + stage results',
               r.status_code == 200 and b'Round 1' in r.data
               and b'Classification' in r.data
               and b'Stage 1' in r.data
+              and b'sweden-flag.png' in r.data
               and r.data.index(b'smokedriver') < r.data.index(b'secondpilot'),
               f'status={r.status_code}')
 

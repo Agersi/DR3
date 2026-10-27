@@ -252,6 +252,7 @@ table.table, .table-wrap table { width: 100%; border-collapse: collapse; backgro
 .table tr:nth-child(even) td, .table-wrap tr:nth-child(even) td { background: rgba(24, 28, 20, 0.25); }
 .table tr:last-child td, .table-wrap tr:last-child td { border-bottom: 0; }
 .num { font-family: var(--mono); font-size: 0.92em; }
+.flag { height: 0.95em; width: auto; vertical-align: -0.18em; margin-right: 0.3em; border-radius: 2px; }
 
 /* ── Chips / badges ─────────────────────────────────── */
 

@@ -15,7 +15,14 @@
     <label for="display_name">Display name</label>
     <input id="display_name" name="display_name" value="{{ g.user.display_name }}">
     <label for="country">Country</label>
-    <input id="country" name="country" value="{{ g.user.country or '' }}">
+    <select id="country" name="country">
+      <option value="">—</option>
+      {% if g.user.country and g.user.country not in countries %}
+      <option value="{{ g.user.country }}" selected>{{ g.user.country }}</option>
+      {% endif %}
+      {% for c in countries %}<option value="{{ c }}"{% if c == g.user.country %} selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
     <label for="bio">Bio</label>
     <textarea id="bio" name="bio" rows="3">{{ g.user.bio or '' }}</textarea>
     <button type="submit">Save profile</button>

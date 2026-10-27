@@ -36,7 +36,7 @@
            data-limit="25">
       {% for row in stats.recent %}
       <tr>
-        <td>{{ row.driver }}</td>
+        <td>{{ flag_img(row.driver_flag) }}{{ row.driver }}</td>
         <td>{{ row.club or '—' }}</td>
         <td>{{ row.car or '—' }}</td>
         <td class="num">{{ row.time_text }}</td>
@@ -64,6 +64,21 @@
     return td;
   }
 
+  function driverCell(row) {
+    var td = document.createElement('td');
+    if (row.driver_flag) {
+      var img = document.createElement('img');
+      img.className = 'flag';
+      img.src = row.driver_flag;
+      img.alt = '';
+      img.loading = 'lazy';
+      td.appendChild(img);
+      td.appendChild(document.createTextNode(' '));
+    }
+    td.appendChild(document.createTextNode(row.driver || '—'));
+    return td;
+  }
+
   function loadMore() {
     if (loading || done) return;
     loading = true;
@@ -75,7 +90,7 @@
         if (!rows.length) { done = true; return; }
         rows.forEach(function (row) {
           var tr = document.createElement('tr');
-          tr.appendChild(cell(row.driver));
+          tr.appendChild(driverCell(row));
           tr.appendChild(cell(row.club));
           tr.appendChild(cell(row.car));
           tr.appendChild(cell(row.time_text, 'num'));

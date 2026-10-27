@@ -3,7 +3,7 @@
 {% block content %}
 <div class="panel">
   <h1>{{ target.display_name }}</h1>
-  <p class="meta">@{{ target.username }}{% if target.country %} · {{ target.country }}{% endif %}</p>
+  <p class="meta">@{{ target.username }}{% if target.country %} · {{ flag_img(flag_url(target.country)) }}{{ target.country }}{% endif %}</p>
   {% if target.bio %}<p>{{ target.bio }}</p>{% endif %}
 </div>
 {% endblock %}
