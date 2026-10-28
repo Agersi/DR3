@@ -1027,6 +1027,120 @@ def main() -> int:
               not _class_errors([_cev(qloc, qclass), _cev(qloc, other_rally)], CHAMP_MODE_SEASON),
               str(_class_errors([_cev(qloc, qclass), _cev(qloc, other_rally)], CHAMP_MODE_SEASON)))
 
+    # 19g. draft management (#45): load-previous / load-draft / save-permanent
+    from app.models import ChampionshipDraft as _CD
+    with app.app_context():
+        latest = (Event.query.filter_by(club_id=club_id)
+                  .order_by(Event.start_time.desc()).first())
+        latest_legs = json.loads(latest.legs_json or '[]') if latest else []
+        latest_settings = json.loads(latest.settings_json or '{}') if latest else {}
+    r = client.post(f'/clubs/{club_id}/championship/load-previous', follow_redirects=False)
+    check('load-previous redirects to a fresh draft editor',
+          r.status_code == 302 and '/championship/' in r.headers.get('Location', ''),
+          f"loc={r.headers.get('Location')}")
+    prev_draft = r.headers.get('Location', '').rstrip('/').split('/')[-1]
+    known_drafts = [v for k, v in locals().items()
+                    if k.endswith('_draft') and isinstance(v, str) and v != prev_draft]
+    check('load-previous created a new draft (not an existing one)',
+          prev_draft.startswith('champ-draft-') and prev_draft not in known_drafts,
+          f"prev_draft={prev_draft} known={known_drafts}")
+    r = client.get(f'/clubs/{club_id}/championship/{prev_draft}')
+    check('loaded draft editor renders', r.status_code == 200, f'status={r.status_code}')
+    with app.app_context():
+        pd = db.session.get(_CD, prev_draft)
+        pdata = json.loads(pd.data_json or '{}') if pd else {}
+        plegs = pdata.get('events') or []
+        check('loaded draft mirrors the latest championship (mode/scoring/first leg)',
+              pd is not None and pd.permanent is False
+              and pdata.get('mode') == latest_settings.get('mode', 'multi')
+              and pdata.get('settings', {}).get('scoring') == latest_settings.get('scoring', 'wrc')
+              and len(plegs) == len(latest_legs)
+              and (not plegs or not latest_legs
+                   or plegs[0].get('location') == latest_legs[0].get('location')),
+              f"pdata={json.dumps(pdata)[:300]}")
+        check('loaded draft has a blank start (owner picks a new window)',
+              pdata.get('start_at') == '', f"start_at={pdata.get('start_at')!r}")
+    r = client.post(f'/clubs/{club_id}/championship/{prev_draft}/save-permanent', follow_redirects=False)
+    check('save-permanent redirects back to preview',
+          r.status_code == 302 and '/preview' in r.headers.get('Location', ''),
+          f"loc={r.headers.get('Location')}")
+    with app.app_context():
+        pd = db.session.get(_CD, prev_draft)
+        check('draft marked permanent', pd is not None and pd.permanent is True, '')
+    r = client.get(f'/clubs/{club_id}/championship/{prev_draft}/preview')
+    check('preview shows the permanent state',
+          r.status_code == 200 and b'Permanent draft' in r.data, f'status={r.status_code}')
+    r = client.get(f'/clubs/{club_id}')
+    detail_html = r.get_data(as_text=True)
+    check('club detail lists the user\'s draft (permanent marked)',
+          r.status_code == 200 and f'value="{prev_draft}"' in detail_html
+          and '— permanent' in detail_html, f'status={r.status_code}')
+    r = client.post(f'/clubs/{club_id}/championship/load-draft',
+                    data={'draft_id': prev_draft}, follow_redirects=False)
+    check('load-draft resumes the picked draft editor',
+          r.status_code == 302 and r.headers.get('Location', '').rstrip('/').endswith(prev_draft),
+          f"loc={r.headers.get('Location')}")
+    r = client.post(f'/clubs/{club_id}/championship/load-draft',
+                    data={'draft_id': 'champ-draft-deadbeef'}, follow_redirects=False)
+    check('load-draft rejects a foreign draft id',
+          r.status_code == 302 and r.headers.get('Location', '').rstrip('/') == f'/clubs/{club_id}',
+          f"loc={r.headers.get('Location')}")
+
+    # Permanent drafts survive submit (reusable templates) — fresh one-shot
+    # flow: generate -> fill -> save-permanent -> submit -> still there.
+    r = client.post(f'/clubs/{club_id}/championship/new', data={
+        'num_events': '1', 'num_stages': '1', 'mode': 'multi',
+    }, follow_redirects=False)
+    perm_draft = r.headers.get('Location', '').rstrip('/').split('/')[-1]
+    perm_form = {
+        'events[0][location]': qloc or '',
+        'events[0][car_class]': qclass or '',
+        'events[0][duration_days]': '1',
+        'events[0][duration_hours]': '0',
+        'events[0][duration_mins]': '0',
+        'action': 'preview',
+    }
+    if routes:
+        perm_form['events[0][stages][0][route]'] = str(routes[0][0])
+        perm_form['events[0][stages][0][conditions]'] = str(stage_conditions_for_location(qloc)[0])
+        perm_form['events[0][stages][0][surface_deg]'] = 'Medium'
+        perm_form['events[0][stages][0][service_area]'] = 'Medium'
+    client.post(f'/clubs/{club_id}/championship/{perm_draft}', data=perm_form, follow_redirects=False)
+    r = client.post(f'/clubs/{club_id}/championship/{perm_draft}/save-permanent', follow_redirects=False)
+    check('fresh draft saved as permanent', r.status_code == 302, f'status={r.status_code}')
+    perm_iso = time.strftime('%Y-%m-%dT%H:%M', time.gmtime(time.time() + 6 * 86400))
+    r = client.post(f'/clubs/{club_id}/championship/{perm_draft}/submit', data={
+        'start_at': perm_iso,
+        'adv_hardcore_damage': '1',
+    }, follow_redirects=False)
+    check('permanent draft submit redirects to club detail',
+          r.status_code == 302 and r.headers.get('Location', '').rstrip('/') == f'/clubs/{club_id}',
+          f"loc={r.headers.get('Location')}")
+    with app.app_context():
+        pd = db.session.get(_CD, perm_draft)
+        check('permanent draft survives submit (reusable template)',
+              pd is not None and pd.permanent is True, '')
+    r = client.post(f'/clubs/{club_id}/championship/{perm_draft}/discard', follow_redirects=False)
+    with app.app_context():
+        check('permanent draft discard still deletes it', db.session.get(_CD, perm_draft) is None, '')
+
+    # Load-previous guard: a club without championships gets the greyed button
+    # and an error flash instead of a redirect into a phantom editor.
+    r = client.post('/clubs', data={
+        'name': 'Draft Lab', 'description': '',
+        'visibility': 'public', 'join_policy': 'open',
+    }, follow_redirects=False)
+    check('draft lab club created', r.status_code == 302, f'status={r.status_code}')
+    lab_id = r.headers.get('Location', '').rstrip('/').split('/')[-1]
+    r = client.get(f'/clubs/{lab_id}')
+    check('load-previous greyed out without a championship',
+          r.status_code == 200
+          and b'disabled title="This club has no championship to load yet"' in r.data,
+          f'status={r.status_code}')
+    r = client.post(f'/clubs/{lab_id}/championship/load-previous', follow_redirects=True)
+    check('load-previous on an empty club flashes an error',
+          r.status_code == 200 and b'no championship to load' in r.data, f'status={r.status_code}')
+
     # 20. delete the championships
     with app.app_context():
         champ_ids = [e.id for e in Event.query.filter_by(club_id=club_id).all()]

@@ -297,6 +297,7 @@ def get_draft(draft_id: str) -> dict | None:
     data['club_id'] = d.club_id
     data['owner'] = d.owner
     data['created_at'] = d.created_at.isoformat() if d.created_at else ''
+    data['permanent'] = bool(d.permanent)
     return data
 
 
@@ -310,8 +311,10 @@ def save_draft(draft: dict) -> None:
             owner=draft.get('owner', ''),
         )
         db.session.add(d)
+    # Row columns (permanent included) are managed separately — never let a
+    # draft dict's copy of them leak into data_json.
     payload = {k: v for k, v in draft.items()
-               if k not in ('id', 'club_id', 'owner', 'created_at')}
+               if k not in ('id', 'club_id', 'owner', 'created_at', 'permanent')}
     d.data_json = json.dumps(payload)
     db.session.commit()
 
@@ -321,6 +324,59 @@ def delete_draft(draft_id: str) -> None:
     if d is not None:
         db.session.delete(d)
         db.session.commit()
+
+
+def draft_from_event(event: dict, club_id: str, owner: str) -> dict:
+    """Seed a fresh builder draft from a stored championship event.
+
+    Inverse of the submit path (pages/clubs.py::championship_submit): the
+    event's legs become editor events and its settings_json becomes the
+    draft settings.  ``start_at`` is left empty on purpose — the old window
+    has already passed, so the owner picks a new start on the preview screen.
+    """
+    from .scoring import SCORING_SYSTEMS, SCORING_WRC
+    from .tables import CHAMP_MODE_MULTI, CHAMP_MODES, normalize_championship
+
+    s = event.get('settings') or {}
+    scoring = s.get('scoring')
+    if scoring not in SCORING_SYSTEMS:
+        scoring = SCORING_WRC
+    mode = s.get('mode')
+    if mode not in CHAMP_MODES:
+        mode = CHAMP_MODE_MULTI
+    events = []
+    for leg in normalize_championship(event)['events']:
+        events.append({
+            'location': leg.get('location') or '',
+            'car_class': leg.get('car_class') or '',
+            'duration': dict(leg.get('duration') or {'days': 0, 'hours': 0, 'mins': 0}),
+            'rx_laps': leg.get('rx_laps'),
+            'stages': [
+                {
+                    'track_id': st.get('track_id'),
+                    'conditions_id': st.get('conditions_id'),
+                    'surface_deg': st.get('surface_deg', 'Medium'),
+                    'service_area': st.get('service_area', 'Medium'),
+                }
+                for st in leg.get('stages', [])
+            ],
+        })
+    return {
+        'id': f'champ-draft-{secrets.token_hex(4)}',
+        'club_id': club_id,
+        'owner': owner,
+        'mode': mode,
+        'start_at': '',
+        'settings': {
+            'hardcore_damage': bool(s.get('hardcore_damage', False)),
+            'unexpected_moments': bool(s.get('unexpected_moments', False)),
+            'force_cockpit_camera': bool(s.get('force_cockpit_camera', False)),
+            'allow_assists': bool(s.get('allow_assists', False)),
+            'scoring': scoring,
+            'power_stage': bool(s.get('power_stage', False)),
+        },
+        'events': events,
+    }
 
 
 # ── Notifications ────────────────────────────────────────

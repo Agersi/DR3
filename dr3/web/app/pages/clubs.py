@@ -37,6 +37,7 @@ from ..clubs import (
     club_reviewers,
     club_visibility,
     delete_draft,
+    draft_from_event,
     email_invite,
     email_join_approved,
     email_join_denied,
@@ -144,6 +145,20 @@ def _require_draft(club_id: str, draft_id: str) -> dict:
     if not draft or draft.get('club_id') != club_id:
         abort(404)
     return draft
+
+
+def _latest_club_event(club_id: str) -> dict | None:
+    """The club's most recent championship (latest start_time, id tiebreak)."""
+    events = [e for e in get_all_events()
+              if e.get('club_id') == club_id and e.get('start_time')]
+
+    def _ts(e):
+        try:
+            return datetime.fromisoformat(e['start_time']).timestamp()
+        except (TypeError, ValueError):
+            return 0.0
+
+    return max(events, key=lambda e: (_ts(e), e['id'])) if events else None
 
 
 def _championship_edit_context(club: Club, draft: dict) -> dict:
@@ -321,6 +336,35 @@ def club_detail(club_id: str):
             if link.revoked_at is None:
                 invite_links.append(link)
 
+    # Draft management (backlog #45): the most recent championship to load as
+    # a fresh draft, plus this user's existing drafts for the club.
+    previous_event = None
+    my_drafts = []
+    if is_admin:
+        previous_event = _latest_club_event(club_id)
+        if uname:
+            rows = ChampionshipDraft.query.filter_by(
+                club_id=club.id, owner=uname).all()
+            rows.sort(key=lambda d: d.created_at or utcnow(), reverse=True)
+            for d in rows:
+                try:
+                    data = json.loads(d.data_json or '{}')
+                except ValueError:
+                    data = {}
+                if not isinstance(data, dict):
+                    data = {}
+                evs = [ev for ev in (data.get('events') or []) if isinstance(ev, dict)]
+                locs = [ev['location'] for ev in evs if ev.get('location')]
+                label = f'{len(evs)} event' + ('' if len(evs) == 1 else 's')
+                if locs:
+                    label += ' — ' + ', '.join(dict.fromkeys(locs))
+                my_drafts.append({
+                    'id': d.id,
+                    'permanent': bool(d.permanent),
+                    'label': label,
+                    'created_at': d.created_at.strftime('%d %b %Y') if d.created_at else '',
+                })
+
     live_ends = ''
     if live_event is not None:
         ee = effective_end(live_event, now)
@@ -338,6 +382,8 @@ def club_detail(club_id: str):
         pending_users=pending_users,
         pending_invites=pending_invites,
         invite_links=invite_links,
+        previous_event=previous_event,
+        my_drafts=my_drafts,
         visibility=club_visibility(club),
         join_policy=club_join_policy(club),
     )
@@ -1126,7 +1172,11 @@ def championship_submit(club_id: str, draft_id: str):
         legs_json=json.dumps(v2_events),
     )
     db.session.add(event)
-    delete_draft(draft_id)
+    # Permanent drafts are reusable templates: they survive submit so the
+    # same championship can be recreated from them later.  Regular drafts
+    # are one-shot and go away with the created event.
+    if not draft.get('permanent'):
+        delete_draft(draft_id)
     db.session.commit()
     flash('Championship created!', 'success')
     return redirect(url_for('clubs.club_detail', club_id=club.id))
@@ -1216,3 +1266,44 @@ def championship_discard(club_id: str, draft_id: str):
     delete_draft(draft_id)
     flash('Draft discarded.', 'info')
     return redirect(url_for('clubs.club_detail', club_id=club.id))
+
+
+@clubs_bp.route('/clubs/<club_id>/championship/load-previous', methods=['POST'])
+@verified_required
+def championship_load_previous(club_id: str):
+    """Seed a fresh draft from the club's most recent championship."""
+    club = _require_club_admin(club_id)
+    prev = _latest_club_event(club.id)
+    if prev is None:
+        flash('This club has no championship to load.', 'error')
+        return redirect(url_for('clubs.club_detail', club_id=club.id))
+    draft = draft_from_event(prev, club.id, g.user.username)
+    save_draft(draft)
+    flash(f'Loaded "{prev.get("name", prev["id"])}" as a new draft.', 'info')
+    return redirect(url_for('clubs.championship_edit', club_id=club.id, draft_id=draft['id']))
+
+
+@clubs_bp.route('/clubs/<club_id>/championship/load-draft', methods=['POST'])
+@verified_required
+def championship_load_draft(club_id: str):
+    """Continue editing one of the user's existing drafts for this club."""
+    club = _require_club_admin(club_id)
+    draft_id = (request.form.get('draft_id') or '').strip()
+    d = db.session.get(ChampionshipDraft, draft_id) if draft_id else None
+    if d is None or d.club_id != club.id or d.owner != g.user.username:
+        flash('That draft does not exist for this club.', 'error')
+        return redirect(url_for('clubs.club_detail', club_id=club.id))
+    return redirect(url_for('clubs.championship_edit', club_id=club.id, draft_id=draft_id))
+
+
+@clubs_bp.route('/clubs/<club_id>/championship/<draft_id>/save-permanent', methods=['POST'])
+@verified_required
+def championship_save_permanent(club_id: str, draft_id: str):
+    """Mark a draft permanent so it survives submit and can be reloaded."""
+    club = _require_club_admin(club_id)
+    _require_draft(club_id, draft_id)
+    d = db.session.get(ChampionshipDraft, draft_id)
+    d.permanent = True
+    db.session.commit()
+    flash('Draft saved as permanent — it stays available to reload after submit.', 'success')
+    return redirect(url_for('clubs.championship_preview', club_id=club.id, draft_id=draft_id))

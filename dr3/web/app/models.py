@@ -107,6 +107,9 @@ class ChampionshipDraft(db.Model):
     owner: str = db.Column(db.String(64), nullable=False)
     created_at: datetime = db.Column(db.DateTime, default=utcnow)
     data_json: str = db.Column(db.Text, nullable=False)
+    # Permanent drafts survive submit (reusable templates); regular ones are
+    # deleted when the championship is created.
+    permanent: bool = db.Column(db.Boolean, default=False)
 
 
 class Event(db.Model):

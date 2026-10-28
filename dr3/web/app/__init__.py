@@ -164,11 +164,34 @@ def _create_schema(db) -> None:
     for attempt in range(5):
         try:
             db.create_all()
-            return
+            break
         except OperationalError as e:
             if '1050' not in str(e) and 'already exists' not in str(e):
                 raise
             time.sleep(0.5 * (attempt + 1))
+    _ensure_draft_permanent_column(db)
+
+
+def _ensure_draft_permanent_column(db) -> None:
+    """Additive migration for databases created before ChampionshipDraft.permanent.
+
+    create_all only creates missing tables, so pre-existing championship_drafts
+    tables need the column added explicitly (works on SQLite and MySQL)."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+
+    cols = {c['name'] for c in db.inspect(db.engine).get_columns('championship_drafts')}
+    if 'permanent' in cols:
+        return
+    try:
+        with db.engine.begin() as conn:
+            conn.execute(text(
+                'ALTER TABLE championship_drafts '
+                'ADD COLUMN permanent BOOLEAN NOT NULL DEFAULT 0'))
+    except OperationalError as e:
+        # Lost the boot race to another worker adding the same column.
+        if '1060' not in str(e) and 'duplicate column' not in str(e):
+            raise
 
 
 def _load_dotenv_local() -> None:

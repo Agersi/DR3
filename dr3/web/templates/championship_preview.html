@@ -61,8 +61,13 @@
   <div class="actions-row">
     <button type="submit">Submit championship</button>
     <a class="btn ghost" href="{{ url_for('clubs.championship_edit', club_id=club.id, draft_id=draft.id) }}">Back to edit</a>
+    <button type="submit" form="permanentDraftForm" class="ghost" {% if draft.permanent %}disabled title="This draft is already permanent — it stays available after submit"{% endif %}>{% if draft.permanent %}Permanent draft{% else %}Save Permanent Draft{% endif %}</button>
     <button type="submit" form="discardDraftForm" class="danger">Discard draft</button>
   </div>
+</form>
+
+<form id="permanentDraftForm" method="post" action="{{ url_for('clubs.championship_save_permanent', club_id=club.id, draft_id=draft.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 </form>
 
 <form id="discardDraftForm" method="post" action="{{ url_for('clubs.championship_discard', club_id=club.id, draft_id=draft.id) }}">
