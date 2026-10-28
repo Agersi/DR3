@@ -11,8 +11,21 @@ Decision under test: only clean finishes are submitted as completions; both DNF
 close-out shapes send a marker instead (mark_dnf=True, time_ms=0) so the web
 side can flag the pre-persisted time-limit entry without changing its time —
 web scoring then counts it as a DNF (zero rally points), and the bogus limit
-value must not leak into the echoed ChampTimeMs. The Progress response is still
-built for every shape (state machine unchanged — step 3 territory).
+value must not leak into the echoed ChampTimeMs.
+
+Progress response: a DNF close-out ends the event/leg for this player, so the
+response is ALWAYS State=2 (event finished) + AttemptsLeft=0 — never
+"ready for next stage". Answering mid-leg after a wreck made the game start
+the next stage with a destroyed car and crash on Continue (mid-leg recurrence
+2026-10-28, access violation at dirtrally2.exe + 0x27d447; single-stage events
+had only worked because the pre-persisted time-limit value already made the
+stage count look done).
+
+Marker payload: mid-leg abandons close out the stage AFTER the wrecked one
+(captured 2026-10-28: wreck on stage 0 -> StageComplete(stage=1, rs=5)), so
+the marker carries dnf_stage_index = stage_index - 1 and the web side flags
+that entry too — otherwise its pre-persisted time-limit value scores as a
+real finish.
 
 Run: python tools\repro_terminal_damage.py   (from D:\CODE\DR2)
 """
@@ -137,7 +150,11 @@ def main():
         check("rs=4: marker time_ms is 0 (web keeps stored limit)",
               api.submitted[0]["time_ms"], 0)
         check("rs=4: marker race_status", api.submitted[0]["race_status"], 4)
-    check("rs=4: State (mid-leg)", unwrap(r["Progress"]["State"]), 0)
+        check("rs=4: marker points at the wrecked (previous) stage",
+              api.submitted[0].get("dnf_stage_index"), 0)
+    check("rs=4: State (event finished after DNF)",
+          unwrap(r["Progress"]["State"]), 2)
+    check("rs=4: AttemptsLeft", unwrap(r["Progress"]["AttemptsLeft"]), 0)
     check("rs=4: ChampTimeMs unchanged", unwrap(r["Progress"]["ChampTimeMs"]), 1000)
 
     # Daily-shape close-out (rs=0, recov=True, StageTime = stage time limit):
@@ -150,9 +167,43 @@ def main():
         check("recov: marker flag", api.submitted[0].get("mark_dnf"), True)
         check("recov: marker race_status normalised to 4",
               api.submitted[0]["race_status"], 4)
-    check("recov: State (mid-leg)", unwrap(r["Progress"]["State"]), 0)
+        check("recov: marker points at the wrecked (previous) stage",
+              api.submitted[0].get("dnf_stage_index"), 0)
+    check("recov: State (event finished after DNF)",
+          unwrap(r["Progress"]["State"]), 2)
+    check("recov: AttemptsLeft", unwrap(r["Progress"]["AttemptsLeft"]), 0)
     check("recov: ChampTimeMs does not absorb the limit value",
           unwrap(r["Progress"]["ChampTimeMs"]), 1000)
+
+    # Mid-leg abandon flow (observed 2026-10-28, evt-10872bf1 / HanBaoBao):
+    # the game pre-persisted stage 0 with the time limit via its post-wreck
+    # leaderboard query, then closed out the FOLLOWING stage retired (rs=5).
+    # The marker lands on that next stage; the response must still end the
+    # event, not offer the stage after it.
+    api = FakeApi(
+        events={"evtT": {"stages": [stage(0), stage(1), stage(2)]}},
+        progress_events=[
+            {"event_id": "evtT",
+             "completed_stages": [stage(0, time_ms=900000)],
+             "total_time_ms": 900000, "attempts_used": 0},
+        ],
+    )
+    d = make_dispatcher(api)
+    d._challenge_event_map = {800001: "evtT"}
+    d._challenge_subevent_map = {800001: 0}
+    r = d._stage_complete(sc(1, race_status=5))
+    check("abandon: DNF marker sent", len(api.submitted), 1)
+    if api.submitted:
+        check("abandon: marker on the closed-out (next) stage",
+              api.submitted[0]["stage_index"], 1)
+        check("abandon: marker race_status preserved (5)",
+              api.submitted[0]["race_status"], 5)
+        check("abandon: dnf_stage_index points at the pre-persisted wrecked stage",
+              api.submitted[0].get("dnf_stage_index"), 0)
+    check("abandon: State (event finished)", unwrap(r["Progress"]["State"]), 2)
+    check("abandon: AttemptsLeft", unwrap(r["Progress"]["AttemptsLeft"]), 0)
+    check("abandon: ChampTimeMs keeps the pre-persisted limit, no leak",
+          unwrap(r["Progress"]["ChampTimeMs"]), 900000)
 
     print()
     if FAILS:

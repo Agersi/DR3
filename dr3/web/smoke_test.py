@@ -268,12 +268,76 @@ def main() -> int:
         check('dnf: rally_standings counts the DNF stage as unfinished',
               row['dnf_stages'] == 2, str(row)[:200])
 
+    # 7a-b. Mid-leg abandon (backlog #32, 2026-10-28): wreck on stage 0 -> the
+    # pre-persist stores the limit there; the close-out lands on the NEXT
+    # stage (rs=5) carrying dnf_stage_index=0, so BOTH entries end up flagged.
+    with app.app_context():
+        from datetime import timedelta
+        from app.models import Event, utcnow
+        now = utcnow()
+        db.session.add(Event(
+            id='smoke-dnf-midleg', schema_version=2, name='Smoke DNF MidLeg',
+            type='daily', location='Lydden Hill', car_class='Gravel 1',
+            surface='Gravel', conditions='Dry',
+            stages_json=json.dumps([st, st]), settings_json=json.dumps({}),
+            legs_json=json.dumps([{
+                'location': 'Lydden Hill', 'car_class': 'Gravel 1',
+                'surface': 'Gravel', 'duration': {'days': 0, 'hours': 1, 'mins': 0},
+                'stages': [st, st],
+            }]),
+            start_time=now - timedelta(minutes=5), end_time=now + timedelta(hours=1),
+            active=True, featured=False, club_id=None, system=False,
+        ))
+        db.session.commit()
+
+    eid3 = 'smoke-dnf-midleg'
+    r = client.post('/api/game/stage-begin', headers=headers, json={
+        'event_id': eid3, 'stage_index': 0, 'event_index': 0,
+        'livery_id': 7, 'tuning_setup_b64': 'ZG5mbWFyaw==', 'tyre_compound': 9,
+        'tyres_remaining': 1, 'nationality_id': 31, 'vehicle_id': 469,
+    })
+    check('midleg: stage-begin ok', (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+
+    r = client.post('/api/game/stage-complete', headers=headers, json={
+        'event_id': eid3, 'username': 'smokedriver', 'stage_index': 0,
+        'event_index': 0, 'time_ms': 900000,
+    })
+    check('midleg: pre-persist ok', (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+
+    r = client.post('/api/game/stage-complete', headers=headers, json={
+        'event_id': eid3, 'username': 'smokedriver', 'stage_index': 1,
+        'event_index': 0, 'time_ms': 0, 'race_status': 5, 'mark_dnf': True,
+        'dnf_stage_index': 0,
+    })
+    check('midleg: marker ok', (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+
+    r = client.get(f'/api/game/leaderboard/{eid3}', headers=headers)
+    j = r.get_json() or {}
+    e0 = (j.get('entries') or [{}])[0]
+    st0 = (e0.get('stages') or [None, None])[0] or {}
+    st1 = (e0.get('stages') or [None, None])[1] or {}
+    check('midleg: wrecked stage flagged DNF', st0.get('race_status') == 5, str(st0)[:200])
+    check('midleg: wrecked stage keeps the pre-persisted limit time',
+          st0.get('time_ms') == 900000, str(st0)[:200])
+    check('midleg: closed-out stage flagged DNF', st1.get('race_status') == 5, str(st1)[:200])
+    check('midleg: total keeps the limit value only once',
+          e0.get('total_time_ms') == 900000, str(e0.get('total_time_ms')))
+
+    with app.app_context():
+        from app import scoring
+        from app.events import entries_for_event, get_event
+        ev3 = get_event(eid3)
+        rows = scoring.rally_standings(entries_for_event(eid3), {
+            'offset': 0, 'count': 2, 'location': ev3['location'], 'stages': ev3['stages']})
+        row = next(rw for rw in rows if rw['username'] == 'smokedriver')
+        check('midleg: both stages count as unfinished', row['dnf_stages'] == 2, str(row)[:200])
+
     # clean up so later recent-times checks see only the original single row
     with app.app_context():
         from app.models import Event, Result
-        for res in Result.query.filter_by(event_id=eid2).all():
+        for res in Result.query.filter(Result.event_id.in_([eid2, eid3])).all():
             db.session.delete(res)
-        db.session.query(Event).filter_by(id=eid2).delete()
+        db.session.query(Event).filter(Event.id.in_([eid2, eid3])).delete()
         db.session.commit()
 
     # 7b. client-version endpoint (source of the client's update banner)

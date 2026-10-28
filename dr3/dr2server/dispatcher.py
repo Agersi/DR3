@@ -2884,6 +2884,11 @@ class RpcDispatcher:
                 try:
                     # time_ms=0 is ignored by the web side for markers — the
                     # stored pre-persisted time (the stage's limit) stays.
+                    # Mid-leg abandons close out the stage AFTER the wrecked
+                    # one, so tell the web which stage actually got wrecked:
+                    # its pre-persisted limit entry must be flagged DNF too,
+                    # or scoring counts the limit as a real finish.
+                    dnf_stage_index = (req.stage_index - 1) if req.stage_index > 0 else None
                     self.api_client.submit_stage(
                         event_id=event_id,
                         username="",  # server uses g.game_user from token
@@ -2892,9 +2897,11 @@ class RpcDispatcher:
                         time_ms=0,
                         race_status=req.race_status if req.race_status else 4,
                         mark_dnf=True,
+                        dnf_stage_index=dnf_stage_index,
                     )
                     print(f"[STAGE] DNF marker sent (race_status={req.race_status}, "
-                          f"recov_to_service={bool(req.recov_to_service)})")
+                          f"recov_to_service={bool(req.recov_to_service)}, "
+                          f"dnf_stage={dnf_stage_index})")
                 except Exception as exc:
                     print(f"[STAGE] api_client.submit_stage() raised: {exc}")
             else:
@@ -2934,13 +2941,24 @@ class RpcDispatcher:
         tyre_compound = int(latest.get("tyre_compound", 0) or 7)
         tyres_remaining = int(latest.get("tyres_remaining", 0) or 2)
 
+        # A DNF close-out ends the event/leg for this player: after terminal
+        # damage the game abandons the rest of the leg (it closes out the
+        # following stage retired), so answering "ready for next stage" makes
+        # it start one with a destroyed car and crash on Continue (backlog 32,
+        # mid-leg recurrence 2026-10-28 — access violation at dirtrally2.exe +
+        # 0x27d447). Single-stage events never hit this because the pre-
+        # persisted time-limit value already made the stage count look done;
+        # force finished for every DNF shape.
+        dnf_closeout = not finished_cleanly
         if req.challenge_id in self._challenge_subevent_map:
             # Per-event challenge: this event's stages complete in order, so the
             # local (0-based) index reaching the event's count means it's done.
             completed_in_event = (req.stage_index + 1) if req.race_status == 0 else req.stage_index
-            all_done = event_stage_count > 0 and completed_in_event >= event_stage_count
+            all_done = event_stage_count > 0 and (
+                dnf_closeout or completed_in_event >= event_stage_count)
         else:
-            all_done = event_stage_count > 0 and len(completed_stages) >= event_stage_count
+            all_done = event_stage_count > 0 and (
+                dnf_closeout or len(completed_stages) >= event_stage_count)
         if all_done:
             target_stage_index = event_stage_count - 1
             state_out = 2  # event finished

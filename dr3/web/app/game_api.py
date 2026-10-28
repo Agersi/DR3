@@ -349,6 +349,33 @@ def api_game_stage_complete():
         stage_entry.setdefault('time_ms', 0)
         stage_entry.setdefault('penalties_ms', 0)
         vid = stage_entry.get('vehicle_id')
+        # Mid-leg abandon (backlog 32, 2026-10-28): the game closes out the
+        # stage AFTER the wrecked one retired, so the wrecked stage's own
+        # entry — carrying the pre-persisted time limit — sits at a different
+        # position. Flag it too (keeping its stored time), or scoring counts
+        # the limit value as a real finish.
+        dnf_local = data.get('dnf_stage_index')
+        if dnf_local is not None:
+            try:
+                dnf_pos = global_stage_index(event, event_index, int(dnf_local))
+            except (TypeError, ValueError):
+                dnf_pos = -1
+            if 0 <= dnf_pos < pos:
+                while len(stages) <= dnf_pos:
+                    stages.append(
+                        {'time_ms': 0, 'penalties_ms': 0, 'submitted_at': None})
+                wrecked_entry = {
+                    **stages[dnf_pos],
+                    **{k: v for k, v in
+                       in_progress_all.get(str(dnf_pos), {}).items()
+                       if v is not None},
+                }
+                wrecked_entry['race_status'] = int(data.get('race_status') or 4)
+                wrecked_entry.setdefault('time_ms', 0)
+                wrecked_entry.setdefault('penalties_ms', 0)
+                stages[dnf_pos] = wrecked_entry
+                if not vid:
+                    vid = wrecked_entry.get('vehicle_id')
     else:
         # Merge oldest→newest so newer wins: prior submission, then stage-begin
         # capture, then this submission's explicitly-sent fields.

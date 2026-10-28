@@ -10,8 +10,12 @@ Two jobs, both idempotent:
      given events are flagged race_status=4 (terminal-damage runs whose
      close-out predated the marker, so they would otherwise score rally
      points as if they were clean finishes).
+  3. With --result ID [...], the same DNF flagging is scoped to specific
+     result rows — for mid-leg abandons where only one driver's row on an
+     event has a wrecked stage (the pre-persisted time-limit entry that the
+     close-out marker landed past).
 
-Run on the VPS:  /opt/dr3/.venv/bin/python /tmp/backfill_result_vehicle.py [--mark-dnf EVENT_ID ...]
+Run on the VPS:  /opt/dr3/.venv/bin/python /tmp/backfill_result_vehicle.py [--mark-dnf EVENT_ID ...] [--result ID ...]
 """
 import json
 import os
@@ -31,10 +35,17 @@ def car_label_for(vid):
     return f"Vehicle {int(vid)}"
 
 
-mark_dnf_events = []
 args = sys.argv[1:]
-if "--mark-dnf" in args:
-    mark_dnf_events = args[args.index("--mark-dnf") + 1:]
+
+
+def values_after(flag):
+    if flag not in args:
+        return []
+    rest = args[args.index(flag) + 1:]
+    return [a for a in rest if not a.startswith("--")]
+
+mark_dnf_events = values_after("--mark-dnf")
+mark_dnf_results = [int(a) for a in values_after("--result")]
 
 with open("/opt/dr3/web/.env") as f:
     for line in f:
@@ -70,7 +81,7 @@ for rid, eid, user, vid, sj in cur.fetchall():
             filled += 1
             print(f"result {rid} ({eid} / {user}): vehicle_id -> {entry_vid}")
 
-    if eid in mark_dnf_events:
+    if eid in mark_dnf_events or rid in mark_dnf_results:
         row_flags = 0
         for s in stages:
             if s and int(s.get("time_ms", 0) or 0) > 0 \
