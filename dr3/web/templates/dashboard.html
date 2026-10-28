@@ -76,7 +76,7 @@
       {% for e in active_events %}
       <tr>
         <td><a href="{{ url_for('pages.event_detail', event_id=e['id']) }}">{{ e['name'] }}</a></td>
-        <td><span class="chip">{{ e.get('type') or 'club' }}</span></td>
+        <td><span class="chip">{{ e.mode_label }}</span></td>
         <td>{{ e.get('location') or '' }}</td>
         <td>{{ e.get('car_class') or '' }}</td>
       </tr>
@@ -91,7 +91,7 @@
 <div class="panel">
   <h2>My clubs</h2>
   {% if my_clubs %}
-  <ul>{% for c in my_clubs %}<li>{{ c.name }}</li>{% endfor %}</ul>
+  <ul>{% for c in my_clubs %}<li><a href="{{ url_for('clubs.club_detail', club_id=c.id) }}">{{ c.name }}</a></li>{% endfor %}</ul>
   {% else %}
   <p>You are not in any clubs yet — <a href="{{ url_for('clubs.clubs_list') }}">browse clubs</a>.</p>
   {% endif %}

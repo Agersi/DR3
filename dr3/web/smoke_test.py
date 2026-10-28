@@ -1083,6 +1083,7 @@ def main() -> int:
                              settings_json=json.dumps({'mode': 'season'}),
                              legs_json=json.dumps(season_legs), active=True))
         db.session.commit()
+        order_club_ids = [alpha.id, beta.id, season.id]
     r = client.get('/clubs')
     html = r.get_data(as_text=True)
     check('club list renders with ordering fixtures', r.status_code == 200, f'status={r.status_code}')
@@ -1108,6 +1109,16 @@ def main() -> int:
           and all(n in game_names for n in ('Order Alpha', 'Order Beta', 'Order Season'))
           and game_names.index('Order Beta') < game_names.index('Order Season')
           < game_names.index('Order Alpha'), str(game_names))
+
+    # 21d. dashboard: live events show championship mode, clubs link out (#46)
+    r = client.get('/dashboard')
+    html = r.get_data(as_text=True)
+    check('dashboard renders', r.status_code == 200, f'status={r.status_code}')
+    check('dashboard live-events Type column shows championship mode',
+          'Rally Season' in html and 'Multi-Location Rally' in html
+          and '<span class="chip">club</span>' not in html)
+    check('dashboard my-clubs names link to club detail pages',
+          all(f'href="/clubs/{cid}"' in html for cid in order_club_ids))
 
     # 23. home page: site stats + footer social links (backlog #25-#29)
     r = client.get('/')

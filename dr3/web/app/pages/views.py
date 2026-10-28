@@ -406,11 +406,14 @@ def user_tokens(user: User) -> list[GameToken]:
 @pages_bp.route('/dashboard')
 @login_required
 def dashboard():
+    from ..results_view import mode_label
+
     memberships = ClubMember.query.filter_by(user_id=g.user.id).all()
     my_clubs = [m.club for m in memberships if m.club is not None]
     my_club_ids = {m.club_id for m in memberships}
     events = [
-        e for e in sort_events(get_all_events())
+        {**e, 'mode_label': mode_label(e)}
+        for e in sort_events(get_all_events())
         if event_is_active(e) and e.get('club_id') in my_club_ids
     ]
     active_token = next(
