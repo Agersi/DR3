@@ -1119,6 +1119,9 @@ def main() -> int:
           and '<span class="chip">club</span>' not in html)
     check('dashboard my-clubs names link to club detail pages',
           all(f'href="/clubs/{cid}"' in html for cid in order_club_ids))
+    # Order Alpha ends +5d → "4d 23h" at render time (fixture created seconds ago).
+    check('dashboard live-events show time left countdown',
+          'Time left' in html and '4d 23h' in html)
 
     # 23. home page: site stats + footer social links (backlog #25-#29)
     r = client.get('/')

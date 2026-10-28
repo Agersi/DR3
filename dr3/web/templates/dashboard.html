@@ -72,11 +72,12 @@
   {% if active_events %}
   <div class="table-wrap">
     <table>
-      <tr><th>Event</th><th>Type</th><th>Location</th><th>Class</th></tr>
+      <tr><th>Event</th><th>Type</th><th>Time left</th><th>Location</th><th>Class</th></tr>
       {% for e in active_events %}
       <tr>
         <td><a href="{{ url_for('pages.event_detail', event_id=e['id']) }}">{{ e['name'] }}</a></td>
         <td><span class="chip">{{ e.mode_label }}</span></td>
+        <td>{{ e.ends_at | countdown }}</td>
         <td>{{ e.get('location') or '' }}</td>
         <td>{{ e.get('car_class') or '' }}</td>
       </tr>
