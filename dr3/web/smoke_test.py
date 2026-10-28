@@ -1137,6 +1137,12 @@ def main() -> int:
           r.status_code == 200
           and b'disabled title="This club has no championship to load yet"' in r.data,
           f'status={r.status_code}')
+    check('championship actions row: Create New / Load Previous / Load from Draft',
+          b'class="champ-actions"' in r.data
+          and b'>Create New<' in r.data
+          and b'>Load Previous<' in r.data
+          and b'>Load from Draft<' in r.data,
+          f'status={r.status_code}')
     r = client.post(f'/clubs/{lab_id}/championship/load-previous', follow_redirects=True)
     check('load-previous on an empty club flashes an error',
           r.status_code == 200 and b'no championship to load' in r.data, f'status={r.status_code}')

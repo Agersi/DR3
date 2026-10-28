@@ -246,13 +246,13 @@
 <div class="panel">
   <h2>Championships</h2>
   <p>Schedule a championship that runs over days or weeks. Pick the type (Multi-Location Rally or Rally Season), the points system and the power-stage option on the next screen.</p>
-  <p>
-    <a class="btn ghost" href="{{ url_for('clubs.championship_new', club_id=club.id) }}">Create Championship</a>
-    <form method="post" action="{{ url_for('clubs.championship_load_previous', club_id=club.id) }}" class="inline">
+  <div class="champ-actions">
+    <a class="btn ghost" href="{{ url_for('clubs.championship_new', club_id=club.id) }}">Create New</a>
+    <form method="post" action="{{ url_for('clubs.championship_load_previous', club_id=club.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn ghost" {% if not previous_event %}disabled title="This club has no championship to load yet"{% endif %}>Load Previous</button>
     </form>
-    <form method="post" action="{{ url_for('clubs.championship_load_draft', club_id=club.id) }}" class="inline">
+    <form method="post" action="{{ url_for('clubs.championship_load_draft', club_id=club.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <select name="draft_id" {% if not my_drafts %}disabled{% endif %}>
         {% for d in my_drafts %}
@@ -261,7 +261,7 @@
       </select>
       <button type="submit" class="btn ghost" {% if not my_drafts %}disabled title="No saved drafts yet"{% endif %}>Load from Draft</button>
     </form>
-  </p>
+  </div>
 </div>
 {% endif %}
 
