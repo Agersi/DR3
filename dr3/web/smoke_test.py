@@ -332,12 +332,111 @@ def main() -> int:
         row = next(rw for rw in rows if rw['username'] == 'smokedriver')
         check('midleg: both stages count as unfinished', row['dnf_stages'] == 2, str(row)[:200])
 
+    # 7c. Service-area auto-advance (backlog #32, step 3): the marker carries
+    # dnf_stages — every skipped stage from the wreck up to the next service
+    # area with its max time. The web flags each one and fills in the limit
+    # where no pre-persisted value exists, so my-progress's count-based resume
+    # lands right after the last flagged stage. Monte Carlo limits: 450/451 =
+    # 900s, 454 = 1800s; service area sits after stage 1.
+    with app.app_context():
+        from datetime import timedelta
+        from app.models import Event, utcnow
+        now = utcnow()
+        s0 = {'name': 'Skip S0', 'track_id': 450, 'distance_km': 5.17,
+              'conditions_id': 5, 'conditions': 'Dry', 'surface_deg': 'Medium',
+              'service_area': 'None'}
+        s1 = {'name': 'Skip S1', 'track_id': 451, 'distance_km': 5.13,
+              'conditions_id': 5, 'conditions': 'Dry', 'surface_deg': 'Medium',
+              'service_area': 'Medium'}
+        s2 = {'name': 'Skip S2', 'track_id': 454, 'distance_km': 11.27,
+              'conditions_id': 5, 'conditions': 'Dry', 'surface_deg': 'Medium',
+              'service_area': 'None'}
+        db.session.add(Event(
+            id='smoke-dnf-skip', schema_version=2, name='Smoke DNF Skip',
+            type='daily', location='Monte Carlo', car_class='Gravel 1',
+            surface='Asphalt', conditions='Dry',
+            stages_json=json.dumps([s0, s1, s2]), settings_json=json.dumps({}),
+            legs_json=json.dumps([{
+                'location': 'Monte Carlo', 'car_class': 'Gravel 1',
+                'surface': 'Asphalt', 'duration': {'days': 0, 'hours': 1, 'mins': 0},
+                'stages': [s0, s1, s2],
+            }]),
+            start_time=now - timedelta(minutes=5), end_time=now + timedelta(hours=1),
+            active=True, featured=False, club_id=None, system=False,
+        ))
+        db.session.commit()
+
+    eid4 = 'smoke-dnf-skip'
+    r = client.post('/api/game/stage-begin', headers=headers, json={
+        'event_id': eid4, 'stage_index': 0, 'event_index': 0,
+        'livery_id': 7, 'tuning_setup_b64': 'ZG5mbWFyaw==', 'tyre_compound': 9,
+        'tyres_remaining': 1, 'nationality_id': 31, 'vehicle_id': 469,
+    })
+    check('skip: stage-begin ok', (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+
+    # post-wreck pre-persist of the wrecked stage (stage 0) at its limit
+    r = client.post('/api/game/stage-complete', headers=headers, json={
+        'event_id': eid4, 'username': 'smokedriver', 'stage_index': 0,
+        'event_index': 0, 'time_ms': 900000,
+    })
+    check('skip: pre-persist ok', (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+
+    # close-out on the next stage (rs=5) with the dispatcher's skip plan
+    r = client.post('/api/game/stage-complete', headers=headers, json={
+        'event_id': eid4, 'username': 'smokedriver', 'stage_index': 1,
+        'event_index': 0, 'time_ms': 0, 'race_status': 5, 'mark_dnf': True,
+        'dnf_stage_index': 0,
+        'dnf_stages': [
+            {'stage_index': 0, 'time_ms': 900000},
+            {'stage_index': 1, 'time_ms': 900000},
+        ],
+    })
+    check('skip: marker ok', (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+
+    r = client.get(f'/api/game/leaderboard/{eid4}', headers=headers)
+    j = r.get_json() or {}
+    e0 = (j.get('entries') or [{}])[0]
+    sts = e0.get('stages') or []
+    st0 = sts[0] if len(sts) > 0 else {}
+    st1 = sts[1] if len(sts) > 1 else {}
+    st2 = sts[2] if len(sts) > 2 else {}
+    check('skip: wrecked stage flagged DNF', st0.get('race_status') == 5, str(st0)[:200])
+    check('skip: wrecked stage keeps the pre-persisted limit time',
+          st0.get('time_ms') == 900000, str(st0)[:200])
+    check('skip: closed-out stage flagged DNF', st1.get('race_status') == 5, str(st1)[:200])
+    check('skip: closed-out stage filled with its limit (no pre-persist)',
+          st1.get('time_ms') == 900000, str(st1)[:200])
+    check('skip: resume stage left untouched',
+          st2.get('time_ms', 0) == 0 and 'race_status' not in st2, str(st2)[:200])
+    check('skip: total sums both limits once each',
+          e0.get('total_time_ms') == 1800000, str(e0.get('total_time_ms')))
+
+    r = client.get('/api/game/my-progress', headers=headers)
+    j = r.get_json() or {}
+    ev4 = next((x for x in j.get('events', []) if x['event_id'] == eid4), {})
+    done = [s['stage_index'] for s in ev4.get('completed_stages', [])]
+    check('skip: my-progress counts both flagged stages (resume at stage 2)',
+          sorted(done) == [0, 1], str(ev4)[:300])
+
+    with app.app_context():
+        from app import scoring
+        from app.events import entries_for_event, get_event
+        ev4db = get_event(eid4)
+        rows = scoring.rally_standings(entries_for_event(eid4), {
+            'offset': 0, 'count': 3, 'location': ev4db['location'],
+            'stages': ev4db['stages']})
+        row = next(rw for rw in rows if rw['username'] == 'smokedriver')
+        check('skip: all three stages count as unfinished (2 DNF + resume stage)',
+              row['dnf_stages'] == 3, str(row)[:200])
+
     # clean up so later recent-times checks see only the original single row
     with app.app_context():
         from app.models import Event, Result
-        for res in Result.query.filter(Result.event_id.in_([eid2, eid3])).all():
+        for res in Result.query.filter(
+                Result.event_id.in_([eid2, eid3, eid4])).all():
             db.session.delete(res)
-        db.session.query(Event).filter(Event.id.in_([eid2, eid3])).delete()
+        db.session.query(Event).filter(
+            Event.id.in_([eid2, eid3, eid4])).delete()
         db.session.commit()
 
     # 7b. client-version endpoint (source of the client's update banner)

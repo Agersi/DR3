@@ -13,6 +13,7 @@ dr3/dist/
 dr3/captures/
 dr3/web/smoke.db
 dr3/web/csrf_check.db
+dr3/web/dbg.db
 dr3/DR3.spec
 
 # Not part of the public repo

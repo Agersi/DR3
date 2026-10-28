@@ -22,6 +22,7 @@ from .models import (
     Challenge, Club, CompDamage, EntryWindow, Event, LeaderboardEntry,
     Reward, Stage, StageBeginRequest, StageCompleteRequest, TierReward, _val,
 )
+from .stage_limits import stage_limit_ms
 
 
 Handler = Callable[[Dict[str, Any]], Union[Dict[str, Any], bytes]]
@@ -2824,6 +2825,71 @@ class RpcDispatcher:
 
         return {"ok": True, "Progress": progress, "ResultCode": 0}
 
+    def _dnf_skip_plan(self, event_id: str, sub_index: int,
+                       closeout_stage: int) -> List[Dict[str, Any]]:
+        """Terminal-damage skip plan (backlog 32, step 3).
+
+        After a mid-leg wreck the game advances one stage and closes it out
+        retired. The player should resume at the first stage after the next
+        service area, with every skipped stage marked DNF at its max time
+        (the per-stage limit table in ``stage_limits``). Returns one
+        ``{"stage_index", "time_ms"}`` entry per skipped stage (local indices
+        within the served leg); empty when the leg can't be resolved, in which
+        case the web side falls back to the legacy single-marker behavior.
+        """
+        try:
+            ev = self.api_client.get_event(event_id) if self.api_client else None
+        except Exception:
+            return []
+        legs = self._events_of(ev or {})
+        if not 0 <= sub_index < len(legs):
+            return []
+        leg = legs[sub_index] or {}
+        stages = leg.get("stages") or []
+        n = len(stages)
+        if n == 0:
+            return []
+        wrecked = closeout_stage - 1 if closeout_stage > 0 else closeout_stage
+        wrecked = max(0, min(wrecked, n - 1))
+        try:
+            is_rx = self._leg_is_rx(ev or {}, leg)
+        except Exception:
+            is_rx = False
+        # RX legs serve has_service_area=True on every stage (see
+        # _apply_rallycross_stage_format), so the resume point is always the
+        # next stage; rally legs serve the stored per-stage label.
+        resume = n
+        for j in range(wrecked, n):
+            ws = stages[j] or {}
+            if is_rx:
+                has_svc = True
+            else:
+                label = ws.get("service_area")
+                has_svc = (service_area_for_level(label)[0]
+                           if label is not None else (j % 2 == 0))
+            if has_svc:
+                resume = j + 1
+                break
+        laps_plan: List[int] = []
+        if is_rx:
+            raw_laps = leg.get("rx_laps")
+            try:
+                rx_laps = max(1, int(raw_laps)) if raw_laps is not None else None
+            except (TypeError, ValueError):
+                rx_laps = None
+            laps_plan = [p[1] for p in rallycross_stage_plan(n, laps=rx_laps)]
+        plan: List[Dict[str, Any]] = []
+        for i in range(wrecked, resume):
+            ws = stages[i] or {}
+            tid = ws.get("track_id")
+            try:
+                tid = int(tid) if tid is not None else 0
+            except (TypeError, ValueError):
+                tid = 0
+            laps = laps_plan[i] if i < len(laps_plan) else None
+            plan.append({"stage_index": i, "time_ms": stage_limit_ms(tid, laps=laps)})
+        return plan
+
     def _stage_complete(self, params: Dict[str, Any]) -> Dict[str, Any]:
         import dataclasses
         req = StageCompleteRequest.from_egonet(params)
@@ -2884,10 +2950,11 @@ class RpcDispatcher:
                 try:
                     # time_ms=0 is ignored by the web side for markers — the
                     # stored pre-persisted time (the stage's limit) stays.
-                    # Mid-leg abandons close out the stage AFTER the wrecked
-                    # one, so tell the web which stage actually got wrecked:
-                    # its pre-persisted limit entry must be flagged DNF too,
-                    # or scoring counts the limit as a real finish.
+                    # The skip plan marks every stage from the wreck up to the
+                    # next service area DNF at its max time, so the count-based
+                    # progress resumes right after it; an empty plan keeps the
+                    # legacy single-marker behavior (wrecked stage only).
+                    dnf_stages = self._dnf_skip_plan(event_id, sub_index, req.stage_index)
                     dnf_stage_index = (req.stage_index - 1) if req.stage_index > 0 else None
                     self.api_client.submit_stage(
                         event_id=event_id,
@@ -2898,10 +2965,11 @@ class RpcDispatcher:
                         race_status=req.race_status if req.race_status else 4,
                         mark_dnf=True,
                         dnf_stage_index=dnf_stage_index,
+                        dnf_stages=dnf_stages,
                     )
                     print(f"[STAGE] DNF marker sent (race_status={req.race_status}, "
                           f"recov_to_service={bool(req.recov_to_service)}, "
-                          f"dnf_stage={dnf_stage_index})")
+                          f"dnf_stage={dnf_stage_index}, skip_plan={dnf_stages})")
                 except Exception as exc:
                     print(f"[STAGE] api_client.submit_stage() raised: {exc}")
             else:

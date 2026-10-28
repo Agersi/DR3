@@ -1,0 +1,170 @@
+track_id,discipline,location,name,length_km,max_time_ms
+572,rally,Argentina,Las Juntas,08.25,1800000
+573,rally,Argentina,Valle de los puentes,08.38,1800000
+604,rally,Argentina,Camino a La Puerta,08.25,1800000
+605,rally,Argentina,Camino de acantilados y rocas,05.30,900000
+606,rally,Argentina,El Rodeo,03.24,900000
+607,rally,Argentina,La Merced,03.24,900000
+608,rally,Argentina,Camino de acantilados y rocas inverso,05.30,900000
+609,rally,Argentina,Valle de los puentes a la inversa,08.38,1800000
+610,rally,Argentina,Miraflores,03.35,900000
+611,rally,Argentina,San Isidro,04.48,900000
+612,rally,Argentina,Camino a Coneta,04.48,900000
+613,rally,Argentina,Huillaprima,03.35,900000
+568,rally,Australia,Mount Kaye Pass,12.50,1800000
+569,rally,Australia,Chandlers Creek,12.34,1800000
+584,rally,Australia,Mount Kaye Pass Reverse,12.50,1800000
+585,rally,Australia,Rockton Plains,07.29,900000
+586,rally,Australia,Yambulla Mountain Descent,07.04,900000
+587,rally,Australia,Yambulla Mountain Ascent,07.04,900000
+588,rally,Australia,Rockton Plains Reverse,07.29,900000
+589,rally,Australia,Chandlers Creek Reverse,12.34,1800000
+590,rally,Australia,Noorinbee Ridge Ascent,05.28,900000
+591,rally,Australia,Taylor Farm Sprint,07.01,900000
+592,rally,Australia,Bondi Forest,07.01,900000
+593,rally,Australia,Noorinbee Ridge Descent,05.28,900000
+505,rally,Finland,Kontinjärvi,15.05,1800000
+506,rally,Finland,Hämelahti,15.36,1800000
+507,rally,Finland,Kailajärvi,07.51,900000
+508,rally,Finland,Jyrkysjärvi,07.55,900000
+509,rally,Finland,Naarajärvi,07.43,900000
+510,rally,Finland,Paskuri,07.34,900000
+511,rally,Finland,Kakaristo,16.20,1800000
+512,rally,Finland,Pitkäjärvi,16.20,1800000
+513,rally,Finland,Iso Oksjärvi,08.04,900000
+514,rally,Finland,Järvenkylä,08.05,900000
+515,rally,Finland,Kotajärvi,08.10,900000
+516,rally,Finland,Oksala,08.10,900000
+472,rally,Germany,Oberstein,12.07,1800000
+480,rally,Germany,Hammerstein,11.21,1800000
+489,rally,Germany,Frauenberg,12.07,1800000
+490,rally,Germany,Waldaufstieg,05.39,900000
+491,rally,Germany,Kreuzungsring Reverse,06.31,900000
+492,rally,Germany,Kreuzungsring,06.31,900000
+493,rally,Germany,Waldabstieg,05.39,900000
+494,rally,Germany,Ruschberg,11.10,1800000
+495,rally,Germany,Verbundsring,06.25,900000
+496,rally,Germany,Innerer Feld-Sprint,05.56,900000
+497,rally,Germany,Innerer Feld-Sprint (umgekehrt),05.56,900000
+498,rally,Germany,Verbundsring Reverse,06.25,900000
+460,rally,Greece,Kathodo Leontiou,10.00,1800000
+461,rally,Greece,Pomona Ekrixi,05.09,900000
+462,rally,Greece,Fourkéta Kourva,05.20,900000
+463,rally,Greece,Koryfi Dafni,04.50,900000
+464,rally,Greece,Ampelonas Ormi,05.35,900000
+465,rally,Greece,Perasma Platani,11.09,1800000
+466,rally,Greece,Tsiristra Théa,10.36,1800000
+467,rally,Greece,Ourea Spevsi,06.14,900000
+468,rally,Greece,Pedines Epidaxi,05.38,900000
+469,rally,Greece,Abies Koiléda,07.09,900000
+470,rally,Greece,Ypsona tou Dasos,06.59,900000
+471,rally,Greece,Anodou Farmakas,10.00,1800000
+435,rally,Monte Carlo,Pra d'Alart,10.23,1800000
+449,rally,Monte Carlo,Col de Turini Départ,10.23,1800000
+450,rally,Monte Carlo,Gordolon - Courte montée,05.17,900000
+451,rally,Monte Carlo,Col de Turini - Sprint en descente,05.13,900000
+452,rally,Monte Carlo,Col de Turini sprint en Montée,05.13,900000
+453,rally,Monte Carlo,Col de Turini - Descente,05.17,900000
+454,rally,Monte Carlo,Vallée descendante,11.27,1800000
+455,rally,Monte Carlo,Route de Turini,11.27,1800000
+456,rally,Monte Carlo,Col de Turini - Départ en descente,07.25,900000
+457,rally,Monte Carlo,Approche du Col de Turini - Montée,04.35,900000
+458,rally,Monte Carlo,Route de Turini Descente,04.35,900000
+459,rally,Monte Carlo,Route de Turini Montée,07.24,900000
+626,rally,New England,North Fork Pass,12.50,1800000
+627,rally,New England,North Fork Pass Reverse,12.50,1800000
+628,rally,New England,Hancock Creek Burst,07.29,900000
+629,rally,New England,Fuller Mountain Descent,07.04,900000
+630,rally,New England,Fuller Mountain Ascent,07.04,900000
+631,rally,New England,Fury Lake Depart,07.29,900000
+632,rally,New England,Beaver Creek Trail Forward,13.26,1800000
+633,rally,New England,Beaver Creek Trail Reverse,13.26,1800000
+634,rally,New England,Hancock Hill Sprint Forward,06.01,900000
+635,rally,New England,Tolt Valley Sprint Reverse,06.10,900000
+636,rally,New England,Tolt Valley Sprint Forward,06.10,900000
+637,rally,New England,Hancock Hill Sprint Reverse,06.01,900000
+570,rally,New Zealand,Te Awanga Forward,11.48,1800000
+571,rally,New Zealand,Waimarama Point Forward,16.06,1800000
+594,rally,New Zealand,Ocean Beach,11.48,1800000
+595,rally,New Zealand,Te Awanga Sprint Forward,05.19,900000
+596,rally,New Zealand,Ocean Beach Sprint Forward,07.01,900000
+597,rally,New Zealand,Ocean Beach Sprint Reverse,07.01,900000
+598,rally,New Zealand,Te Awanga Sprint Reverse,05.19,900000
+599,rally,New Zealand,Waimarama Point Reverse,16.06,1800000
+600,rally,New Zealand,Elsthorpe Sprint Forward,07.32,900000
+601,rally,New Zealand,Waimarama Sprint Forward,09.21,900000
+602,rally,New Zealand,Waimarama Sprint Reverse,09.21,900000
+603,rally,New Zealand,Elsthorpe Sprint Reverse,07.32,900000
+614,rally,Poland,Zaróbka,16.46,1800000
+615,rally,Poland,Zagórze,16.46,1800000
+616,rally,Poland,Kopina,07.03,900000
+617,rally,Poland,Marynka,09.25,900000
+618,rally,Poland,Borysik,09.25,900000
+619,rally,Poland,Józefin,07.03,900000
+620,rally,Poland,Jezioro Rotcze,13.42,1800000
+621,rally,Poland,Zienki,13.42,1800000
+622,rally,Poland,Czarny Las,07.02,900000
+623,rally,Poland,Lejno,07.22,900000
+624,rally,Poland,Jagodno,07.22,900000
+625,rally,Poland,Jezioro Lukie,07.02,900000
+657,rally,Scotland,South Morningside,12.58,1800000
+658,rally,Scotland,South Morningside Reverse,13.06,1800000
+659,rally,Scotland,Old Butterstone Muir,06.22,900000
+660,rally,Scotland,Rosebank Farm,07.16,900000
+661,rally,Scotland,Rosebank Farm Reverse,07.36,900000
+662,rally,Scotland,Old Butterstone Muir Reverse,06.06,900000
+663,rally,Scotland,Newhouse Bridge,13.26,1800000
+664,rally,Scotland,Newhouse Bridge Reverse,13.38,1800000
+665,rally,Scotland,Glencastle Farm,05.25,900000
+666,rally,Scotland,Annbank Station,08.17,900000
+667,rally,Scotland,Annbank Station Reverse,07.59,900000
+668,rally,Scotland,Glencastle Farm Reverse,05.24,900000
+566,rally,Spain,Comienzo De Bellriu,14.34,1800000
+567,rally,Spain,Centenera,10.57,1800000
+574,rally,Spain,Final de Bellriu,14.34,1800000
+575,rally,Spain,Ascenso por valle el Gualet,07.00,900000
+576,rally,Spain,Viñedos dentro del valle Parra,07.21,900000
+577,rally,Spain,Ascenso bosque Montverd,07.21,900000
+578,rally,Spain,Salida desde Montverd,07.00,900000
+579,rally,Spain,Camino a Centenera,10.57,1800000
+580,rally,Spain,Descenso por carretera,04.58,900000
+581,rally,Spain,Viñedos Dardenyà,06.55,900000
+582,rally,Spain,Viñedos Dardenyà inversa,06.55,900000
+583,rally,Spain,Subida por carretera,04.58,900000
+517,rally,Sweden,Ransbysäter,12.38,1800000
+518,rally,Sweden,Norraskoga,12.38,1800000
+519,rally,Sweden,Älgsjön Sprint,05.25,900000
+520,rally,Sweden,Stor-jangen Sprint Reverse,07.09,900000
+521,rally,Sweden,Stor-jangen Sprint,07.09,900000
+522,rally,Sweden,Skogsrallyt,05.25,900000
+523,rally,Sweden,Hamra,12.34,1800000
+524,rally,Sweden,Lysvik,12.34,1800000
+525,rally,Sweden,Elgsjön,07.28,900000
+526,rally,Sweden,Björklangen,05.19,900000
+527,rally,Sweden,Östra Hinnsjön,05.19,900000
+528,rally,Sweden,Älgsjön,07.28,900000
+437,rally,Wales,Sweet Lamb,10.30,1800000
+438,rally,Wales,Geufron Forest,10.00,1800000
+439,rally,Wales,Pant Mawr,05.10,900000
+440,rally,Wales,Bidno Moorland Reverse,05.20,900000
+441,rally,Wales,Bidno Moorland,05.30,900000
+442,rally,Wales,Pant Mawr Reverse,05.10,900000
+443,rally,Wales,River Severn Valley,11.40,1800000
+444,rally,Wales,Bronfelen,11.40,1800000
+445,rally,Wales,Fferm Wynt,06.10,900000
+446,rally,Wales,Dyffryn Afon Reverse,06.10,900000
+447,rally,Wales,Dyffryn Afon,06.10,900000
+448,rally,Wales,Fferm Wynt Reverse,06.10,900000
+538,rallycross,Barcelona,Circuit de Barcelona-Catalunya,01.13,300000
+641,rallycross,Bikernieki,Bikernieki,01.29,300000
+640,rallycross,Estering,Estering,01.35,300000
+478,rallycross,Hell,Hell,01.02,300000
+476,rallycross,Höljes,Höljes,01.21,300000
+642,rallycross,Killarney,Killarney International Raceway,01.07,300000
+536,rallycross,Loheac,Lohéac Bretagne,01.09,300000
+436,rallycross,Lydden Hill,Lydden Hill,01.40,300000
+639,rallycross,Mettet,Mettet,01.15,300000
+537,rallycross,Montalegre,Montalegre,01.35,300000
+638,rallycross,Silverstone,Silverstone,01.37,300000
+565,rallycross,Trois-Rivières,Trois-Rivières,01.35,300000
+643,rallycross,Yas Marina,Yas Marina Circuit,01.00,300000

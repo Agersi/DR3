@@ -337,45 +337,57 @@ def api_game_stage_complete():
     _routing_keys = {'event_id', 'username', 'stage_index', 'event_index'}
 
     if mark_dnf:
-        # DNF close-out marker (backlog 32): the game pre-persisted the stage's
-        # time limit via its post-wreck leaderboard query, so keep the stored
-        # time and only flag the entry as a non-finish. Never burns an attempt
-        # — a mid-leg DNF must not lock out the rest of the leg.
-        stage_entry = {
-            **prev_stage_entry,
-            **{k: v for k, v in in_progress_entry.items() if v is not None},
-        }
-        stage_entry['race_status'] = int(data.get('race_status') or 4)
-        stage_entry.setdefault('time_ms', 0)
-        stage_entry.setdefault('penalties_ms', 0)
-        vid = stage_entry.get('vehicle_id')
-        # Mid-leg abandon (backlog 32, 2026-10-28): the game closes out the
-        # stage AFTER the wrecked one retired, so the wrecked stage's own
-        # entry — carrying the pre-persisted time limit — sits at a different
-        # position. Flag it too (keeping its stored time), or scoring counts
-        # the limit value as a real finish.
-        dnf_local = data.get('dnf_stage_index')
-        if dnf_local is not None:
-            try:
-                dnf_pos = global_stage_index(event, event_index, int(dnf_local))
-            except (TypeError, ValueError):
-                dnf_pos = -1
-            if 0 <= dnf_pos < pos:
-                while len(stages) <= dnf_pos:
-                    stages.append(
-                        {'time_ms': 0, 'penalties_ms': 0, 'submitted_at': None})
-                wrecked_entry = {
-                    **stages[dnf_pos],
-                    **{k: v for k, v in
-                       in_progress_all.get(str(dnf_pos), {}).items()
-                       if v is not None},
-                }
-                wrecked_entry['race_status'] = int(data.get('race_status') or 4)
-                wrecked_entry.setdefault('time_ms', 0)
-                wrecked_entry.setdefault('penalties_ms', 0)
-                stages[dnf_pos] = wrecked_entry
-                if not vid:
-                    vid = wrecked_entry.get('vehicle_id')
+        # DNF close-out marker (backlog 32): the game pre-persisted a stage's
+        # time limit via its post-wreck leaderboard query, so keep stored times
+        # and only flag entries as non-finishes. Never burns an attempt — a
+        # mid-leg DNF must not lock out the rest of the leg. dnf_stages (step 3)
+        # lists every skipped stage — from the wreck up to the next service
+        # area — with its max time: each gets flagged, and any without a stored
+        # pre-persisted value is given the limit, so the count-based progress
+        # resumes right after the last flagged stage.
+        rs = int(data.get('race_status') or 4)
+        dnf_list = data.get('dnf_stages')
+        targets: list[tuple[int, int]] = []
+        if isinstance(dnf_list, list):
+            for item in dnf_list:
+                try:
+                    si = int(item.get('stage_index'))
+                    t = int(item.get('time_ms') or 0)
+                except (TypeError, ValueError):
+                    continue
+                p = global_stage_index(event, event_index, si)
+                if p >= 0:
+                    targets.append((p, max(0, t)))
+        if not targets:
+            # Legacy single-marker shape (older clients / unresolved plan):
+            # flag the close-out stage and, when given, the wrecked one.
+            targets.append((pos, 0))
+            dnf_local = data.get('dnf_stage_index')
+            if dnf_local is not None:
+                try:
+                    dnf_pos = global_stage_index(event, event_index, int(dnf_local))
+                except (TypeError, ValueError):
+                    dnf_pos = -1
+                if 0 <= dnf_pos < pos:
+                    targets.append((dnf_pos, 0))
+        vid = None
+        for p, t in targets:
+            while len(stages) <= p:
+                stages.append(
+                    {'time_ms': 0, 'penalties_ms': 0, 'submitted_at': None})
+            entry = {
+                **stages[p],
+                **{k: v for k, v in
+                   in_progress_all.get(str(p), {}).items() if v is not None},
+            }
+            entry['race_status'] = rs
+            if t > 0 and not (entry.get('time_ms', 0) or 0):
+                entry['time_ms'] = t
+            entry.setdefault('time_ms', 0)
+            entry.setdefault('penalties_ms', 0)
+            stages[p] = entry
+            if not vid:
+                vid = entry.get('vehicle_id')
     else:
         # Merge oldest→newest so newer wins: prior submission, then stage-begin
         # capture, then this submission's explicitly-sent fields.
@@ -392,8 +404,7 @@ def api_game_stage_complete():
         stage_entry.setdefault('penalties_ms', 0)
         stage_entry.setdefault('race_status', 0)
         vid = vehicle_id if vehicle_id is not None else stage_entry.get('vehicle_id')
-
-    stages[pos] = stage_entry
+        stages[pos] = stage_entry
 
     # A DNF/retired finish burns an attempt; race_status==0 is a clean finish.
     # Markers don't count — see the mark_dnf branch above.

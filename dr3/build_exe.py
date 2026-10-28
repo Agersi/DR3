@@ -181,6 +181,13 @@ def build() -> None:
     if scripts_src.is_dir():
         add_data.append(f"{scripts_src}{sep}scripts")
 
+    # Per-stage time-limit table (backlog 32, step 3) — stage_limits.py reads
+    # it relative to its own module path, so bundle it inside the dr2server/
+    # directory of the bundle.
+    limits_csv = ROOT / "dr2server" / "stage_time_limits.csv"
+    if limits_csv.is_file():
+        add_data.append(f"{limits_csv}{sep}dr2server")
+
     # ------------------------------------------------------------------
     # Hidden imports that PyInstaller's static analysis might miss.
     # ------------------------------------------------------------------

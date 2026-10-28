@@ -27,6 +27,13 @@ the marker carries dnf_stage_index = stage_index - 1 and the web side flags
 that entry too — otherwise its pre-persisted time-limit value scores as a
 real finish.
 
+Step 3 (service-area auto-advance): the marker also carries dnf_stages — one
+entry per skipped stage, from the wreck up to the first stage after the next
+service area, each with its max time from dr2server/stage_time_limits.csv
+(RX rows are per-lap × NumberLaps). The web side flags every listed stage (and
+fills in the limit where no pre-persisted value exists), so the count-based
+progress resumes right after the last flagged stage.
+
 Run: python tools\repro_terminal_damage.py   (from D:\CODE\DR2)
 """
 import sys
@@ -35,8 +42,8 @@ from pathlib import Path
 sys.path.insert(0, r"D:\CODE\DR2\dr3")
 
 from dr2server.account_store import AccountStore
+from dr2server.api_client import _location_id_for
 from dr2server.dispatcher import RpcDispatcher
-from dr2server.game_data import Location, Track
 
 FAILS = 0
 
@@ -64,6 +71,9 @@ class FakeApi:
 
     def get_event(self, event_id):
         return self.events.get(event_id)
+
+    def resolve_location_id(self, location_name):
+        return _location_id_for(location_name)
 
     def submit_stage_begin(self, **kw):
         pass
@@ -152,6 +162,11 @@ def main():
         check("rs=4: marker race_status", api.submitted[0]["race_status"], 4)
         check("rs=4: marker points at the wrecked (previous) stage",
               api.submitted[0].get("dnf_stage_index"), 0)
+        # Legacy-shape event (no service_area labels): parity fallback puts a
+        # service area after stage 0, so only the wrecked stage is skipped.
+        check("rs=4: skip plan = wrecked stage only (no limit known)",
+              api.submitted[0].get("dnf_stages"),
+              [{"stage_index": 0, "time_ms": 0}])
     check("rs=4: State (event finished after DNF)",
           unwrap(r["Progress"]["State"]), 2)
     check("rs=4: AttemptsLeft", unwrap(r["Progress"]["AttemptsLeft"]), 0)
@@ -204,6 +219,71 @@ def main():
     check("abandon: AttemptsLeft", unwrap(r["Progress"]["AttemptsLeft"]), 0)
     check("abandon: ChampTimeMs keeps the pre-persisted limit, no leak",
           unwrap(r["Progress"]["ChampTimeMs"]), 900000)
+
+    # Step 3 — service-area auto-advance (rally): wreck on stage 0 of a leg
+    # whose first service area sits AFTER stage 1. The skip plan must cover
+    # stages 0..1 at their per-stage limits (Monte Carlo: 450/451 = 900s),
+    # so the count-based progress resumes at stage 2.
+    api = FakeApi(
+        events={"evtT": {"events": [{
+            "location": "Monte Carlo",
+            "stages": [
+                {"track_id": 450, "service_area": "None"},
+                {"track_id": 451, "service_area": "Medium"},
+                {"track_id": 454, "service_area": "None"},
+            ],
+        }]}},
+        progress_events=[
+            {"event_id": "evtT",
+             "completed_stages": [stage(0, time_ms=900000)],
+             "total_time_ms": 900000, "attempts_used": 0},
+        ],
+    )
+    d = make_dispatcher(api)
+    d._challenge_event_map = {800001: "evtT"}
+    d._challenge_subevent_map = {800001: 0}
+    r = d._stage_complete(sc(1, race_status=5))
+    check("skip: DNF marker sent", len(api.submitted), 1)
+    if api.submitted:
+        check("skip: skip plan covers wreck + closed-out stages",
+              api.submitted[0].get("dnf_stages"),
+              [{"stage_index": 0, "time_ms": 900000},
+               {"stage_index": 1, "time_ms": 900000}])
+        check("skip: dnf_stage_index still points at the wrecked stage",
+              api.submitted[0].get("dnf_stage_index"), 0)
+    check("skip: State (event finished for this run)",
+          unwrap(r["Progress"]["State"]), 2)
+    check("skip: AttemptsLeft", unwrap(r["Progress"]["AttemptsLeft"]), 0)
+
+    # Step 3 — RX leg: every served RX stage has a service area, so the skip
+    # plan is always exactly the wrecked stage; its limit is the per-lap base
+    # (300s) times the leg's lap count (6 -> 1800s).
+    api = FakeApi(
+        events={"evtT": {"events": [{
+            "location": "Hell",
+            "rx_laps": 6,
+            "stages": [
+                {"track_id": 478, "service_area": "None"},
+                {"track_id": 478, "service_area": "Medium"},
+            ],
+        }]}},
+        progress_events=[
+            {"event_id": "evtT",
+             "completed_stages": [stage(0, time_ms=1800000)],
+             "total_time_ms": 1800000, "attempts_used": 0},
+        ],
+    )
+    d = make_dispatcher(api)
+    d._challenge_event_map = {800001: "evtT"}
+    d._challenge_subevent_map = {800001: 0}
+    r = d._stage_complete(sc(1, race_status=5))
+    check("rx: DNF marker sent", len(api.submitted), 1)
+    if api.submitted:
+        check("rx: skip plan = wrecked stage at per-lap x laps limit",
+              api.submitted[0].get("dnf_stages"),
+              [{"stage_index": 0, "time_ms": 1800000}])
+    check("rx: State (event finished for this run)",
+          unwrap(r["Progress"]["State"]), 2)
 
     print()
     if FAILS:
