@@ -77,7 +77,7 @@
       <tr>
         <td><a href="{{ url_for('pages.event_detail', event_id=e['id']) }}">{{ e['name'] }}</a></td>
         <td><span class="chip">{{ e.mode_label }}</span></td>
-        <td>{{ e.ends_at | countdown }}</td>
+        <td>{{ e.end_time | countdown }}</td>
         <td>{{ e.get('location') or '' }}</td>
         <td>{{ e.get('car_class') or '' }}</td>
       </tr>

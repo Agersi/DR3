@@ -1122,6 +1122,9 @@ def main() -> int:
     # Order Alpha ends +5d → "4d 23h" at render time (fixture created seconds ago).
     check('dashboard live-events show time left countdown',
           'Time left' in html and '4d 23h' in html)
+    # Season's stored end_time is the LAST leg (+11d23h); time left must count down
+    # to the full championship end, not the current leg's end (+3d23h).
+    check('dashboard season time left uses full championship end', '11d' in html)
 
     # 23. home page: site stats + footer social links (backlog #25-#29)
     r = client.get('/')
