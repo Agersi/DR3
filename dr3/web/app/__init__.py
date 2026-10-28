@@ -10,12 +10,11 @@ from flask_wtf import CSRFProtect
 
 csrf = CSRFProtect()
 
-# External project links (footer + home page). DISCORD_URL is empty until the
-# community server exists — set it here when it does.
+# External project links (footer + home page).
 GITHUB_URL = 'https://github.com/Agersi/DR3'
 TWITCH_URL = 'https://www.twitch.tv/agersi'
 KO_FI_URL = 'https://ko-fi.com/agersi'
-DISCORD_URL = ''
+DISCORD_URL = 'https://discord.com/invite/U3h9dWGgGY'
 
 
 def _parse_dt(value):

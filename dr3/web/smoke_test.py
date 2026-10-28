@@ -1113,9 +1113,11 @@ def main() -> int:
     r = client.get('/')
     html = r.get_data(as_text=True)
     check('home renders', r.status_code == 200, f'status={r.status_code}')
-    check('footer links: github/ko-fi/twitch',
+    check('footer links: github/ko-fi/twitch/discord',
           'github.com/Agersi/DR3' in html and 'ko-fi.com/agersi' in html
-          and 'twitch.tv/agersi' in html)
+          and 'twitch.tv/agersi' in html
+          and 'discord.com/invite/U3h9dWGgGY' in html
+          and 'Join the community' in html)
     check('footer shows open-source line + donate',
           'open source' in html and 'Donate' in html)
     check('footer shows trademark notice',
