@@ -1075,6 +1075,10 @@ def main() -> int:
     check('club detail lists the user\'s draft (permanent marked)',
           r.status_code == 200 and f'value="{prev_draft}"' in detail_html
           and '— permanent' in detail_html, f'status={r.status_code}')
+    check('draft select sits under the Load from Draft button',
+          b'>Load from Draft<' in r.data and b'name="draft_id"' in r.data
+          and r.data.index(b'>Load from Draft<') < r.data.index(b'name="draft_id"'),
+          f'status={r.status_code}')
     r = client.post(f'/clubs/{club_id}/championship/load-draft',
                     data={'draft_id': prev_draft}, follow_redirects=False)
     check('load-draft resumes the picked draft editor',

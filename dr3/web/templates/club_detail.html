@@ -254,12 +254,14 @@
     </form>
     <form method="post" action="{{ url_for('clubs.championship_load_draft', club_id=club.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <select name="draft_id" {% if not my_drafts %}disabled{% endif %}>
+      <button type="submit" class="btn ghost" {% if not my_drafts %}disabled title="No saved drafts yet"{% endif %}>Load from Draft</button>
+      {% if my_drafts %}
+      <select name="draft_id">
         {% for d in my_drafts %}
         <option value="{{ d.id }}">{{ d.label }} ({{ d.created_at }}){% if d.permanent %} — permanent{% endif %}</option>
         {% endfor %}
       </select>
-      <button type="submit" class="btn ghost" {% if not my_drafts %}disabled title="No saved drafts yet"{% endif %}>Load from Draft</button>
+      {% endif %}
     </form>
   </div>
 </div>
