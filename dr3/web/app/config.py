@@ -25,6 +25,11 @@ class Config:
     SESSION_COOKIE_SAMESITE: str = 'Lax'
     SESSION_COOKIE_SECURE: bool = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
     WTF_CSRF_ENABLED: bool = os.environ.get('DR3_DISABLE_CSRF', '0') != '1'
+    # No time-based expiry (Flask-WTF default is 3600s): long-lived forms like
+    # the championship builder must not fail with "The CSRF token has expired"
+    # when a user leaves the page open. Tokens stay bound to the session, so
+    # CSRF protection is unchanged — only the clock limit is removed.
+    WTF_CSRF_TIME_LIMIT: int | None = None
 
     SMTP_HOST: str = os.environ.get('EMAIL_HOST', '')
     SMTP_PORT: int = int(os.environ.get('EMAIL_PORT', '587'))
