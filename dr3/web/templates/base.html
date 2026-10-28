@@ -1,6 +1,63 @@
 {% macro flag_img(url) -%}
 {%- if url %}<img class="flag" src="{{ url }}" alt="" loading="lazy"> {%- endif -%}
 {%- endmacro %}
+{% macro token_display(token) -%}
+  {% set masked_token = token[:3] ~ '•' * 20 %}
+  <div class="token-box" data-token="{{ token }}">
+    <code class="token-value">{{ masked_token }}</code>
+    <button type="button" class="small ghost token-toggle" aria-pressed="false">Show</button>
+    <button type="button" class="small ghost token-copy">Copy</button>
+  </div>
+  <p class="meta">Paste this token into the DR3 app (see <a href="{{ url_for('pages.install') }}">install guide</a>), press Save, then START.</p>
+  <script>
+  (function () {
+    var boxes = document.querySelectorAll('.token-box[data-token]');
+    boxes.forEach(function (box) {
+      var value = box.querySelector('.token-value');
+      var toggle = box.querySelector('.token-toggle');
+      var copy = box.querySelector('.token-copy');
+      var secret = box.dataset.token;
+      var hidden = value.textContent;
+      var shown = false;
+
+      function render() {
+        value.textContent = shown ? secret : hidden;
+        if (toggle) {
+          toggle.textContent = shown ? 'Hide' : 'Show';
+          toggle.setAttribute('aria-pressed', String(shown));
+        }
+      }
+
+      if (toggle) {
+        toggle.addEventListener('click', function () {
+          shown = !shown;
+          render();
+        });
+      }
+
+      if (copy) {
+        copy.addEventListener('click', function () {
+          var copied = function () {
+            copy.textContent = 'Copied';
+            setTimeout(function () { copy.textContent = 'Copy'; }, 1500);
+          };
+          var fallback = function () {
+            shown = true;
+            render();
+            copy.textContent = 'Select + copy';
+            setTimeout(function () { copy.textContent = 'Copy'; }, 2000);
+          };
+          if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(secret).then(copied, fallback);
+          } else {
+            fallback();
+          }
+        });
+      }
+    });
+  })();
+  </script>
+{%- endmacro %}
 <!doctype html>
 <html lang="en">
 <head>

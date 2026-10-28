@@ -56,13 +56,13 @@
 <div class="panel">
   <h2>Game token</h2>
   {% if token %}
-  <p>Your game token (put this in the local server's <code>--api-token</code>):</p>
-  <div class="token-box"><code>{{ token }}</code></div>
+  {{ token_display(token) }}
   <form method="post" action="{{ url_for('game_api.api_token_revoke') }}" onsubmit="return confirm('Revoke this token?');" class="inline">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="danger small">Revoke token</button>
   </form>
   {% else %}
+  <p>No game token yet.</p>
   <form method="post" action="{{ url_for('game_api.api_token_generate') }}" class="inline">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit">Generate game token</button>
