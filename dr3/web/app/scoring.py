@@ -267,8 +267,9 @@ def championship_points(event: dict, entries: list[dict]) -> dict[str, int]:
     real stage time in it (``rally_standings``, bogey-adjusted, fastest first).
     A driver's classification position earns points from the championship's
     scoring system — WRC/GroupB fixed top-ten scales or the field-size
-    Codemasters formula — but only if they finished every stage of that rally:
-    a DNF takes up their classification position and scores nothing for it.
+    Codemasters formula — but only if they finished every stage of that rally.
+    A DNF takes up its classification position and scores nothing under
+    WRC/GroupB; under Codemasters, taking part still earns the minimum 1 point.
     When power-stage points are enabled, the top five finishers of each rally's
     FINAL stage earn an extra bonus (5/4/3/2/1) on top of the classification
     points. A driver's total is the sum across rallies; every driver in
@@ -282,10 +283,13 @@ def championship_points(event: dict, entries: list[dict]) -> dict[str, int]:
         participants = [r for r in rows if _ran_any_stage(r)]
         p_total = len(participants)
         for pos, row in enumerate(participants, start=1):
-            if row['dnf_stages'] != 0:
-                continue
             name = row['username']
-            pts = rally_classification_points(system, p_total, pos)
+            if row['dnf_stages'] != 0:
+                # DNF: takes its position but no classification points — except
+                # Codemasters, where taking part earns the minimum 1 point.
+                pts = 1 if system == SCORING_CODEMASTERS else 0
+            else:
+                pts = rally_classification_points(system, p_total, pos)
             points[name] = points.get(name, 0) + pts
         if power_stage and rally['count'] > 0:
             final_idx = rally['count'] - 1

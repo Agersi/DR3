@@ -676,7 +676,6 @@ _VCLASS_LABEL_TO_ID.update({
     "group b (rwd)":      int(VehicleClass.GROUP_B_RWD),
     "group b rallycross": int(VehicleClass.GROUP_B_RX),
     "f2 kit cars":        int(VehicleClass.F2_KIT_CAR),
-    "rally gt":           int(VehicleClass.NR4_R4),  # no confirmed Rally GT ID
     "2000cc":             int(VehicleClass.CC_4WD),  # web UI label for 2000cc 4WD
     "2000cc 4wd":         int(VehicleClass.CC_4WD),
     "4wd <= 2000cc":      int(VehicleClass.CC_4WD),

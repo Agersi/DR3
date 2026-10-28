@@ -707,10 +707,10 @@ def main() -> int:
           championship_points(fake_event, fake_entries) == {'A': 51, 'B': 21, 'C': 30},
           f"points={championship_points(fake_event, fake_entries)}")
     fake_event['settings'] = {'scoring': 'codemasters', 'power_stage': False}
-    # Codemasters, P=3 per rally: p = [3, 2, 1]. Rally 1: C=3, A=2, B DNF;
-    # rally 2: A=3, B=2, C DNF. Totals: A=5, B=2, C=3.
-    check('codemasters points: field-size scale, dnf scores nothing',
-          championship_points(fake_event, fake_entries) == {'A': 5, 'B': 2, 'C': 3},
+    # Codemasters, P=3 per rally: p = [3, 2, 1]. Rally 1: C=3, A=2, B DNF=1;
+    # rally 2: A=3, B=2, C DNF=1. Totals: A=5, B=3, C=4.
+    check('codemasters points: field-size scale, dnf takes minimum 1 point',
+          championship_points(fake_event, fake_entries) == {'A': 5, 'B': 3, 'C': 4},
           f"points={championship_points(fake_event, fake_entries)}")
     r = client.get(f'/clubs/{club_id}/championship/new')
     check('new screen offers scoring systems + power stage',
