@@ -188,6 +188,94 @@ def main() -> int:
     check('my-progress has event', any(x['event_id'] == eid for x in j.get('events', [])),
           str(j)[:200])
 
+    # 7a. DNF marker semantics (backlog #32): a pre-persisted time-limit row
+    # picks up its vehicle from the stage-begin capture, and the DNF close-out
+    # marker flags the entry without changing its time or burning an attempt.
+    with app.app_context():
+        from datetime import timedelta
+        from app.models import Event, utcnow
+        now = utcnow()
+        st = {'name': 'Smoke DNF Stage', 'track_id': 10, 'distance_km': 10.0,
+              'conditions_id': 5, 'conditions': 'Dry', 'surface_deg': 'Medium',
+              'service_area': 'Medium'}
+        db.session.add(Event(
+            id='smoke-dnf-event', schema_version=2, name='Smoke DNF Event',
+            type='daily', location='Lydden Hill', car_class='Gravel 1',
+            surface='Gravel', conditions='Dry',
+            stages_json=json.dumps([st, st]), settings_json=json.dumps({}),
+            legs_json=json.dumps([{
+                'location': 'Lydden Hill', 'car_class': 'Gravel 1',
+                'surface': 'Gravel', 'duration': {'days': 0, 'hours': 1, 'mins': 0},
+                'stages': [st, st],
+            }]),
+            start_time=now - timedelta(minutes=5), end_time=now + timedelta(hours=1),
+            active=True, featured=False, club_id=None, system=False,
+        ))
+        db.session.commit()
+
+    eid2 = 'smoke-dnf-event'
+    r = client.post('/api/game/stage-begin', headers=headers, json={
+        'event_id': eid2, 'stage_index': 1, 'event_index': 0,
+        'livery_id': 7, 'tuning_setup_b64': 'ZG5mbWFyaw==', 'tyre_compound': 9,
+        'tyres_remaining': 1, 'nationality_id': 31, 'vehicle_id': 469,
+    })
+    check('dnf: stage-begin ok', (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+
+    # pre-persist (leaderboard-view shape): time only, no vehicle of its own
+    r = client.post('/api/game/stage-complete', headers=headers, json={
+        'event_id': eid2, 'username': 'smokedriver', 'stage_index': 1,
+        'event_index': 0, 'time_ms': 900000,
+    })
+    check('dnf: pre-persist ok', (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+
+    r = client.get(f'/api/game/leaderboard/{eid2}', headers=headers)
+    j = r.get_json() or {}
+    e0 = (j.get('entries') or [{}])[0]
+    st1 = (e0.get('stages') or [None, {}])[1]
+    check('dnf: pre-persist row carries vehicle from stage-begin',
+          e0.get('vehicle_id') == 469 and st1.get('vehicle_id') == 469, str(e0)[:300])
+
+    # DNF close-out marker: flags the entry, keeps the limit time, no attempt
+    r = client.post('/api/game/stage-complete', headers=headers, json={
+        'event_id': eid2, 'username': 'smokedriver', 'stage_index': 1,
+        'event_index': 0, 'time_ms': 0, 'race_status': 4, 'mark_dnf': True,
+    })
+    check('dnf: marker ok', (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+
+    r = client.get(f'/api/game/leaderboard/{eid2}', headers=headers)
+    j = r.get_json() or {}
+    e0 = (j.get('entries') or [{}])[0]
+    st1 = (e0.get('stages') or [None, {}])[1]
+    check('dnf: marker flags race_status=4', st1.get('race_status') == 4, str(st1)[:200])
+    check('dnf: marker keeps the pre-persisted limit time',
+          e0.get('total_time_ms') == 900000, str(e0.get('total_time_ms')))
+
+    r = client.get('/api/game/my-progress', headers=headers)
+    j = r.get_json() or {}
+    ev2 = next((x for x in j.get('events', []) if x['event_id'] == eid2), {})
+    check('dnf: marker burns no attempt', ev2.get('attempts_used') == 0, str(ev2)[:200])
+
+    # scoring: the flagged stage doesn't count as done -> DNF for that rally
+    with app.app_context():
+        from app import scoring
+        from app.events import entries_for_event, get_event
+        ev = get_event(eid2)
+        rows = scoring.rally_standings(entries_for_event(eid2), {
+            'offset': 0, 'count': 2, 'location': ev['location'], 'stages': ev['stages']})
+        row = next(rw for rw in rows if rw['username'] == 'smokedriver')
+        # Both stages are unfinished: stage 1 is the flagged DNF (it still
+        # carries the limit time but race_status=4), stage 0 was never started.
+        check('dnf: rally_standings counts the DNF stage as unfinished',
+              row['dnf_stages'] == 2, str(row)[:200])
+
+    # clean up so later recent-times checks see only the original single row
+    with app.app_context():
+        from app.models import Event, Result
+        for res in Result.query.filter_by(event_id=eid2).all():
+            db.session.delete(res)
+        db.session.query(Event).filter_by(id=eid2).delete()
+        db.session.commit()
+
     # 7b. client-version endpoint (source of the client's update banner)
     ver_file = HERE.parent / 'dist' / 'VERSION.txt'
     had_ver = ver_file.is_file()

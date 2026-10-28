@@ -218,7 +218,11 @@ def rally_standings(entries: list[dict], rally: dict) -> list[dict]:
     for e in entries:
         seg = (e.get('stages', []) or [])[offset:offset + count]
         seg += [None] * (count - len(seg))
-        done = sum(1 for s in seg if s and int(s.get('time_ms', 0) or 0) > 0)
+        # A stage with a non-zero race_status is a DNF close-out (it may still
+        # carry the pre-persisted time-limit value) — it doesn't count as done.
+        done = sum(1 for s in seg
+                   if s and int(s.get('time_ms', 0) or 0) > 0
+                   and int(s.get('race_status', 0) or 0) == 0)
         rows.append({
             'username': e.get('username', ''),
             'car': car_label(e),

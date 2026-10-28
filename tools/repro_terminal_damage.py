@@ -7,11 +7,12 @@ Observed close-out shapes (captures/20261027-*, tools/stage_complete_audit.py):
                               stage's time limit (900.0/1800.0s); the real upstream
                               answers that shape with State=6 DNF
 
-Decision under test: only clean finishes are submitted to the web; both DNF
-close-out shapes are skipped (the missing stage is then counted as a DNF by web
-scoring — bogey time + zero rally points), and the bogus limit value in
-StageTime must not leak into the echoed ChampTimeMs. The Progress response is
-still built for every shape (state machine unchanged — step 3 territory).
+Decision under test: only clean finishes are submitted as completions; both DNF
+close-out shapes send a marker instead (mark_dnf=True, time_ms=0) so the web
+side can flag the pre-persisted time-limit entry without changing its time —
+web scoring then counts it as a DNF (zero rally points), and the bogus limit
+value must not leak into the echoed ChampTimeMs. The Progress response is still
+built for every shape (state machine unchanged — step 3 territory).
 
 Run: python tools\repro_terminal_damage.py   (from D:\CODE\DR2)
 """
@@ -126,19 +127,29 @@ def main():
     check("clean: ChampTimeMs includes this stage",
           unwrap(r["Progress"]["ChampTimeMs"]), 1000 + 100500)
 
-    # Club terminal-damage close-out (rs=4): skipped, no phantom time.
+    # Club terminal-damage close-out (rs=4): a marker is sent (not a
+    # completion), no phantom time.
     d, api = fresh()
     r = d._stage_complete(sc(1, race_status=4))
-    check("rs=4: submit_stage NOT called", len(api.submitted), 0)
+    check("rs=4: DNF marker sent", len(api.submitted), 1)
+    if api.submitted:
+        check("rs=4: marker flag", api.submitted[0].get("mark_dnf"), True)
+        check("rs=4: marker time_ms is 0 (web keeps stored limit)",
+              api.submitted[0]["time_ms"], 0)
+        check("rs=4: marker race_status", api.submitted[0]["race_status"], 4)
     check("rs=4: State (mid-leg)", unwrap(r["Progress"]["State"]), 0)
     check("rs=4: ChampTimeMs unchanged", unwrap(r["Progress"]["ChampTimeMs"]), 1000)
 
     # Daily-shape close-out (rs=0, recov=True, StageTime = stage time limit):
-    # must be skipped exactly like rs=4 — upstream answers this shape with
+    # must be marked exactly like rs=4 — upstream answers this shape with
     # State=6 DNF, and the limit value is not a real stage time.
     d, api = fresh()
     r = d._stage_complete(sc(1, recov=True, stage_time=900.0))
-    check("recov: submit_stage NOT called", len(api.submitted), 0)
+    check("recov: DNF marker sent", len(api.submitted), 1)
+    if api.submitted:
+        check("recov: marker flag", api.submitted[0].get("mark_dnf"), True)
+        check("recov: marker race_status normalised to 4",
+              api.submitted[0]["race_status"], 4)
     check("recov: State (mid-leg)", unwrap(r["Progress"]["State"]), 0)
     check("recov: ChampTimeMs does not absorb the limit value",
           unwrap(r["Progress"]["ChampTimeMs"]), 1000)

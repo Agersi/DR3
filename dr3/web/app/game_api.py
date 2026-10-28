@@ -322,6 +322,7 @@ def api_game_stage_complete():
     pos = global_stage_index(event, event_index, stage_index)
     time_ms = int(data.get('time_ms', 0))
     vehicle_id = data.get('vehicle_id')
+    mark_dnf = bool(data.get('mark_dnf'))
 
     r = upsert_result(event_id, user.username)
     stages = json.loads(r.stages_json or '[]')
@@ -335,25 +336,41 @@ def api_game_stage_complete():
     # Routing/identity fields that don't belong inside a stage entry.
     _routing_keys = {'event_id', 'username', 'stage_index', 'event_index'}
 
-    # Merge oldest→newest so newer wins: prior submission, then stage-begin
-    # capture, then this submission's explicitly-sent fields.
-    stage_entry = {
-        **prev_stage_entry,
-        **{k: v for k, v in in_progress_entry.items() if v is not None},
-        **{k: v for k, v in data.items()
-           if v is not None and k not in _routing_keys},
-    }
-    stage_entry['time_ms'] = time_ms
-    stage_entry['submitted_at'] = utcnow().isoformat()
-    if vehicle_id is not None:
-        stage_entry['vehicle_id'] = vehicle_id
-    stage_entry.setdefault('penalties_ms', 0)
-    stage_entry.setdefault('race_status', 0)
+    if mark_dnf:
+        # DNF close-out marker (backlog 32): the game pre-persisted the stage's
+        # time limit via its post-wreck leaderboard query, so keep the stored
+        # time and only flag the entry as a non-finish. Never burns an attempt
+        # — a mid-leg DNF must not lock out the rest of the leg.
+        stage_entry = {
+            **prev_stage_entry,
+            **{k: v for k, v in in_progress_entry.items() if v is not None},
+        }
+        stage_entry['race_status'] = int(data.get('race_status') or 4)
+        stage_entry.setdefault('time_ms', 0)
+        stage_entry.setdefault('penalties_ms', 0)
+        vid = stage_entry.get('vehicle_id')
+    else:
+        # Merge oldest→newest so newer wins: prior submission, then stage-begin
+        # capture, then this submission's explicitly-sent fields.
+        stage_entry = {
+            **prev_stage_entry,
+            **{k: v for k, v in in_progress_entry.items() if v is not None},
+            **{k: v for k, v in data.items()
+               if v is not None and k not in _routing_keys},
+        }
+        stage_entry['time_ms'] = time_ms
+        stage_entry['submitted_at'] = utcnow().isoformat()
+        if vehicle_id is not None:
+            stage_entry['vehicle_id'] = vehicle_id
+        stage_entry.setdefault('penalties_ms', 0)
+        stage_entry.setdefault('race_status', 0)
+        vid = vehicle_id if vehicle_id is not None else stage_entry.get('vehicle_id')
 
     stages[pos] = stage_entry
 
     # A DNF/retired finish burns an attempt; race_status==0 is a clean finish.
-    if stage_entry['race_status'] != 0:
+    # Markers don't count — see the mark_dnf branch above.
+    if not mark_dnf and stage_entry['race_status'] != 0:
         r.attempts_used = (r.attempts_used or 0) + 1
 
     r.total_time_ms = sum(
@@ -361,9 +378,12 @@ def api_game_stage_complete():
         for s in stages
         if s.get('time_ms', 0) > 0
     )
-    if vehicle_id is not None:
-        r.vehicle_id = vehicle_id
-        r.car = car_label({'vehicle_id': vehicle_id})
+    # The Result-level vehicle (leaderboards read this column, not the stage
+    # entries): a pre-persisted row has no submitted vehicle of its own, so
+    # fall back to whatever the stage entry carries from the stage-begin.
+    if vid:
+        r.vehicle_id = vid
+        r.car = car_label({'vehicle_id': vid})
     r.stages_json = json.dumps(stages)
     db.session.commit()
 

@@ -4,6 +4,7 @@ Reads credentials from .env at the project root. Never prints the password.
 
 Usage:  python tools/vps.py "command" ["cmd2" ...]   (each runs, exit codes shown)
         python tools/vps.py --sudo "command"
+        python tools/vps.py [--sudo] --run-script <script.sh> [ARG ...]
 """
 import os
 import sys
@@ -58,20 +59,24 @@ class Vps:
         rc = chan.recv_exit_status()
         return rc, out_b.decode("utf-8", "replace"), err_b.decode("utf-8", "replace")
 
-    def run_script(self, local_path, timeout=300, use_sudo=False):
-        """Upload a bash script to /tmp and execute it remotely."""
+    def run_script(self, local_path, script_args=(), timeout=300, use_sudo=False):
+        """Upload a bash script to /tmp and execute it remotely.
+
+        ``script_args`` are forwarded as positional arguments ($1, $2, ...) —
+        each must be a single shell-safe word (no spaces)."""
+        arg_str = " ".join(script_args)
         with open(local_path, "rb") as f:
             data = f.read().replace(b"\r\n", b"\n")
         sftp = self.client.open_sftp()
         with sftp.open("/tmp/dr3_remote.sh", "wb") as rf:
             rf.write(data)
         if not use_sudo:
-            return self.run("bash /tmp/dr3_remote.sh", timeout)
+            return self.run(f"bash /tmp/dr3_remote.sh {arg_str}".rstrip(), timeout)
         rc, out, err = self.run("sudo -n true", 30)
         if rc == 0:
-            return self.run("sudo bash /tmp/dr3_remote.sh", timeout)
+            return self.run(f"sudo bash /tmp/dr3_remote.sh {arg_str}".rstrip(), timeout)
         chan = self.client.get_transport().open_session()
-        chan.exec_command("sudo -S bash /tmp/dr3_remote.sh")
+        chan.exec_command(f"sudo -S bash /tmp/dr3_remote.sh {arg_str}".rstrip())
         chan.sendall((self.password + "\n").encode())
         chan.shutdown_write()
         out_b, err_b = b"", b""
@@ -107,7 +112,8 @@ def main():
     vps = Vps()
     try:
         if args[0] == "--run-script" and len(args) >= 2:
-            rc, out, err = vps.run_script(args[1], use_sudo=use_sudo)
+            rc, out, err = vps.run_script(args[1], script_args=tuple(args[2:]),
+                                          use_sudo=use_sudo)
             print(out, end=(" " if out and not out.endswith("\n") else ""))
             if err.strip():
                 print("[stderr]\n" + err, end=(" " if not err.endswith("\n") else ""))

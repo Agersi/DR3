@@ -2848,7 +2848,10 @@ class RpcDispatcher:
         # close-out, rs=4) and recov_to_service=True (daily-shape close-out —
         # the game sends rs=0 with the stage's time limit as StageTime; the
         # real upstream answers that shape with State=6 DNF, so it must not be
-        # recorded as a completion). Either way we still build a Progress
+        # recorded as a completion). For DNF shapes we send a marker instead:
+        # the game pre-persisted the time-limit value via its post-wreck
+        # leaderboard query, and the web side flags that entry (race_status)
+        # without changing its time. Either way we still build a Progress
         # response below.
         finished_cleanly = req.race_status == 0 and not req.recov_to_service
         if event_id and self.api_client is not None and finished_cleanly:
@@ -2877,8 +2880,26 @@ class RpcDispatcher:
             except Exception as exc:
                 print(f"[STAGE] api_client.submit_stage() raised: {exc}")
         elif not finished_cleanly:
-            print(f"[STAGE] Not submitting (DNF close-out: race_status={req.race_status}, "
-                  f"recov_to_service={bool(req.recov_to_service)})")
+            if event_id and self.api_client is not None:
+                try:
+                    # time_ms=0 is ignored by the web side for markers — the
+                    # stored pre-persisted time (the stage's limit) stays.
+                    self.api_client.submit_stage(
+                        event_id=event_id,
+                        username="",  # server uses g.game_user from token
+                        stage_index=req.stage_index,
+                        event_index=sub_index,
+                        time_ms=0,
+                        race_status=req.race_status if req.race_status else 4,
+                        mark_dnf=True,
+                    )
+                    print(f"[STAGE] DNF marker sent (race_status={req.race_status}, "
+                          f"recov_to_service={bool(req.recov_to_service)})")
+                except Exception as exc:
+                    print(f"[STAGE] api_client.submit_stage() raised: {exc}")
+            else:
+                print(f"[STAGE] Not submitting (DNF close-out: race_status={req.race_status}, "
+                      f"recov_to_service={bool(req.recov_to_service)})")
         elif not event_id:
             print(f"[STAGE] Cannot submit — no event_id available")
 
