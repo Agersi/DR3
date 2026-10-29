@@ -160,6 +160,10 @@ class RpcDispatcher:
         # its sub-event index (0-based).  Only populated for multi-event
         # championships; single-event challenges are absent (index 0).
         self._challenge_subevent_map: Dict[int, int] = {}
+        # Maps numeric challenge_id -> the local stage index of the most recent
+        # StageBegin for that challenge in this session. Used to resolve the
+        # wrecked stage on terminal-damage close-outs (see _dnf_skip_plan).
+        self._last_begin_stage: Dict[int, int] = {}
         # Maps numeric club_id -> web club_id string
         self._club_id_map: Dict[int, str] = {}
         # Maps time-trial LeaderboardId -> (vclass, track, conditions, category) tuple
@@ -2742,6 +2746,11 @@ class RpcDispatcher:
         # Flat championship-wide stage ordinal; == stage_index for event 0.
         gidx = req.stage_index + (self._stage_offset(event_id, sub_index) if event_id else 0)
 
+        # Remember where the player is: a terminal-damage close-out arrives at
+        # the END of the leg, so this is the only in-session record of which
+        # stage they were actually on (see _dnf_skip_plan).
+        self._last_begin_stage[req.challenge_id] = req.stage_index
+
         if event_id:
             self._current_event_id = event_id
         if req.vehicle_id:
@@ -2849,30 +2858,36 @@ class RpcDispatcher:
 
     def _dnf_skip_plan(self, event_id: str, sub_index: int,
                        closeout_stage: int,
-                       race_status: int) -> List[Dict[str, Any]]:
+                       race_status: int,
+                       challenge_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Terminal-damage skip plan (backlog 32, step 3).
 
-        Abandon close-outs arrive in three shapes (all captured instances):
-        a mid-leg wreck advances one stage and closes it out retired
-        (rs=5, partial time); a rally wreck on the leg's LAST stage closes
-        that stage out directly (rs=4, partial time); an RX wreck on the
-        leg's last stage ALSO closes it directly but with rs=5 and
-        StageTime=0 (2026-10-29 capture: Hell semi, closeout of stage 1 of 2
-        right after a genuine heat finish). So an rs=5 close-out is only
-        assumed to be the advance shape when the stage before it holds no
-        genuine finish — a stored time strictly below its limit (the post-
-        wreck leaderboard pre-persist stores exactly the limit, so a DNF'd
-        previous stage can never look genuine). The player resumes at the
-        next service area: a
-        stage's ``service_area`` label describes the service BEFORE that
-        stage (the builder's per-stage column), so that is the first stage
-        after the wreck whose label is non-None; when none exists, the next
-        service is the start of the following leg and the rest of this leg is
-        skipped. Every skipped stage is marked DNF at its max time (the
-        per-stage limit table in ``stage_limits``). Returns one
-        ``{"stage_index", "time_ms"}`` entry per skipped stage (local indices
-        within the served leg); empty when the leg can't be resolved, in which
-        case the web side falls back to the legacy single-marker behavior.
+        The game's abandon flow advances to the END of the leg and closes out
+        its LAST stage (n-1) with rs=5 regardless of where the player was —
+        captured 2026-10-29 on a 6-stage season leg: retiring on stage 3 and
+        retiring in the service park before any stage BOTH closed out stage 5.
+        The closeout index therefore says nothing about the wrecked stage on
+        legs longer than two (the old rs-based "wrecked = closeout-1" guess
+        only coincided with the truth on 2-stage legs). The wrecked stage is
+        resolved from stored data instead: after a wreck the game queries the
+        leaderboard of the stage the player was ON with PlayerBest set to that
+        stage's exact time limit, and our pre-persist stores it — so an
+        unflagged entry whose stored time equals its limit (genuine finishes
+        are always strictly below their limit; DNF-flagged entries carry
+        race_status != 0) identifies the wrecked stage. The most recent
+        StageBegin of this session is the fallback when no such signature
+        exists (e.g. a service-park retirement with no pre-persist).
+
+        The player resumes at the next service area: a stage's ``service_area``
+        label describes the service BEFORE that stage (the builder's per-stage
+        column), so that is the first stage after the wreck whose label is
+        non-None; when none exists, the next service is the start of the
+        following leg and the rest of this leg is skipped. Every skipped stage
+        is marked DNF at its max time (the per-stage limit table in
+        ``stage_limits``). Returns one ``{"stage_index", "time_ms"}`` entry per
+        skipped stage (local indices within the served leg); empty when the leg
+        can't be resolved, in which case the web side falls back to the legacy
+        single-marker behavior.
         """
         try:
             ev = self.api_client.get_event(event_id) if self.api_client else None
@@ -2909,28 +2924,29 @@ class RpcDispatcher:
             laps = laps_plan[i] if i < len(laps_plan) else None
             return stage_limit_ms(tid, laps=laps)
 
-        wrecked = closeout_stage
-        if race_status == 5 and closeout_stage > 0:
-            # The advance shape closes out the stage AFTER the wreck — but an
-            # RX wreck on the leg's last stage arrives as rs=5 closing the
-            # wrecked stage ITSELF. When the stage before the close-out
-            # already holds a genuine finish (stored time strictly below its
-            # limit), the close-out is direct and the wrecked stage IS it.
-            prev = closeout_stage - 1
-            offset = sum(len(l.get("stages") or []) for l in legs[:sub_index])
-            ep = (self._user_progress_for_event(event_id)
-                  if self.api_client else None)
-            completed = (ep or {}).get("completed_stages", []) if ep else []
-            def _flat(s):
-                try:
-                    return int(s.get("stage_index"))
-                except (TypeError, ValueError):
-                    return -1
-            entry = next(
-                (s for s in completed if _flat(s) == offset + prev), None)
-            stored = int(entry.get("time_ms", 0) or 0) if entry else 0
-            if not (0 < stored < _limit_ms(prev)):
-                wrecked = prev
+        offset = sum(len(l.get("stages") or []) for l in legs[:sub_index])
+        ep = (self._user_progress_for_event(event_id)
+              if self.api_client else None)
+        completed = (ep or {}).get("completed_stages", []) if ep else []
+        cands: List[int] = []
+        for s in completed:
+            try:
+                si = int(s.get("stage_index")) - offset
+            except (TypeError, ValueError):
+                continue
+            if not 0 <= si < n:
+                continue
+            lim = _limit_ms(si)
+            stored = int(s.get("time_ms", 0) or 0)
+            rs = int(s.get("race_status", 0) or 0)
+            if lim > 0 and stored == lim and not rs:
+                cands.append(si)
+        if cands:
+            wrecked = max(cands)
+        else:
+            lb = (self._last_begin_stage.get(challenge_id)
+                  if challenge_id is not None else None)
+            wrecked = lb if (lb is not None and 0 <= lb < n) else 0
         wrecked = max(0, min(wrecked, n - 1))
         # The service BEFORE stage j exists iff its label is non-None (RX legs
         # serve a service on every stage — see _apply_rallycross_stage_format),
@@ -3019,7 +3035,8 @@ class RpcDispatcher:
                     # progress resumes right after it; an empty plan keeps the
                     # legacy single-marker behavior (wrecked stage only).
                     dnf_stages = self._dnf_skip_plan(
-                        event_id, sub_index, req.stage_index, req.race_status)
+                        event_id, sub_index, req.stage_index, req.race_status,
+                        req.challenge_id)
                     # The plan's first entry IS the wrecked stage (resolved
                     # against stored progress); fall back to the rs-based
                     # guess only when the leg couldn't be resolved.

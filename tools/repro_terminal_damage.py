@@ -21,19 +21,19 @@ the next stage with a destroyed car and crash on Continue (mid-leg recurrence
 had only worked because the pre-persisted time-limit value already made the
 stage count look done).
 
-Marker payload: three close-out shapes exist (all captured instances):
-mid-leg abandons advance one stage and close it out retired (rs=5, partial
-time; captured 2026-10-28: wreck on stage 0 -> StageComplete(stage=1, rs=5));
-a rally wreck on the leg's LAST stage closes that stage out directly
-(rs=4, partial time; captured 2026-10-27/28); an RX wreck on the leg's last
-stage ALSO closes it directly but with rs=5 and StageTime=0 (captured
-2026-10-29: Hell semi after a genuine heat finish). An rs=5 close-out is only
-treated as the advance shape when the stage before it has no stored time
-strictly below its limit — the post-wreck leaderboard pre-persist stores
-exactly the limit, so a DNF'd previous stage can never look genuine. The
-marker carries dnf_stage_index = the resolved wrecked stage (the skip plan's
-first entry) so the web side also flags the pre-persisted wrecked entry —
-otherwise its time-limit value scores as a real finish.
+Marker payload: the game's abandon flow advances to the END of the leg and
+closes out its LAST stage (n-1) with rs=5 regardless of where the player was
+(captured 2026-10-29 on a 6-stage season leg: retiring on stage 3 AND
+retiring in the service park before any stage both closed out stage 5), so
+the closeout index never identifies the wrecked stage on legs longer than
+two. The dispatcher resolves it from stored data instead: the post-wreck
+leaderboard pre-persist stores exactly the stage limit on the stage the
+player was ON (genuine finishes are always strictly below their limit, and
+DNF-flagged entries carry race_status != 0), with the session's last
+StageBegin as fallback. The marker carries dnf_stage_index = the resolved
+wrecked stage (the skip plan's first entry) so the web side also flags the
+pre-persisted wrecked entry — otherwise its time-limit value scores as a
+real finish.
 
 Service areas: a stage's service_area label describes the service BEFORE that
 stage (the builder's per-stage column), so the resume point is the first stage
@@ -163,10 +163,11 @@ def main():
     check("clean: ChampTimeMs includes this stage",
           unwrap(r["Progress"]["ChampTimeMs"]), 1000 + 100500)
 
-    # Club terminal-damage close-out (rs=4): a DIRECT close-out — the closed
-    # out stage IS the wrecked one. A marker is sent (not a completion), no
-    # phantom time.
+    # Club terminal-damage close-out (rs=4): the player was ON the closed-out
+    # stage (the session's last StageBegin says so — no pre-persist signature
+    # in this fixture). A marker is sent (not a completion), no phantom time.
     d, api = fresh()
+    d._last_begin_stage[800001] = 1
     r = d._stage_complete(sc(1, race_status=4))
     check("rs=4: DNF marker sent", len(api.submitted), 1)
     if api.submitted:
@@ -191,6 +192,7 @@ def main():
     # must be marked exactly like rs=4 — upstream answers this shape with
     # State=6 DNF, and the limit value is not a real stage time.
     d, api = fresh()
+    d._last_begin_stage[800001] = 1
     r = d._stage_complete(sc(1, recov=True, stage_time=900.0))
     check("recov: DNF marker sent", len(api.submitted), 1)
     if api.submitted:
@@ -205,11 +207,12 @@ def main():
     check("recov: ChampTimeMs does not absorb the limit value",
           unwrap(r["Progress"]["ChampTimeMs"]), 1000)
 
-    # Mid-leg abandon flow (observed 2026-10-28, evt-10872bf1 / HanBaoBao):
-    # the game pre-persisted stage 0 with the time limit via its post-wreck
-    # leaderboard query, then closed out the FOLLOWING stage retired (rs=5).
-    # The marker lands on that next stage; the response must still end the
-    # event, not offer the stage after it.
+    # Mid-leg abandon flow: the game pre-persisted stage 0 with the time limit
+    # via its post-wreck leaderboard query, then advanced to the END of the leg
+    # and closed out its last stage retired (rs=5) — captured on a 6-stage
+    # season leg where BOTH a mid-leg wreck and a service-park retirement
+    # closed out stage 5. The marker lands on that last stage; the response
+    # must still end the event, not offer the stage after it.
     api = FakeApi(
         events={"evtT": {"stages": [stage(0), stage(1), stage(2)]}},
         progress_events=[
@@ -221,11 +224,14 @@ def main():
     d = make_dispatcher(api)
     d._challenge_event_map = {800001: "evtT"}
     d._challenge_subevent_map = {800001: 0}
-    r = d._stage_complete(sc(1, race_status=5))
+    # Legacy-shape fixture (no track ids -> no limit signature), so the wreck
+    # resolves via the session's last StageBegin: the player was on stage 0.
+    d._last_begin_stage[800001] = 0
+    r = d._stage_complete(sc(2, race_status=5))
     check("abandon: DNF marker sent", len(api.submitted), 1)
     if api.submitted:
-        check("abandon: marker on the closed-out (next) stage",
-              api.submitted[0]["stage_index"], 1)
+        check("abandon: marker on the closed-out (leg-end) stage",
+              api.submitted[0]["stage_index"], 2)
         check("abandon: marker race_status preserved (5)",
               api.submitted[0]["race_status"], 5)
         check("abandon: dnf_stage_index points at the pre-persisted wrecked stage",
@@ -331,6 +337,9 @@ def main():
     d = make_dispatcher(api)
     d._challenge_event_map = {800001: "evtT"}
     d._challenge_subevent_map = {800001: 0}
+    # The genuine heat finish (184801 < 1200000 limit) carries no signature,
+    # so the wreck resolves via the session's last StageBegin: the semi.
+    d._last_begin_stage[800001] = 1
     r = d._stage_complete(sc(1, race_status=5, stage_time=0.0))
     check("rx-last-stage: DNF marker sent", len(api.submitted), 1)
     if api.submitted:
@@ -398,6 +407,10 @@ def main():
     d = make_dispatcher(api)
     d._challenge_event_map = {800001: "evtT"}
     d._challenge_subevent_map = {800001: 0}
+    # The genuine stage-0 finish (285116 < 900000 limit) carries no signature,
+    # so the wreck resolves via the session's last StageBegin: the leg's last
+    # stage, which is also the one the close-out targets.
+    d._last_begin_stage[800001] = 1
     r = d._stage_complete(sc(1, race_status=4, stage_time=31.5))
     check("last-stage wreck: DNF marker sent", len(api.submitted), 1)
     if api.submitted:
@@ -500,6 +513,111 @@ def main():
               (0, [{"stage_index": 0, "time_ms": 900000},
                    {"stage_index": 1, "time_ms": 900000}]))
     check("service-area retire: State=2 (leg finished for this run)",
+          unwrap(r["Progress"]["State"]), 2)
+
+    # Han's FWDs shape (2026-10-29, 6-stage season leg): services BEFORE
+    # stages 0/2/4. Retirement in the service park before any stage — no
+    # StageBegin, only the post-wreck pre-persist on stage 0 at its exact
+    # limit (track 636 = 900s). The close-out lands on stage 5 (leg end); the
+    # old closeout-minus-one guess flagged stages 4+5 instead of 0+1.
+    han_leg = [
+        {"track_id": 636, "service_area": "Medium"},
+        {"track_id": 630, "service_area": "None"},
+        {"track_id": 632, "service_area": "Medium"},
+        {"track_id": 633, "service_area": "None"},
+        {"track_id": 629, "service_area": "Medium"},
+        {"track_id": 635, "service_area": "None"},
+    ]
+    api = FakeApi(
+        events={"evtT": {"events": [{"location": "New England",
+                                     "stages": han_leg}]}},
+        progress_events=[
+            {"event_id": "evtT",
+             "completed_stages": [{"stage_index": 0, "time_ms": 900000}],
+             "total_time_ms": 900000, "attempts_used": 0},
+        ],
+    )
+    d = make_dispatcher(api)
+    d._challenge_event_map = {800001: "evtT"}
+    d._challenge_subevent_map = {800001: 0}
+    r = d._stage_complete(sc(5, race_status=5, stage_time=0.0))
+    check("long-leg park retire: DNF marker sent", len(api.submitted), 1)
+    if api.submitted:
+        s = api.submitted[0]
+        check("long-leg park retire: close-out targets the leg-end stage",
+              s["stage_index"], 5)
+        check("long-leg park retire: wreck resolved from the pre-persist signature",
+              s.get("dnf_stage_index"), 0)
+        check("long-leg park retire: skip plan = stages 0..1 only"
+              " (resume at stage 2, next service)",
+              s.get("dnf_stages"),
+              [{"stage_index": 0, "time_ms": 900000},
+               {"stage_index": 1, "time_ms": 900000}])
+    check("long-leg park retire: State=2 (leg finished for this run)",
+          unwrap(r["Progress"]["State"]), 2)
+
+    # Same leg, mid-leg wreck on stage 3 (the user's second round): genuine
+    # finishes before it + the pre-persist on stage 3 at its exact limit
+    # (track 633 = 1800s). The next service sits BEFORE stage 4, so only
+    # stage 3 is skipped.
+    api = FakeApi(
+        events={"evtT": {"events": [{"location": "New England",
+                                     "stages": han_leg}]}},
+        progress_events=[
+            {"event_id": "evtT",
+             "completed_stages": [
+                 {"stage_index": 0, "time_ms": 236522},
+                 {"stage_index": 1, "time_ms": 219176},
+                 {"stage_index": 2, "time_ms": 800000},
+                 {"stage_index": 3, "time_ms": 1800000},
+             ],
+             "total_time_ms": 236522 + 219176 + 800000 + 1800000,
+             "attempts_used": 0},
+        ],
+    )
+    d = make_dispatcher(api)
+    d._challenge_event_map = {800001: "evtT"}
+    d._challenge_subevent_map = {800001: 0}
+    r = d._stage_complete(sc(5, race_status=5, stage_time=0.0))
+    check("long-leg mid wreck: DNF marker sent", len(api.submitted), 1)
+    if api.submitted:
+        s = api.submitted[0]
+        check("long-leg mid wreck: genuine finishes not re-flagged,"
+              " only the pre-persisted stage 3 skipped",
+              (s.get("dnf_stage_index"), s.get("dnf_stages")),
+              (3, [{"stage_index": 3, "time_ms": 1800000}]))
+    check("long-leg mid wreck: State=2 (leg finished for this run)",
+          unwrap(r["Progress"]["State"]), 2)
+
+    # Same leg again but WITHOUT the pre-persist signature (e.g. the
+    # leaderboard query never landed): the session's last StageBegin must
+    # carry the resolution on its own.
+    api = FakeApi(
+        events={"evtT": {"events": [{"location": "New England",
+                                     "stages": han_leg}]}},
+        progress_events=[
+            {"event_id": "evtT",
+             "completed_stages": [
+                 {"stage_index": 0, "time_ms": 236522},
+                 {"stage_index": 1, "time_ms": 219176},
+                 {"stage_index": 2, "time_ms": 800000},
+             ],
+             "total_time_ms": 236522 + 219176 + 800000,
+             "attempts_used": 0},
+        ],
+    )
+    d = make_dispatcher(api)
+    d._challenge_event_map = {800001: "evtT"}
+    d._challenge_subevent_map = {800001: 0}
+    d._last_begin_stage[800001] = 3
+    r = d._stage_complete(sc(5, race_status=5, stage_time=0.0))
+    check("long-leg fallback: DNF marker sent", len(api.submitted), 1)
+    if api.submitted:
+        s = api.submitted[0]
+        check("long-leg fallback: last StageBegin resolves the wrecked stage",
+              (s.get("dnf_stage_index"), s.get("dnf_stages")),
+              (3, [{"stage_index": 3, "time_ms": 1800000}]))
+    check("long-leg fallback: State=2 (leg finished for this run)",
           unwrap(r["Progress"]["State"]), 2)
 
     print()
