@@ -288,9 +288,9 @@ table.table, .table-wrap table { width: 100%; border-collapse: collapse; backgro
 .actions-row { display: flex; gap: 0.7rem; flex-wrap: wrap; align-items: center; margin-top: 1rem; }
 .actions-row button, .actions-row .btn { margin-top: 0; }
 
-.champ-actions { display: flex; justify-content: space-around; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin: 0.8rem 0 0.2rem; }
+.champ-actions { display: flex; justify-content: space-around; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem; margin: 0.8rem 0 0.2rem; }
 .champ-actions form { display: inline-flex; flex-direction: column; align-items: center; gap: 0.45rem; margin: 0; }
-.champ-actions form button { margin-top: 0; }
+.champ-actions .btn, .champ-actions form button { margin-top: 0; }
 .champ-actions select { width: auto; max-width: 260px; min-width: 190px; margin: 0; }
 
 /* ── Misc components ────────────────────────────────── */
