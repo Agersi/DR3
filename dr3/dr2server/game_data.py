@@ -1879,10 +1879,12 @@ def rallycross_stage_plan(stage_count: int,
                           laps: Optional[int] = None) -> List[Tuple[int, int]]:
     """(StageType, NumberLaps) for each stage of an RX event of ``stage_count``.
 
-    One stage is the solo daily format.  Two or more follow RaceNet's
-    knockout shape: heats, then a semi-final and a final as the last two.
-    With ``laps`` set, every stage of the event runs that many laps instead of
-    the per-stage-type defaults (a club championship option).
+    One stage is the solo daily format.  Two stages are a heat followed by a
+    semi; three or more follow RaceNet's knockout shape: heats, then a
+    semi-final and a final as the last two.  A final is never placed directly
+    after a heat — see the n == 2 branch.  With ``laps`` set, every stage of
+    the event runs that many laps instead of the per-stage-type defaults (a
+    club championship option).
     """
     n = max(1, int(stage_count))
     if laps is not None:
@@ -1892,11 +1894,17 @@ def rallycross_stage_plan(stage_count: int,
     knock_laps = RX_KNOCKOUT_LAPS if laps is None else laps
     if n == 1:
         return [(RX_STAGE_TYPE_HEAT, solo_laps)]
-    knockout = [(RX_STAGE_TYPE_FINAL, knock_laps)]
-    if n >= 3:
-        knockout.insert(0, (RX_STAGE_TYPE_SEMI, knock_laps))
-    heats = [(RX_STAGE_TYPE_HEAT, heat_laps)] * (n - len(knockout))
-    return heats + knockout
+    if n == 2:
+        # End on the SEMI.  A heat directly before a final crashes the game
+        # at the finish line: the next-stage preparation has a dedicated
+        # "next stage is FINAL" branch that builds the final grid from the
+        # semi results, and with no semi in the event the lookup returns
+        # NULL and dirtrally2.exe faults (access violation at +0x5A68D9,
+        # observed 2026-10-29 on a [HEAT, FINAL] club leg).  Every shape
+        # RaceNet ever served is [2] or [2,2,2,2,3,4] — no heat->final pair.
+        return [(RX_STAGE_TYPE_HEAT, heat_laps), (RX_STAGE_TYPE_SEMI, knock_laps)]
+    heats = [(RX_STAGE_TYPE_HEAT, heat_laps)] * (n - 2)
+    return heats + [(RX_STAGE_TYPE_SEMI, knock_laps), (RX_STAGE_TYPE_FINAL, knock_laps)]
 
 
 def is_track_verified(track_id: int) -> bool:
