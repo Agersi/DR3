@@ -337,15 +337,20 @@ def club_detail(club_id: str):
                 invite_links.append(link)
 
     # Draft management (backlog #45): the most recent championship to load as
-    # a fresh draft, plus this user's existing drafts for the club.
+    # a fresh draft, plus this user's existing drafts — available across every
+    # club they admin; loading one from another club clones it into this one.
     previous_event = None
     my_drafts = []
     if is_admin:
         previous_event = _latest_club_event(club_id)
         if uname:
-            rows = ChampionshipDraft.query.filter_by(
-                club_id=club.id, owner=uname).all()
+            rows = ChampionshipDraft.query.filter_by(owner=uname).all()
             rows.sort(key=lambda d: d.created_at or utcnow(), reverse=True)
+            foreign_ids = {d.club_id for d in rows} - {club.id}
+            source_names = {}
+            if foreign_ids:
+                source_names = {c.id: c.name for c in
+                                Club.query.filter(Club.id.in_(foreign_ids)).all()}
             for d in rows:
                 try:
                     data = json.loads(d.data_json or '{}')
@@ -363,6 +368,7 @@ def club_detail(club_id: str):
                     'permanent': bool(d.permanent),
                     'label': label,
                     'created_at': d.created_at.strftime('%d %b %Y') if d.created_at else '',
+                    'source': source_names.get(d.club_id, '') if d.club_id != club.id else '',
                 })
 
     live_ends = ''
@@ -1286,14 +1292,25 @@ def championship_load_previous(club_id: str):
 @clubs_bp.route('/clubs/<club_id>/championship/load-draft', methods=['POST'])
 @verified_required
 def championship_load_draft(club_id: str):
-    """Continue editing one of the user's existing drafts for this club."""
+    """Load one of the user's drafts. A draft of this club is resumed as-is;
+    a draft from another club is cloned into this one as a fresh working
+    copy (the original stays where it was)."""
     club = _require_club_admin(club_id)
     draft_id = (request.form.get('draft_id') or '').strip()
     d = db.session.get(ChampionshipDraft, draft_id) if draft_id else None
-    if d is None or d.club_id != club.id or d.owner != g.user.username:
-        flash('That draft does not exist for this club.', 'error')
+    if d is None or d.owner != g.user.username:
+        flash('That draft is not available.', 'error')
         return redirect(url_for('clubs.club_detail', club_id=club.id))
-    return redirect(url_for('clubs.championship_edit', club_id=club.id, draft_id=draft_id))
+    if d.club_id == club.id:
+        return redirect(url_for('clubs.championship_edit', club_id=club.id, draft_id=draft_id))
+    clone = dict(get_draft(draft_id))
+    clone['id'] = f'champ-draft-{secrets.token_hex(4)}'
+    clone['club_id'] = club.id
+    clone['permanent'] = False
+    save_draft(clone)
+    src = db.session.get(Club, d.club_id)
+    flash(f'Loaded a draft from "{src.name if src else d.club_id}" as a new draft.', 'info')
+    return redirect(url_for('clubs.championship_edit', club_id=club.id, draft_id=clone['id']))
 
 
 @clubs_bp.route('/clubs/<club_id>/championship/<draft_id>/save-permanent', methods=['POST'])

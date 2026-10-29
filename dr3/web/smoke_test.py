@@ -1151,6 +1151,33 @@ def main() -> int:
     check('load-previous on an empty club flashes an error',
           r.status_code == 200 and b'no championship to load' in r.data, f'status={r.status_code}')
 
+    # Cross-club draft loading (#45 follow-up): a user's drafts are available
+    # from every club they admin; loading one made in another club clones it.
+    r = client.get(f'/clubs/{lab_id}')
+    lab_html = r.get_data(as_text=True)
+    check('drafts from other clubs are listed with their source',
+          r.status_code == 200 and f'value="{prev_draft}"' in lab_html
+          and '— from Smoke Crew' in lab_html, f'status={r.status_code}')
+    r = client.post(f'/clubs/{lab_id}/championship/load-draft',
+                    data={'draft_id': prev_draft}, follow_redirects=False)
+    clone_loc = r.headers.get('Location', '')
+    clone_id = clone_loc.rstrip('/').split('/')[-1]
+    check('cross-club load-draft creates a clone in the target club',
+          r.status_code == 302 and clone_id.startswith('champ-draft-')
+          and clone_id != prev_draft, f"loc={clone_loc}")
+    with app.app_context():
+        src = db.session.get(_CD, prev_draft)
+        dst = db.session.get(_CD, clone_id)
+        check('clone targets the new club, original draft untouched',
+              dst is not None and dst.club_id == lab_id
+              and dst.owner == 'smokedriver' and dst.permanent is False
+              and src is not None and src.club_id == club_id
+              and json.loads(dst.data_json or '{}') == json.loads(src.data_json or '{}'),
+              '')
+    r = client.get(f'/clubs/{lab_id}/championship/{clone_id}')
+    check('cloned draft editor renders in the target club',
+          r.status_code == 200, f'status={r.status_code}')
+
     # 20. delete the championships
     with app.app_context():
         champ_ids = [e.id for e in Event.query.filter_by(club_id=club_id).all()]
