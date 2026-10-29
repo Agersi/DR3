@@ -21,13 +21,19 @@ the next stage with a destroyed car and crash on Continue (mid-leg recurrence
 had only worked because the pre-persisted time-limit value already made the
 stage count look done).
 
-Marker payload: two close-out shapes exist (all captured instances agree):
-mid-leg abandons advance one stage and close it out retired (rs=5; captured
-2026-10-28: wreck on stage 0 -> StageComplete(stage=1, rs=5)), while a wreck
-on the leg's LAST stage closes that stage out directly (rs=4, partial time;
-captured 2026-10-27/28 on single-stage legs). Only the rs=5 shape carries
-dnf_stage_index = stage_index - 1 so the web side also flags the pre-persisted
-wrecked entry — otherwise its time-limit value scores as a real finish.
+Marker payload: three close-out shapes exist (all captured instances):
+mid-leg abandons advance one stage and close it out retired (rs=5, partial
+time; captured 2026-10-28: wreck on stage 0 -> StageComplete(stage=1, rs=5));
+a rally wreck on the leg's LAST stage closes that stage out directly
+(rs=4, partial time; captured 2026-10-27/28); an RX wreck on the leg's last
+stage ALSO closes it directly but with rs=5 and StageTime=0 (captured
+2026-10-29: Hell semi after a genuine heat finish). An rs=5 close-out is only
+treated as the advance shape when the stage before it has no stored time
+strictly below its limit — the post-wreck leaderboard pre-persist stores
+exactly the limit, so a DNF'd previous stage can never look genuine. The
+marker carries dnf_stage_index = the resolved wrecked stage (the skip plan's
+first entry) so the web side also flags the pre-persisted wrecked entry —
+otherwise its time-limit value scores as a real finish.
 
 Service areas: a stage's service_area label describes the service BEFORE that
 stage (the builder's per-stage column), so the resume point is the first stage
@@ -168,8 +174,8 @@ def main():
         check("rs=4: marker time_ms is 0 (web keeps stored limit)",
               api.submitted[0]["time_ms"], 0)
         check("rs=4: marker race_status", api.submitted[0]["race_status"], 4)
-        check("rs=4: direct close-out -> no dnf_stage_index",
-              api.submitted[0].get("dnf_stage_index"), None)
+        check("rs=4: direct close-out -> dnf_stage_index is the wrecked stage itself",
+              api.submitted[0].get("dnf_stage_index"), 1)
         # Legacy-shape event (no service_area labels): parity fallback puts a
         # service BEFORE even stages, so the next one after wrecked stage 1 is
         # before stage 2 — only the wrecked stage is skipped.
@@ -191,8 +197,8 @@ def main():
         check("recov: marker flag", api.submitted[0].get("mark_dnf"), True)
         check("recov: marker race_status normalised to 4",
               api.submitted[0]["race_status"], 4)
-        check("recov: not the advance shape -> no dnf_stage_index",
-              api.submitted[0].get("dnf_stage_index"), None)
+        check("recov: direct close-out -> dnf_stage_index is the wrecked stage itself",
+              api.submitted[0].get("dnf_stage_index"), 1)
     check("recov: State (event finished after DNF)",
           unwrap(r["Progress"]["State"]), 2)
     check("recov: AttemptsLeft", unwrap(r["Progress"]["AttemptsLeft"]), 0)
@@ -301,6 +307,43 @@ def main():
     check("rx: State (event finished for this run)",
           unwrap(r["Progress"]["State"]), 2)
 
+    # Step 3 — RX wreck on the leg's LAST stage (captured 2026-10-29, Hell
+    # semi): the close-out arrives as rs=5 with StageTime=0 closing the
+    # wrecked stage ITSELF, right after a genuine heat finish. The stored
+    # previous time is strictly below its limit, so this is the DIRECT shape
+    # — only the wrecked (closed-out) stage is skipped; the genuine heat
+    # finish must NOT be re-flagged.
+    api = FakeApi(
+        events={"evtT": {"events": [{
+            "location": "Hell",
+            "rx_laps": 4,
+            "stages": [
+                {"track_id": 478, "service_area": "Long"},
+                {"track_id": 478, "service_area": "None"},
+            ],
+        }]}},
+        progress_events=[
+            {"event_id": "evtT",
+             "completed_stages": [stage(0, time_ms=184801)],
+             "total_time_ms": 184801, "attempts_used": 0},
+        ],
+    )
+    d = make_dispatcher(api)
+    d._challenge_event_map = {800001: "evtT"}
+    d._challenge_subevent_map = {800001: 0}
+    r = d._stage_complete(sc(1, race_status=5, stage_time=0.0))
+    check("rx-last-stage: DNF marker sent", len(api.submitted), 1)
+    if api.submitted:
+        check("rx-last-stage: genuine previous finish -> direct shape,"
+              " only the wrecked stage skipped",
+              api.submitted[0].get("dnf_stages"),
+              [{"stage_index": 1, "time_ms": 1200000}])
+        check("rx-last-stage: dnf_stage_index points at the wrecked (closed-out) stage",
+              api.submitted[0].get("dnf_stage_index"), 1)
+    check("rx-last-stage: State (event finished for this run)",
+          unwrap(r["Progress"]["State"]), 2)
+    check("rx-last-stage: AttemptsLeft", unwrap(r["Progress"]["AttemptsLeft"]), 0)
+
     # Step 3 — the user's reported case (Terminal Testing, Monte Carlo leg):
     # labels [Long, None] mean a service BEFORE stage 0 only (the event start)
     # and NONE between stages 1 and 2. Wreck on stage 0 (advance close-out at
@@ -358,8 +401,8 @@ def main():
     r = d._stage_complete(sc(1, race_status=4, stage_time=31.5))
     check("last-stage wreck: DNF marker sent", len(api.submitted), 1)
     if api.submitted:
-        check("last-stage wreck: direct close-out -> no dnf_stage_index",
-              api.submitted[0].get("dnf_stage_index"), None)
+        check("last-stage wreck: direct close-out -> dnf_stage_index is the wrecked stage itself",
+              api.submitted[0].get("dnf_stage_index"), 1)
         check("last-stage wreck: skip plan = wrecked stage only",
               api.submitted[0].get("dnf_stages"),
               [{"stage_index": 1, "time_ms": 900000}])
