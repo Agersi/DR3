@@ -88,20 +88,27 @@ def _stable_int_id(string_id: str, base: int = 100000, offset: int = 0) -> int:
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "data" / "upstream_templates"
 
 
-# Vehicle ID -> default LiveryId, from the upstream inventory template.
-# The game requires LiveryId to belong to the VehicleId, otherwise Progress
-# entries load the wrong car.
+# Vehicle ID -> default LiveryId, from upstream GetInventory responses
+# (template snapshot + live capture 2026-10-29).  Livery IDs are per-paint-job
+# catalog ids: any real (vehicle, livery) pair is valid for every account, so
+# pairs captured from one inventory work for all.  The game requires a
+# non-zero LiveryId that belongs to the VehicleId — a zero/unknown id makes it
+# dereference NULL when preparing the next stage (crash at +0x106590).
 _LIVERY_FOR_VEHICLE: Dict[int, int] = {
-    382: 2906, 395: 3511, 396: 2923, 399: 2921, 400: 2918, 401: 2912,
-    468: 2929, 469: 3473, 470: 2927, 471: 2919, 478: 2915, 480: 2917,
-    482: 3437, 483: 2904, 484: 2905, 485: 2689, 490: 2705, 511: 2951,
-    513: 3079, 529: 2892, 532: 2897, 534: 2899, 535: 3050, 536: 2910,
-    537: 2914, 538: 2926, 541: 2938, 547: 2949, 548: 2950, 550: 2953,
-    555: 3359, 556: 3360, 558: 3362, 559: 3363, 561: 3365, 563: 3367,
-    565: 3369, 570: 3374, 572: 3475, 573: 3484, 574: 3485, 575: 3494,
+    382: 2906, 385: 3501, 389: 2907, 393: 2916, 394: 2924, 395: 3511,
+    396: 2923, 399: 2921, 400: 2918, 401: 2912, 468: 2929, 469: 3473,
+    470: 2927, 471: 2919, 472: 3052, 477: 2908, 478: 2915, 479: 2911,
+    480: 2917, 482: 3437, 483: 2904, 484: 2905, 485: 2689, 490: 2705,
+    502: 2820, 504: 2820, 511: 2951, 513: 3079, 514: 3389, 527: 2891,
+    529: 2892, 530: 2893, 531: 2894, 532: 2897, 533: 2898, 534: 2899,
+    535: 3050, 536: 2910, 537: 2914, 538: 2926, 541: 2938, 543: 3321,
+    547: 2949, 548: 2950, 550: 2953, 554: 3358, 555: 3359, 556: 3360,
+    557: 3379, 558: 3362, 559: 3363, 560: 3364, 561: 3365, 562: 3366,
+    563: 3367, 564: 3673, 565: 3369, 566: 3370, 567: 3410, 569: 3701,
+    570: 3374, 571: 3462, 572: 3475, 573: 3484, 574: 3485, 575: 3494,
     576: 3513, 577: 3654, 578: 3690, 579: 3719, 580: 3711, 581: 3713,
     582: 3722, 585: 3765, 586: 3767, 587: 3770, 588: 3763, 589: 3772,
-    590: 3764, 593: 3774, 597: 3779,
+    590: 3764, 593: 3774, 597: 3779, 600: 3874,
 }
 
 
@@ -1019,6 +1026,32 @@ class RpcDispatcher:
         )
         return club_egonet, challenge_egonet, progress_egonet
 
+    @staticmethod
+    def _carry_vehicle(
+        completed: List[Dict[str, Any]],
+    ) -> tuple[int, int]:
+        """Vehicle/livery to carry over from the player's completed stages.
+
+        Prefers the last entry, but a DNF close-out entry can be sparse (no
+        vehicle data of its own), so walk back to the nearest stage that has
+        a real livery; the default-livery table covers vehicles with no
+        captured livery at all.  A zero livery must never be served — the
+        game dereferences it when preparing the next stage (crash).
+        """
+        if not completed:
+            return 0, 0
+        src = completed[-1]
+        for e in reversed(completed):
+            if e.get("livery_id"):
+                src = e
+                break
+        vehicle_id = src.get("vehicle_id") or 0
+        if not isinstance(vehicle_id, int):
+            vehicle_id = 0
+        livery_id = src.get("livery_id", 0) or _LIVERY_FOR_VEHICLE.get(
+            vehicle_id, 0)
+        return vehicle_id, livery_id
+
     def _multi_event_progress(
         self, challenge_id: int, layout: List[int], active: int,
         ep: Optional[Dict[str, Any]], carry_over: bool = False,
@@ -1061,10 +1094,7 @@ class RpcDispatcher:
             if not carry_over or completed_count <= 0:
                 return None  # not started -> enterable, no Progress entry
             last = completed[completed_count - 1]
-            vehicle_id = last.get("vehicle_id") or 0
-            if not isinstance(vehicle_id, int):
-                vehicle_id = 0
-            livery_id = last.get("livery_id", 0) or _LIVERY_FOR_VEHICLE.get(vehicle_id, 0)
+            vehicle_id, livery_id = self._carry_vehicle(completed)
             if prev_was_rx:
                 # RX stage tyre values are invalid on rally tracks — seed the
                 # upstream defaults instead (see docstring).
@@ -1095,10 +1125,7 @@ class RpcDispatcher:
         target_stage_index = (event_stage_count - 1) if all_done else done_in_event
 
         last = completed[completed_count - 1] if completed else {}
-        vehicle_id = last.get("vehicle_id") or 0
-        if not isinstance(vehicle_id, int):
-            vehicle_id = 0
-        livery_id = last.get("livery_id", 0) or _LIVERY_FOR_VEHICLE.get(vehicle_id, 0)
+        vehicle_id, livery_id = self._carry_vehicle(completed)
         return self._build_progress_dict(
             challenge_id=challenge_id,
             target_stage_index=target_stage_index,
@@ -1510,12 +1537,7 @@ class RpcDispatcher:
                 stage_index_out = next_stage_idx
                 state_out = 1
 
-            vehicle_id = last_stage.get("vehicle_id") or 0
-            if not isinstance(vehicle_id, int):
-                vehicle_id = 0
-            livery_id = last_stage.get("livery_id", 0)
-            if not livery_id:
-                livery_id = _LIVERY_FOR_VEHICLE.get(vehicle_id, 0)
+            vehicle_id, livery_id = self._carry_vehicle(completed_stages)
 
             progress.append(self._build_progress_dict(
                 challenge_id=chal_id,

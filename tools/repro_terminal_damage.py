@@ -409,6 +409,57 @@ def main():
     check("last-stage wreck: State (event finished for this run)",
           unwrap(r["Progress"]["State"]), 2)
 
+    # Carry-over into the NEXT leg after a DNF (crash 2026-10-29, +0x106590):
+    # the last completed entry is the sparse advance close-out (web falls back
+    # its vehicle to the Result column but has no livery). The carry-over must
+    # walk back to the nearest stage with a real livery — never serve 0.
+    def sparse(idx, vehicle_id):
+        return {"stage_index": idx, "time_ms": 900000,
+                "vehicle_id": vehicle_id, "livery_id": 0,
+                "race_status": 5}
+
+    api = FakeApi(
+        events={"evtT": {"stages": [stage(0), stage(1)]}},
+        progress_events=[
+            {"event_id": "evtT",
+             "completed_stages": [
+                 {**stage(0, time_ms=900000), "vehicle_id": 564,
+                  "livery_id": 3368},
+                 sparse(1, 564),
+             ],
+             "total_time_ms": 1800000, "attempts_used": 0},
+        ],
+    )
+    d = make_dispatcher(api)
+    p = d._multi_event_progress(800002, [2, 2, 2], 1,
+                                api.progress["events"][0], carry_over=True)
+    check("carry-dnf: Progress entry served", p is not None, True)
+    if p:
+        check("carry-dnf: vehicle from the real stage, livery walked back"
+              " past the sparse close-out",
+              (unwrap(p["VehicleId"]), unwrap(p["LiveryId"])),
+              (564, 3368))
+
+    # No captured livery anywhere -> the default-livery table must cover the
+    # vehicle (564 was missing from it before 2026-10-29).
+    api = FakeApi(
+        events={"evtT": {"stages": [stage(0), stage(1)]}},
+        progress_events=[
+            {"event_id": "evtT",
+             "completed_stages": [
+                 {**stage(0, time_ms=900000), "vehicle_id": 564,
+                  "livery_id": 0},
+                 sparse(1, 564),
+             ],
+             "total_time_ms": 1800000, "attempts_used": 0},
+        ],
+    )
+    d = make_dispatcher(api)
+    p = d._multi_event_progress(800002, [2, 2, 2], 1,
+                                api.progress["events"][0], carry_over=True)
+    check("carry-table: livery from the default table",
+          (unwrap(p["VehicleId"]), unwrap(p["LiveryId"])), (564, 3673))
+
     print()
     if FAILS:
         print(f"{FAILS} CHECK(S) FAILED")
