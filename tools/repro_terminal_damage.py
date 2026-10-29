@@ -460,6 +460,48 @@ def main():
     check("carry-table: livery from the default table",
           (unwrap(p["VehicleId"]), unwrap(p["LiveryId"])), (564, 3673))
 
+    # Service-area retirement (2026-10-29 crash, +0x100840): the player
+    # retires BEFORE any stage-begin capture, so the web side has no vehicle
+    # data at all (pre-persist row is time-only). The close-out payload itself
+    # carries the car the player was driving — the marker must pass it through
+    # so the web can merge it into the flagged entries (leaderboard car/class/
+    # flag + next-leg carry-over); without it the next leg is served with
+    # VehicleId=0/LiveryId=0 and the game crashes on Start.
+    api = FakeApi(
+        events={"evtT": {"events": [{
+            "location": "Monte Carlo",
+            "stages": [
+                {"track_id": 450, "service_area": "Long"},
+                {"track_id": 453, "service_area": "None"},
+            ],
+        }]}},
+        progress_events=[
+            # Only the post-wreck pre-persist exists (time limit, no vehicle).
+            {"event_id": "evtT",
+             "completed_stages": [{"stage_index": 0, "time_ms": 900000}],
+             "total_time_ms": 900000, "attempts_used": 0},
+        ],
+    )
+    d = make_dispatcher(api)
+    d._challenge_event_map = {800001: "evtT"}
+    d._challenge_subevent_map = {800001: 0}
+    r = d._stage_complete(sc(1, race_status=5, stage_time=0.0))
+    check("service-area retire: DNF marker sent", len(api.submitted), 1)
+    if api.submitted:
+        s = api.submitted[0]
+        check("service-area retire: marker carries the payload's vehicle",
+              s.get("vehicle_id"), 469)
+        check("service-area retire: marker carries the payload's livery",
+              s.get("livery_id"), 3233)
+        check("service-area retire: marker carries the payload's nationality",
+              s.get("nationality_id"), 31)
+        check("service-area retire: advance shape -> wrecked stage 0, whole leg skipped",
+              (s.get("dnf_stage_index"), s.get("dnf_stages")),
+              (0, [{"stage_index": 0, "time_ms": 900000},
+                   {"stage_index": 1, "time_ms": 900000}]))
+    check("service-area retire: State=2 (leg finished for this run)",
+          unwrap(r["Progress"]["State"]), 2)
+
     print()
     if FAILS:
         print(f"{FAILS} CHECK(S) FAILED")

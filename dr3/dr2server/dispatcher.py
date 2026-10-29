@@ -3037,6 +3037,13 @@ class RpcDispatcher:
                         stage_index=req.stage_index,
                         event_index=sub_index,
                         time_ms=0,
+                        # The close-out payload carries the car the player was
+                        # driving — essential for service-area retirements,
+                        # which happen before any stage-begin capture, so no
+                        # other source of vehicle data exists.
+                        vehicle_id=req.vehicle_id if req.vehicle_id else None,
+                        livery_id=req.livery_id,
+                        nationality_id=req.nationality_id,
                         race_status=req.race_status if req.race_status else 4,
                         mark_dnf=True,
                         dnf_stage_index=dnf_stage_index,
@@ -3044,6 +3051,7 @@ class RpcDispatcher:
                     )
                     print(f"[STAGE] DNF marker sent (race_status={req.race_status}, "
                           f"recov_to_service={bool(req.recov_to_service)}, "
+                          f"vehicle={req.vehicle_id} livery={req.livery_id} "
                           f"dnf_stage={dnf_stage_index}, skip_plan={dnf_stages})")
                 except Exception as exc:
                     print(f"[STAGE] api_client.submit_stage() raised: {exc}")

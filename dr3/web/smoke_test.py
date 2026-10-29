@@ -429,14 +429,88 @@ def main() -> int:
         check('skip: all three stages count as unfinished (2 DNF + resume stage)',
               row['dnf_stages'] == 3, str(row)[:200])
 
+    # 7d. Service-area retirement (2026-10-29 crash, dirtrally2.exe + 0x100840):
+    # the player retires BEFORE any stage-begin capture, so no vehicle data
+    # exists anywhere — the close-out marker itself carries the car the player
+    # was driving (VehicleId/LiveryId/NationalityId from the StageComplete
+    # payload) and the web must merge it into every flagged entry: leaderboards
+    # show car/class/flag and the next-leg carry-over gets a real vehicle
+    # instead of 0/0 (which crashed the game on Start).
+    with app.app_context():
+        from datetime import timedelta
+        from app.models import Event, utcnow
+        now = utcnow()
+        db.session.add(Event(
+            id='smoke-dnf-service', schema_version=2, name='Smoke DNF Service',
+            type='daily', location='Monte Carlo', car_class='Gravel 1',
+            surface='Asphalt', conditions='Dry',
+            stages_json=json.dumps([st, st]), settings_json=json.dumps({}),
+            legs_json=json.dumps([{
+                'location': 'Monte Carlo', 'car_class': 'Gravel 1',
+                'surface': 'Asphalt', 'duration': {'days': 0, 'hours': 1, 'mins': 0},
+                'stages': [st, st],
+            }]),
+            start_time=now - timedelta(minutes=5), end_time=now + timedelta(hours=1),
+            active=True, featured=False, club_id=None, system=False,
+        ))
+        db.session.commit()
+
+    eid5 = 'smoke-dnf-service'
+    # NO stage-begin — the retirement happens in the service park.
+    r = client.post('/api/game/stage-complete', headers=headers, json={
+        'event_id': eid5, 'username': 'smokedriver', 'stage_index': 0,
+        'event_index': 0, 'time_ms': 900000,
+    })
+    check('service: pre-persist ok (no stage-begin)',
+          (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+
+    r = client.post('/api/game/stage-complete', headers=headers, json={
+        'event_id': eid5, 'username': 'smokedriver', 'stage_index': 1,
+        'event_index': 0, 'time_ms': 0, 'race_status': 5, 'mark_dnf': True,
+        'dnf_stage_index': 0,
+        'dnf_stages': [
+            {'stage_index': 0, 'time_ms': 900000},
+            {'stage_index': 1, 'time_ms': 900000},
+        ],
+        'vehicle_id': 469, 'livery_id': 7, 'nationality_id': 31,
+    })
+    check('service: marker ok', (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+
+    r = client.get(f'/api/game/leaderboard/{eid5}', headers=headers)
+    j = r.get_json() or {}
+    e0 = (j.get('entries') or [{}])[0]
+    sts = e0.get('stages') or []
+    st0 = sts[0] if len(sts) > 0 else {}
+    st1 = sts[1] if len(sts) > 1 else {}
+    check('service: both stages flagged DNF',
+          st0.get('race_status') == 5 and st1.get('race_status') == 5,
+          f'{st0} {st1}')
+    check('service: marker vehicle merged into the pre-persisted entry',
+          st0.get('vehicle_id') == 469 and st0.get('livery_id') == 7, str(st0)[:200])
+    check('service: marker vehicle merged into the sparse close-out entry',
+          st1.get('vehicle_id') == 469 and st1.get('livery_id') == 7, str(st1)[:200])
+    check('service: nationality carried for the flag',
+          st0.get('nationality_id') == 31 and st1.get('nationality_id') == 31,
+          f'{st0} {st1}')
+    check('service: result-level vehicle set (car/class/flag on the board)',
+          e0.get('vehicle_id') == 469, str(e0)[:200])
+
+    r = client.get('/api/game/my-progress', headers=headers)
+    j = r.get_json() or {}
+    ev5 = next((x for x in j.get('events', []) if x['event_id'] == eid5), {})
+    done = ev5.get('completed_stages', [])
+    check('service: carry-over source carries the real vehicle, never 0',
+          all(s.get('vehicle_id') == 469 and s.get('livery_id') == 7
+              for s in done) and len(done) == 2, str(ev5)[:300])
+
     # clean up so later recent-times checks see only the original single row
     with app.app_context():
         from app.models import Event, Result
         for res in Result.query.filter(
-                Result.event_id.in_([eid2, eid3, eid4])).all():
+                Result.event_id.in_([eid2, eid3, eid4, eid5])).all():
             db.session.delete(res)
         db.session.query(Event).filter(
-            Event.id.in_([eid2, eid3, eid4])).delete()
+            Event.id.in_([eid2, eid3, eid4, eid5])).delete()
         db.session.commit()
 
     # 7b. client-version endpoint (source of the client's update banner)

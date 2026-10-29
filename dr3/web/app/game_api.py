@@ -371,6 +371,13 @@ def api_game_stage_complete():
                 if 0 <= dnf_pos < pos:
                     targets.append((dnf_pos, 0))
         vid = None
+        # A service-area retirement happens BEFORE any stage-begin capture, so
+        # the entries may have no vehicle data at all — the close-out payload
+        # itself carries the car the player was driving; merge it into every
+        # flagged entry that lacks one (leaderboards + next-leg carry-over).
+        sent_vid = data.get('vehicle_id') or None
+        sent_liv = data.get('livery_id') or None
+        sent_nat = data.get('nationality_id') or None
         for p, t in targets:
             while len(stages) <= p:
                 stages.append(
@@ -380,6 +387,12 @@ def api_game_stage_complete():
                 **{k: v for k, v in
                    in_progress_all.get(str(p), {}).items() if v is not None},
             }
+            if not entry.get('vehicle_id') and sent_vid:
+                entry['vehicle_id'] = sent_vid
+            if not entry.get('livery_id') and sent_liv:
+                entry['livery_id'] = sent_liv
+            if not entry.get('nationality_id') and sent_nat:
+                entry['nationality_id'] = sent_nat
             entry['race_status'] = rs
             if t > 0 and not (entry.get('time_ms', 0) or 0):
                 entry['time_ms'] = t
@@ -387,7 +400,7 @@ def api_game_stage_complete():
             entry.setdefault('penalties_ms', 0)
             stages[p] = entry
             if not vid:
-                vid = entry.get('vehicle_id')
+                vid = entry.get('vehicle_id') or sent_vid
     else:
         # Merge oldest→newest so newer wins: prior submission, then stage-begin
         # capture, then this submission's explicitly-sent fields.
