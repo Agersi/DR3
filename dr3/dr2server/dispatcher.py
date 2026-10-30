@@ -3200,7 +3200,21 @@ class RpcDispatcher:
         else:
             all_done = event_stage_count > 0 and (
                 dnf_closeout or len(completed_stages) >= event_stage_count)
-        if all_done:
+        # A #39 single-challenge id covers the WHOLE championship in one
+        # challenge. When a leg ends cleanly with more legs left, answer the
+        # ADVANCE shape instead of "finished": State=0 (between stages — the
+        # proven mid-leg flow) with EventIndex pointing at the NEXT leg and
+        # StageIndex 0, so the game continues within the event instead of
+        # dropping to the clubs menu. The final leg keeps the finished shape.
+        advance_leg = (
+            req.challenge_id in self._multi_event_challenges
+            and not dnf_closeout
+            and all_done
+            and sub_index < len(_layout) - 1)
+        if advance_leg:
+            target_stage_index = 0
+            state_out = 0
+        elif all_done:
             target_stage_index = event_stage_count - 1
             state_out = 2  # event finished
         else:
@@ -3239,12 +3253,15 @@ class RpcDispatcher:
             tyre_compound=tyre_compound,
             tyres_remaining=tyres_remaining,
             tuning_bytes=tuning_bytes,
-            attempts_left=self._attempts_left_for(ep, completed=all_done),
+            attempts_left=self._attempts_left_for(
+                ep, completed=all_done and not advance_leg),
             vehicle_mud=self._mud_from_dict(mud_dict),
             # A #39 single-challenge id addresses its legs by EventIndex; echo
-            # the leg back (per-leg challenges keep index 0).
-            event_index=(sub_index if req.challenge_id in self._multi_event_challenges
-                         else 0),
+            # the leg back (per-leg challenges keep index 0). On an advance
+            # answer, point at the NEXT leg instead.
+            event_index=((sub_index + 1) if advance_leg
+                         else (sub_index if req.challenge_id in self._multi_event_challenges
+                               else 0)),
         )
 
         # Reward / research fields all zero — matches mid-event upstream shape.

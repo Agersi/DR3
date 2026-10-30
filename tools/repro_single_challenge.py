@@ -12,7 +12,10 @@ Unit-level checks against RpcDispatcher:
   - StageBegin on a later leg (EventIndex=leg): sub-event recovered from the
     request, flat ordinal offset applied, response echoes EventIndex;
   - StageComplete: leg completion judged against THIS leg's stage count,
-    championship-wide ChampTimeMs, response echoes EventIndex;
+    championship-wide ChampTimeMs, response echoes EventIndex; a clean
+    leg-end with more legs left answers the ADVANCE shape (State=0,
+    EventIndex=next leg, StageIndex=0, AttemptsLeft=1) instead of finished;
+    the final leg keeps State=2/AttemptsLeft=0 and per-leg ids are untouched;
   - GetChallengeRecap: one entry per (EventIndex, StageIndex) for EVERY leg
     with the running championship total.
 
@@ -119,6 +122,8 @@ def event_with(flag, mode="multi"):
 EP_LEG0_DONE = [stage(0, 5000), stage(1, 6000)]
 # Leg 0 done + leg 1 stage 0 done (7000).
 EP_THRU_LEG1_S0 = EP_LEG0_DONE + [stage(2, 7000)]
+# Leg 0 done + leg 1 stages 0..1 done (7000 + 8000).
+EP_THRU_LEG1_S1 = EP_LEG0_DONE + [stage(2, 7000), stage(3, 8000)]
 
 
 def progress_for(stages):
@@ -242,19 +247,53 @@ def main():
           [(c.get("stage_index"), c.get("event_index")) for c in api.begin_calls],
           [(0, 1)])
 
-    # --------------------------------- StageComplete: final stage of leg 0
+    # --------------------------------- StageComplete: clean leg-end, legs left
+    # A single-challenge id must answer the ADVANCE shape (not "finished") so
+    # the game continues within the event instead of dropping to the menu.
     api = FakeApi(events={"evtS": event_with(True)},
                   progress_events=[progress_for(EP_LEG0_DONE)])
     d = make_dispatcher(api)
     d._challenge_event_map[base] = "evtS"
     d._multi_event_challenges.add(base)
     r = d._stage_complete(sc(1, base, event_index=0))
-    check("SC leg0 final: State=2 (leg finished)", unwrap(r["Progress"]["State"]), 2)
-    check("SC leg0 final: AttemptsLeft", unwrap(r["Progress"]["AttemptsLeft"]), 0)
-    check("SC leg0 final: response EventIndex echoes the leg",
-          r["Progress"]["EventIndex"], 0)
-    check("SC leg0 final: ChampTimeMs is the championship total",
+    check("SC leg0 end: State=0 (advance, not finished)",
+          unwrap(r["Progress"]["State"]), 0)
+    check("SC leg0 end: AttemptsLeft stays 1 (challenge not over)",
+          unwrap(r["Progress"]["AttemptsLeft"]), 1)
+    check("SC leg0 end: response EventIndex points at the NEXT leg",
+          r["Progress"]["EventIndex"], 1)
+    check("SC leg0 end: StageIndex reset to 0", r["Progress"]["StageIndex"], 0)
+    check("SC leg0 end: ChampTimeMs is the championship total",
           unwrap(r["Progress"]["ChampTimeMs"]), 11000)
+
+    # --------------------------------- StageComplete: final leg's final stage
+    # The last leg keeps the finished shape (State=2 / AttemptsLeft=0).
+    api = FakeApi(events={"evtS": event_with(True)},
+                  progress_events=[progress_for(EP_THRU_LEG1_S1)])
+    d = make_dispatcher(api)
+    d._challenge_event_map[base] = "evtS"
+    d._multi_event_challenges.add(base)
+    r = d._stage_complete(sc(2, base, event_index=1))
+    check("SC final leg end: State=2 (challenge finished)",
+          unwrap(r["Progress"]["State"]), 2)
+    check("SC final leg end: AttemptsLeft", unwrap(r["Progress"]["AttemptsLeft"]), 0)
+    check("SC final leg end: response EventIndex echoes the leg",
+          r["Progress"]["EventIndex"], 1)
+    check("SC final leg end: target stays on this leg's last stage",
+          r["Progress"]["StageIndex"], 2)
+
+    # --------------------------------- StageComplete: per-leg id (flag OFF)
+    # Negative control — the per-leg model never advances within a challenge.
+    api = FakeApi(events={"evtS": event_with(False)},
+                  progress_events=[progress_for(EP_LEG0_DONE)])
+    d = make_dispatcher(api)
+    d._challenge_event_map[base + 1] = "evtS"
+    d._challenge_subevent_map[base + 1] = 1
+    r = d._stage_complete(sc(2, base + 1, event_index=0))
+    check("SC per-leg leg end: State=2 (unchanged)", unwrap(r["Progress"]["State"]), 2)
+    check("SC per-leg leg end: AttemptsLeft", unwrap(r["Progress"]["AttemptsLeft"]), 0)
+    check("SC per-leg leg end: response EventIndex stays 0",
+          r["Progress"]["EventIndex"], 0)
 
     # --------------------------------- StageComplete: intermediate stage of leg 1
     api = FakeApi(events={"evtS": event_with(True)},
