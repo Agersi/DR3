@@ -163,7 +163,14 @@ class RpcDispatcher:
         # Maps numeric challenge_id -> the local stage index of the most recent
         # StageBegin for that challenge in this session. Used to resolve the
         # wrecked stage on terminal-damage close-outs (see _dnf_skip_plan).
-        self._last_begin_stage: Dict[int, int] = {}
+        # Keyed by (challenge_id, sub_index): a #39 single-challenge id serves
+        # every leg of the championship, so the leg must be part of the key.
+        self._last_begin_stage: Dict[tuple, int] = {}
+        # Challenge ids served as ONE challenge carrying ALL legs of the
+        # championship in Events[] (#39 experiment, gated by the event setting
+        # ``single_challenge``).  For these ids the game addresses stages with
+        # EventIndex = leg index; per-leg ids (base + active) are absent here.
+        self._multi_event_challenges: set = set()
         # Maps numeric club_id -> web club_id string
         self._club_id_map: Dict[int, str] = {}
         # Maps time-trial LeaderboardId -> (vclass, track, conditions, category) tuple
@@ -993,14 +1000,31 @@ class RpcDispatcher:
 
         base_chal_id = _stable_int_id(wevt_id or f"{club_str_id}-0",
                                       base=200000, offset=0)
-        active_chal_id = base_chal_id + active
-        self._challenge_event_map[active_chal_id] = wevt_id
-        self._challenge_subevent_map[active_chal_id] = active
+        # #39 experiment (multi mode only): serve the WHOLE championship as one
+        # challenge carrying every leg in Events[] (the upstream OFFICIAL
+        # monthly-challenge shape), so the game can stay on the event screen
+        # between legs.  The per-leg model below stays the default.
+        single = self._single_challenge(wevt) and mode == "multi"
+        if single:
+            active_chal_id = base_chal_id
+            self._challenge_event_map[active_chal_id] = wevt_id
+            self._multi_event_challenges.add(active_chal_id)
+        else:
+            active_chal_id = base_chal_id + active
+            self._challenge_event_map[active_chal_id] = wevt_id
+            self._challenge_subevent_map[active_chal_id] = active
 
-        event = self._build_subevent(wevt, base_chal_id, active, events[active])
-        if event is None:
-            print(f"[CLUBS] Active event {active} of {wevt_id} unresolvable — skipping")
-            return None
+        if single:
+            events_out = self._build_events_for_champ(wevt, base_chal_id)
+            if not events_out:
+                print(f"[CLUBS] No resolvable events for {wevt_id} — skipping")
+                return None
+        else:
+            event = self._build_subevent(wevt, base_chal_id, active, events[active])
+            if event is None:
+                print(f"[CLUBS] Active event {active} of {wevt_id} unresolvable — skipping")
+                return None
+            events_out = [event]
 
         num_entrants = len(wevt.get("entries", [])) if "entries" in wevt else 0
         club_egonet = Club(
@@ -1014,7 +1038,7 @@ class RpcDispatcher:
             wevt, active_chal_id, club_int_id,
             vreqs if vreqs is not None
             else [{"Type": 1, "Value": UInt32(vclass_id)}],
-            [event], num_entrants, club_name,
+            events_out, num_entrants, club_name,
             entry_window=entry_window,
             use_inv_vehicle=self._use_inv_vehicle(wevt, vreqs),
         )
@@ -1027,6 +1051,10 @@ class RpcDispatcher:
             carry_over=(mode == "multi"),
             prev_was_rx=prev_was_rx,
             championship_time=(mode == "multi"),
+            # Per-leg model: the game always sends EventIndex=0 (the served
+            # challenge IS one leg).  Single-challenge model: the entry must
+            # point at the active leg inside the shared Events[] list.
+            event_index=active if single else 0,
         )
         return club_egonet, challenge_egonet, progress_egonet
 
@@ -1061,6 +1089,7 @@ class RpcDispatcher:
         ep: Optional[Dict[str, Any]], carry_over: bool = False,
         prev_was_rx: bool = False,
         championship_time: bool = False,
+        event_index: int = 0,
     ) -> Optional[Dict[str, Any]]:
         """Progress entry for the active event of a multi-event championship,
         keyed to the currently-served challenge id.
@@ -1122,6 +1151,7 @@ class RpcDispatcher:
                 tyres_remaining=tyres_remaining,
                 tuning_bytes=self._decode_tuning_b64(last.get("tuning_setup_b64", "") or ""),
                 attempts_left=self._attempts_left_for(ep),
+                event_index=event_index,
             )
 
         all_done = done_in_event >= event_stage_count
@@ -1148,6 +1178,7 @@ class RpcDispatcher:
             tyres_remaining=int(last.get("tyres_remaining", 0) or 2),
             tuning_bytes=self._decode_tuning_b64(last.get("tuning_setup_b64", "") or ""),
             attempts_left=self._attempts_left_for(ep, completed=(state == 2)),
+            event_index=event_index,
         )
 
     @staticmethod
@@ -1286,6 +1317,31 @@ class RpcDispatcher:
             return flag
         return vreqs is not None
 
+    @staticmethod
+    def _single_challenge(wevt: Dict[str, Any]) -> bool:
+        """#39 experiment gate.
+
+        ``settings.single_challenge`` (boolean) makes the club path serve the
+        WHOLE championship as one challenge carrying every leg in ``Events[]``
+        (the upstream OFFICIAL monthly-challenge shape) instead of the verified
+        per-leg model (one single-event challenge per active leg).  Off by
+        default, so existing clubs keep the per-leg serving untouched.
+        """
+        settings = wevt.get("settings") or {}
+        return bool(settings.get("single_challenge", False))
+
+    def _per_subevent(self, challenge_id: int) -> bool:
+        """True when the served challenge covers ONE sub-event at a time.
+
+        Both serving models address stages as (EventIndex, local StageIndex):
+        per-leg ids (challenge id = base + active, in ``_challenge_subevent_map``)
+        and #39 single-challenge ids (in ``_multi_event_challenges``, where the
+        game sends EventIndex = leg index).  Legacy single-event challenges are
+        absent from both maps.
+        """
+        return (challenge_id in self._challenge_subevent_map
+                or challenge_id in self._multi_event_challenges)
+
     def _challenge_egonet(self, wevt: Dict[str, Any], chal_id: int, club_int_id: int,
                           requirements: List[Dict[str, Any]], events_out: List[Event],
                           num_entrants: int, default_name: str,
@@ -1374,6 +1430,7 @@ class RpcDispatcher:
         attempts_left: int,
         percentile: int = 0,
         vehicle_mud: Optional[Dict[str, Any]] = None,
+        event_index: int = 0,
     ) -> Dict[str, Any]:
         """Build a single Progress dict matching upstream's wire shape exactly.
 
@@ -1383,10 +1440,14 @@ class RpcDispatcher:
 
         ``vehicle_mud`` is only populated for StageComplete-style responses;
         StageBegin and Clubs.GetClubs Progress entries omit it.
+
+        ``event_index`` is 0 for every per-leg / single-event challenge (the
+        served challenge covers one leg); a #39 single-challenge entry points
+        at the active leg inside the shared Events[] list.
         """
         progress: Dict[str, Any] = {
             "ChallengeID":   challenge_id,
-            "EventIndex":    0,
+            "EventIndex":    event_index,
             "StageIndex":    target_stage_index,
             "State":         state,
             "StageTimeMs":   UInt32(0),
@@ -2740,16 +2801,20 @@ class RpcDispatcher:
               f"tyres={req.tyres_remaining} compound={req.tyre_compound}")
 
         event_id = self._resolve_event_id(req.challenge_id, "Begin")
-        # The game always reports event_index=0 (each championship event is a
-        # separate challenge); recover the real sub-event from the challenge_id.
+        # Per-leg / single-event challenges: the game always reports
+        # event_index=0 (each championship leg is a separate challenge), so the
+        # real sub-event comes from the challenge_id map.  A #39 single-challenge
+        # id is absent from that map, and the game addresses its legs with
+        # EventIndex = leg index — the fallback below picks that up directly.
         sub_index = self._challenge_subevent_map.get(req.challenge_id, req.event_index)
         # Flat championship-wide stage ordinal; == stage_index for event 0.
         gidx = req.stage_index + (self._stage_offset(event_id, sub_index) if event_id else 0)
 
         # Remember where the player is: a terminal-damage close-out arrives at
         # the END of the leg, so this is the only in-session record of which
-        # stage they were actually on (see _dnf_skip_plan).
-        self._last_begin_stage[req.challenge_id] = req.stage_index
+        # stage they were actually on (see _dnf_skip_plan).  Keyed by leg too —
+        # a #39 single-challenge id serves every leg under one challenge_id.
+        self._last_begin_stage[(req.challenge_id, sub_index)] = req.stage_index
 
         if event_id:
             self._current_event_id = event_id
@@ -2816,7 +2881,7 @@ class RpcDispatcher:
         # (backlog 19): report zero remaining attempts so the client has no
         # re-entry into completed club legs.
         _layout = self._champ_layout(event_id) if event_id else []
-        if req.challenge_id in self._challenge_subevent_map:
+        if self._per_subevent(req.challenge_id):
             _ev_count = _layout[sub_index] if 0 <= sub_index < len(_layout) else 0
         else:
             _ev_count = sum(_layout)
@@ -2852,6 +2917,11 @@ class RpcDispatcher:
             tyres_remaining=req.tyres_remaining,
             tuning_bytes=req.tuning_setup or self._decode_tuning_b64(""),
             attempts_left=self._attempts_left_for(ep, completed=event_complete),
+            # A #39 single-challenge id addresses its legs by EventIndex; echo
+            # the leg back so the client's event screen stays on it.  Per-leg
+            # challenges serve a one-event list and always keep index 0.
+            event_index=(sub_index if req.challenge_id in self._multi_event_challenges
+                         else 0),
         )
 
         return {"ok": True, "Progress": progress, "ResultCode": 0}
@@ -2944,7 +3014,7 @@ class RpcDispatcher:
         if cands:
             wrecked = max(cands)
         else:
-            lb = (self._last_begin_stage.get(challenge_id)
+            lb = (self._last_begin_stage.get((challenge_id, sub_index))
                   if challenge_id is not None else None)
             wrecked = lb if (lb is not None and 0 <= lb < n) else 0
         wrecked = max(0, min(wrecked, n - 1))
@@ -2979,7 +3049,10 @@ class RpcDispatcher:
               f"wheel={req.using_wheel} assists={req.using_assists}")
 
         event_id = self._resolve_event_id(req.challenge_id, "Complete")
-        # Recover the real sub-event index (the game always sends event_index=0).
+        # Recover the real sub-event index.  Per-leg / single-event challenges:
+        # the game always sends event_index=0, so it comes from the challenge_id
+        # map; a #39 single-challenge id falls back to the request's EventIndex
+        # (leg index), which is authoritative there.
         sub_index = self._challenge_subevent_map.get(req.challenge_id, req.event_index)
 
         # Convert the request payloads back to plain dicts for the API call.
@@ -3087,13 +3160,13 @@ class RpcDispatcher:
         #     if persisted)
         ep = self._user_progress_for_event(event_id) if event_id else None
         completed_stages = (ep or {}).get("completed_stages", []) if ep else []
-        # Judge completion against THIS event's own stage count: a multi-event
-        # championship serves one event per challenge (each with its own stages),
-        # so the championship-wide total would tell the client to advance to a
-        # stage the served challenge doesn't have — which crashes the game.
+        # Judge completion against THIS leg's own stage count: per-leg challenges
+        # cover one leg each, and a #39 single-challenge id covers all legs but
+        # the game still advances leg-by-leg — the championship-wide total would
+        # tell the client to advance past stages of a leg it isn't in.
         # One layout fetch for this request; reused for the ChampTimeMs range.
         _layout = self._champ_layout(event_id) if event_id else []
-        if req.challenge_id in self._challenge_subevent_map:
+        if self._per_subevent(req.challenge_id):
             event_stage_count = _layout[sub_index] if 0 <= sub_index < len(_layout) else 0
         else:
             event_stage_count = sum(_layout)
@@ -3118,9 +3191,9 @@ class RpcDispatcher:
         # persisted time-limit value already made the stage count look done;
         # force finished for every DNF shape.
         dnf_closeout = not finished_cleanly
-        if req.challenge_id in self._challenge_subevent_map:
-            # Per-event challenge: this event's stages complete in order, so the
-            # local (0-based) index reaching the event's count means it's done.
+        if self._per_subevent(req.challenge_id):
+            # Per-leg challenge: this leg's stages complete in order, so the
+            # local (0-based) index reaching the leg's count means it's done.
             completed_in_event = (req.stage_index + 1) if req.race_status == 0 else req.stage_index
             all_done = event_stage_count > 0 and (
                 dnf_closeout or completed_in_event >= event_stage_count)
@@ -3138,7 +3211,7 @@ class RpcDispatcher:
         # (backlog 38); other modes total this rally's stages only (each
         # rally is its own challenge). Add this stage's time if the web fetch
         # hasn't seen the submission yet.
-        if req.challenge_id in self._challenge_subevent_map and event_id:
+        if self._per_subevent(req.challenge_id) and event_id:
             rally_offset, rally_count = self._subevent_range(event_id, sub_index, _layout)
         else:
             rally_offset, rally_count = 0, None
@@ -3168,6 +3241,10 @@ class RpcDispatcher:
             tuning_bytes=tuning_bytes,
             attempts_left=self._attempts_left_for(ep, completed=all_done),
             vehicle_mud=self._mud_from_dict(mud_dict),
+            # A #39 single-challenge id addresses its legs by EventIndex; echo
+            # the leg back (per-leg challenges keep index 0).
+            event_index=(sub_index if req.challenge_id in self._multi_event_challenges
+                         else 0),
         )
 
         # Reward / research fields all zero — matches mid-event upstream shape.
@@ -3219,14 +3296,40 @@ class RpcDispatcher:
         if not layout or not 0 <= sub_index < len(layout):
             return {"ok": True, "Recap": []}
 
-        offset = sum(layout[:sub_index])
-        count = layout[sub_index]
         ep = self._user_progress_for_event(event_id)
         times_by_gidx: Dict[int, int] = {}
         for s in (ep or {}).get("completed_stages", []):
             gidx = int(s.get("stage_index", 0) or 0)
             times_by_gidx[gidx] = int(s.get("time_ms", 0) or 0)
 
+        # #39 single-challenge id: the recap lists EVERY leg, one entry per
+        # (EventIndex, StageIndex), with the running championship-wide total —
+        # this is what fills the in-game "Event Progress" tab across legs.
+        if challenge_id in self._multi_event_challenges:
+            recap_all: List[Dict[str, Any]] = []
+            cumul = 0
+            for i, count_i in enumerate(layout):
+                offset_i = sum(layout[:i])
+                for j in range(count_i):
+                    t = times_by_gidx.get(offset_i + j)
+                    if t is not None:
+                        state = 2
+                        cumul += t
+                    else:
+                        state = 0
+                        t = 0
+                    recap_all.append({
+                        "ChallengeId": challenge_id,
+                        "EventIndex": i,
+                        "StageIndex": j,
+                        "State": state,
+                        "StageTimeMs": UInt32(t),
+                        "CumulTimeMs": UInt32(cumul),
+                    })
+            return {"ok": True, "Recap": recap_all}
+
+        offset = sum(layout[:sub_index])
+        count = layout[sub_index]
         recap: List[Dict[str, Any]] = []
         # Multi-Location Rally recaps carry the running championship total:
         # seed with every completed stage before this leg (backlog 38).

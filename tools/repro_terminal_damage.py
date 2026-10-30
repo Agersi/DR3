@@ -167,7 +167,7 @@ def main():
     # stage (the session's last StageBegin says so — no pre-persist signature
     # in this fixture). A marker is sent (not a completion), no phantom time.
     d, api = fresh()
-    d._last_begin_stage[800001] = 1
+    d._last_begin_stage[(800001, 0)] = 1
     r = d._stage_complete(sc(1, race_status=4))
     check("rs=4: DNF marker sent", len(api.submitted), 1)
     if api.submitted:
@@ -192,7 +192,7 @@ def main():
     # must be marked exactly like rs=4 — upstream answers this shape with
     # State=6 DNF, and the limit value is not a real stage time.
     d, api = fresh()
-    d._last_begin_stage[800001] = 1
+    d._last_begin_stage[(800001, 0)] = 1
     r = d._stage_complete(sc(1, recov=True, stage_time=900.0))
     check("recov: DNF marker sent", len(api.submitted), 1)
     if api.submitted:
@@ -226,7 +226,7 @@ def main():
     d._challenge_subevent_map = {800001: 0}
     # Legacy-shape fixture (no track ids -> no limit signature), so the wreck
     # resolves via the session's last StageBegin: the player was on stage 0.
-    d._last_begin_stage[800001] = 0
+    d._last_begin_stage[(800001, 0)] = 0
     r = d._stage_complete(sc(2, race_status=5))
     check("abandon: DNF marker sent", len(api.submitted), 1)
     if api.submitted:
@@ -339,7 +339,7 @@ def main():
     d._challenge_subevent_map = {800001: 0}
     # The genuine heat finish (184801 < 1200000 limit) carries no signature,
     # so the wreck resolves via the session's last StageBegin: the semi.
-    d._last_begin_stage[800001] = 1
+    d._last_begin_stage[(800001, 0)] = 1
     r = d._stage_complete(sc(1, race_status=5, stage_time=0.0))
     check("rx-last-stage: DNF marker sent", len(api.submitted), 1)
     if api.submitted:
@@ -410,7 +410,7 @@ def main():
     # The genuine stage-0 finish (285116 < 900000 limit) carries no signature,
     # so the wreck resolves via the session's last StageBegin: the leg's last
     # stage, which is also the one the close-out targets.
-    d._last_begin_stage[800001] = 1
+    d._last_begin_stage[(800001, 0)] = 1
     r = d._stage_complete(sc(1, race_status=4, stage_time=31.5))
     check("last-stage wreck: DNF marker sent", len(api.submitted), 1)
     if api.submitted:
@@ -609,7 +609,7 @@ def main():
     d = make_dispatcher(api)
     d._challenge_event_map = {800001: "evtT"}
     d._challenge_subevent_map = {800001: 0}
-    d._last_begin_stage[800001] = 3
+    d._last_begin_stage[(800001, 0)] = 3
     r = d._stage_complete(sc(5, race_status=5, stage_time=0.0))
     check("long-leg fallback: DNF marker sent", len(api.submitted), 1)
     if api.submitted:
