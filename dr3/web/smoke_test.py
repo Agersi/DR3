@@ -175,6 +175,75 @@ def main() -> int:
     check('leaderboard: entry-level nationality_id from stage-begin',
           e0.get('nationality_id') == 1, str(e0.get('nationality_id')))
 
+    # personal-best stat tracked per car+stage; the faster re-submit replaces it
+    from app.models import StageStat
+    with app.app_context():
+        stat = db.session.query(StageStat).filter_by(
+            username='smokedriver', vehicle_id=1, track_id=10).first()
+        _stat1_ms = stat.best_time_ms if stat else None
+        _stat1_src = stat.source_type if stat else None
+        _stat1_splits = stat.splits_json if stat else 'ABSENT'
+    check('stage stat: best time per car+stage updated to 419000 (club)',
+          _stat1_ms == 419000 and _stat1_src == 'club' and _stat1_splits is None,
+          f'ms={_stat1_ms} src={_stat1_src} splits={_stat1_splits}')
+
+    # splits ride into the stat + a slower time never replaces the stored best
+    # (unit-level: a live submit would add rows to the global recent-times feed)
+    from app.game_api import _upsert_stage_stat
+    with app.app_context():
+        _upsert_stage_stat('smokedriver', 2, 11, 430000,
+                           [108.5, 107.2, 106.9, 107.4], 'club', 'unit-test')
+        _upsert_stage_stat('smokedriver', 2, 11, 500000,
+                           [99.0, 99.0, 99.0, 99.0], 'club', 'unit-test')
+        stat2 = db.session.query(StageStat).filter_by(
+            username='smokedriver', vehicle_id=2, track_id=11).first()
+        _stat2_splits = json.loads(stat2.splits_json) if stat2 and stat2.splits_json else None
+        _stat2_best = stat2.best_time_ms if stat2 else None
+    check('stage stat: splits stored + slower time ignored (unit)',
+          _stat2_splits == [108.5, 107.2, 106.9, 107.4] and _stat2_best == 430000,
+          f'splits={_stat2_splits} best={_stat2_best}')
+
+    # lifetime driving stats: proxied timetrial/official events record through a
+    # dedicated endpoint (the game keeps talking to EGO); snapshot the baseline
+    # first so the deltas are deterministic regardless of earlier submissions.
+    from app.models import User as _User
+    with app.app_context():
+        _u0 = db.session.query(_User).filter_by(username='smokedriver').first()
+        _base_dist = _u0.total_distance_m or 0
+        _base_stages = _u0.stages_driven or 0
+
+    r = client.post('/api/game/stats-record', headers=headers, json={
+        'source_type': 'timetrial', 'vehicle_id': 5, 'track_id': 90,
+        'time_ms': 61234, 'clean': True,
+    })
+    check('stats-record timetrial ok',
+          (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+    r = client.post('/api/game/stats-record', headers=headers, json={
+        'source_type': 'official', 'vehicle_id': 7, 'time_ms': 90000,
+        'distance_m': 5305, 'clean': True,
+    })
+    check('stats-record official ok',
+          (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+    r = client.post('/api/game/stats-record', headers=headers, json={
+        'source_type': 'official', 'vehicle_id': 7, 'distance_m': 0, 'clean': False,
+    })
+    check('stats-record DNF ok (no-op)',
+          (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+
+    with app.app_context():
+        _tt = db.session.query(StageStat).filter_by(
+            username='smokedriver', vehicle_id=5, track_id=90).first()
+        _tt_ms = _tt.best_time_ms if _tt else None
+        _tt_src = _tt.source_type if _tt else None
+        _u1 = db.session.query(_User).filter_by(username='smokedriver').first()
+        _dist_delta = (_u1.total_distance_m or 0) - _base_dist
+        _stages_delta = (_u1.stages_driven or 0) - _base_stages
+    check('stats-record: timetrial per-track best stored (no count bump)',
+          _tt_ms == 61234 and _tt_src == 'timetrial', f'ms={_tt_ms} src={_tt_src}')
+    check('stats-record: official adds distance(5305)+count(1); DNF adds nothing',
+          _dist_delta == 5305 and _stages_delta == 1,
+          f'dist_delta={_dist_delta} stages_delta={_stages_delta}')
+
     # home recent-times rows carry the driver's flag url (backlog #40)
     r = client.get('/api/home/recent-times?offset=0&limit=25')
     j = r.get_json() or {}

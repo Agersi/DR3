@@ -344,6 +344,57 @@ class RequestHandler(BaseHTTPRequestHandler):
             return value.value
         return value
 
+    def _record_proxy_stats(self, method: str, payload: Dict[str, Any]) -> None:
+        """Record driving stats from a proxied timetrial / official stage payload.
+
+        The request still goes to EGO untouched; this only extracts the fields we
+        want to keep (car, track, time, distance) and posts them to the web API
+        in a daemon thread so a slow/failed call can never affect the game. Timetrials
+        carry TrackModelId -> per-track best; officials carry no track id, so they
+        contribute distance + completion count only.
+        """
+        client = self.app.dispatcher.api_client
+        if client is None:
+            return
+
+        def _val(key: str) -> Any:
+            v = payload.get(key)
+            return getattr(v, "value", v)
+
+        try:
+            vehicle_id = int(_val("VehicleId") or 0)
+            time_ms = int(round(float(_val("StageTime") or 0.0) * 1000))
+            if method == "TimeTrial.PostTime":
+                track_id = int(_val("TrackModelId") or 0)
+                clean, distance_m, source_type = True, 0, "timetrial"
+            else:  # RaceNetChallenges.StageComplete (official daily/weekly/monthly)
+                track_id = None
+                race_status = int(_val("RaceStatus") or 0)
+                recov = bool(_val("RecovToService"))
+                clean = (race_status == 0 and not recov)
+                distance_m = int(_val("DistanceDriven") or 0)
+                source_type = "official"
+        except (TypeError, ValueError):
+            return
+
+        if time_ms <= 0 and distance_m <= 0:
+            return
+
+        def _fire() -> None:
+            try:
+                client.record_stats(
+                    source_type=source_type,
+                    vehicle_id=vehicle_id or None,
+                    track_id=track_id,
+                    time_ms=time_ms if time_ms > 0 else None,
+                    distance_m=distance_m if distance_m > 0 else None,
+                    clean=clean,
+                )
+            except Exception as exc:  # never let stats break the proxy path
+                print(f"[STATS] record_stats failed: {exc}")
+
+        Thread(target=_fire, name="dr3-stats", daemon=True).start()
+
     def _handle_egonet_rpc(self, method: str, payload: Dict[str, Any], capture_path: Path) -> None:
         is_proxied = self._should_proxy(method, payload)
         print(f"[RPC] {method}{'  [PROXY]' if is_proxied else ''}")
@@ -354,6 +405,14 @@ class RequestHandler(BaseHTTPRequestHandler):
         # change — the proxy path below is untouched).
         if method == "DataMining.DataEvent":
             self._log_datamining_event(payload)
+
+        # Additive stats recording for proxied timetrial / official stage data.
+        # These methods go straight upstream (the game keeps working against the
+        # real EGO server); we read the decoded payload on the way through and
+        # record it to the web API in a fire-and-forget thread, so it can never
+        # break or delay the proxied request.
+        if is_proxied and method in ("TimeTrial.PostTime", "RaceNetChallenges.StageComplete"):
+            self._record_proxy_stats(method, payload)
 
         # Check if this method should be proxied upstream
         if is_proxied:

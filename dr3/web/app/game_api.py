@@ -32,7 +32,7 @@ from .events import (
     upsert_result,
     validate_id,
 )
-from .models import Club, ClubMember, GameToken, User, utcnow
+from .models import Club, ClubMember, GameToken, StageStat, User, utcnow
 from .scoring import car_label, championship_points, overall_rank_key
 from .tables import normalize_championship
 
@@ -291,6 +291,45 @@ def api_game_stage_begin():
     return jsonify({'ok': True})
 
 
+def _stage_track_id(event: dict, event_index: int, stage_index: int):
+    """The track id of one leg's stage within a web event (None if unresolvable)."""
+    legs = event.get('events') or [{'stages': event.get('stages', [])}]
+    if not 0 <= event_index < len(legs):
+        return None
+    leg_stages = legs[event_index].get('stages') or []
+    if not 0 <= stage_index < len(leg_stages):
+        return None
+    try:
+        return int(leg_stages[stage_index].get('track_id'))
+    except (TypeError, ValueError):
+        return None
+
+
+def _upsert_stage_stat(username, vehicle_id, track_id, time_ms, splits,
+                       source_type, source_event_id) -> None:
+    """Record a driver's best-ever time on a car at a stage; the per-segment
+    splits from that run ride along (None when unknown). Only a strictly faster
+    clean finish replaces the stored best — a slower or equal time is ignored so
+    partial data never corrupts the record. Missing pieces (no car/track/time)
+    are skipped entirely."""
+    if not username or not vehicle_id or not track_id or not time_ms or time_ms <= 0:
+        return
+    stat = db.session.query(StageStat).filter_by(
+        username=username, vehicle_id=vehicle_id, track_id=track_id).first()
+    splits_json = json.dumps(splits) if isinstance(splits, list) and splits else None
+    if stat is None:
+        db.session.add(StageStat(
+            username=username, vehicle_id=vehicle_id, track_id=track_id,
+            best_time_ms=int(time_ms), splits_json=splits_json,
+            source_type=source_type, source_event_id=source_event_id))
+    elif int(time_ms) < (stat.best_time_ms or 0):
+        stat.best_time_ms = int(time_ms)
+        stat.splits_json = splits_json
+        stat.source_type = source_type
+        stat.source_event_id = source_event_id
+        stat.updated_at = utcnow()
+
+
 @game_api_bp.route('/api/game/stage-complete', methods=['POST'])
 @csrf.exempt  # type: ignore[untyped-decorator]
 @game_auth_required
@@ -419,6 +458,19 @@ def api_game_stage_complete():
         vid = vehicle_id if vehicle_id is not None else stage_entry.get('vehicle_id')
         stages[pos] = stage_entry
 
+        # Lifetime stats for any clean finish: total distance driven (the
+        # per-stage DistanceDriven the game reports) + completion count. The
+        # personal-best stat (per car+stage) needs a known car + track on top.
+        if stage_entry.get('race_status', 0) == 0:
+            user.total_distance_m = (user.total_distance_m or 0) + max(
+                0, int(stage_entry.get('distance_driven') or 0))
+            user.stages_driven = (user.stages_driven or 0) + 1
+            if vid:
+                _upsert_stage_stat(
+                    user.username, vid,
+                    _stage_track_id(event, event_index, stage_index),
+                    time_ms, stage_entry.get('splits'), 'club', event_id)
+
     # A DNF/retired finish burns an attempt; race_status==0 is a clean finish.
     # Markers don't count — see the mark_dnf branch above.
     if not mark_dnf and stage_entry['race_status'] != 0:
@@ -444,6 +496,48 @@ def api_game_stage_complete():
         (i + 1 for i, e in enumerate(entries) if e['username'] == user.username), 0
     )
     return jsonify({'ok': True, 'position': position, 'total_entries': len(entries)})
+
+
+@game_api_bp.route('/api/game/stats-record', methods=['POST'])
+@csrf.exempt  # type: ignore[untyped-decorator]
+@game_auth_required
+def api_game_stats_record():
+    """Record driving stats for events that are proxied to EGO (timetrials +
+    official dailies/weeklies/monthly). The game keeps talking to the real
+    upstream; the client reads those payloads on the way through and posts them
+    here so we can still build per-driver stats.
+
+    - A clean finish with a known car + track updates the personal-best stat
+      (timetrials carry TrackModelId; officials don't, so they skip this).
+    - Any clean stage completion adds its distance to the driver's lifetime total
+      and bumps the completion count.
+    """
+    data = request.get_json(silent=True) or {}
+    user = g.game_user
+    source_type = str(data.get('source_type') or 'official')[:16]
+    clean = bool(data.get('clean'))
+
+    vehicle_id = data.get('vehicle_id')
+    track_id = data.get('track_id')
+    try:
+        time_ms = int(data.get('time_ms') or 0)
+        distance_m = int(data.get('distance_m') or 0)
+    except (TypeError, ValueError):
+        time_ms, distance_m = 0, 0
+
+    if clean:
+        if vehicle_id and track_id and time_ms > 0:
+            _upsert_stage_stat(
+                user.username, int(vehicle_id), int(track_id), time_ms,
+                data.get('splits'), source_type, str(data.get('event_id') or ''))
+        # Time trials aren't rally stages (and carry no distance) — they only
+        # feed the per-track best. Clubs + official stages add distance + count.
+        if source_type != 'timetrial':
+            user.total_distance_m = (user.total_distance_m or 0) + max(0, distance_m)
+            user.stages_driven = (user.stages_driven or 0) + 1
+        db.session.commit()
+
+    return jsonify({'ok': True})
 
 
 @game_api_bp.route('/api/game/my-progress')

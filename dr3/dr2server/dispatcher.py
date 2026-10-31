@@ -22,7 +22,8 @@ from .models import (
     Challenge, Club, CompDamage, EntryWindow, Event, LeaderboardEntry,
     Reward, Stage, StageBeginRequest, StageCompleteRequest, TierReward, _val,
 )
-from .stage_limits import stage_limit_ms
+from .stage_limits import split_count_for_limit, stage_limit_ms
+from .telemetry import scale_segments_to_total
 
 
 Handler = Callable[[Dict[str, Any]], Union[Dict[str, Any], bytes]]
@@ -147,6 +148,15 @@ class RpcDispatcher:
     ) -> None:
         self.account_store = account_store
         self.api_client = api_client
+        # UDP telemetry listener (dr2server.telemetry.TelemetryListener), set by
+        # the host (dr3_app) after construction; None when telemetry is off or
+        # its port could not be bound. Used to derive real per-segment splits
+        # from a just-driven run on club StageComplete / TimeTrial.PostTime.
+        self.telemetry: Optional[Any] = None
+        # Wall-clock (time.time()) of the most recent stage begin / time-trial
+        # circuit load; take_run_since() claims the UDP run started after it, so
+        # a just-driven stage is matched to its own run and never to an older one.
+        self._telemetry_arm_wall: float = 0.0
         # Toggle for diagnostic prints emitted alongside state transitions.
         # The GUI sets this from config["verbose_logging"]; default off so
         # released builds stay quiet unless a user opts in for support.
@@ -2182,6 +2192,9 @@ class RpcDispatcher:
 
         tt_tuple = (vclass, track, conditions, category)
         self._last_tt_request = tt_tuple
+        # Arm the telemetry run clock when a time-trial circuit loads, so the
+        # PostTime that follows claims the UDP run for this circuit.
+        self._telemetry_arm_wall = time.time()
 
         if self.api_client is not None:
             try:
@@ -2248,6 +2261,20 @@ class RpcDispatcher:
 
         entry_id = secrets.token_hex(8)
 
+        # Real per-segment splits from the UDP run just driven on this circuit.
+        # Rally tracks resolve a split count from their max-time limit; rallycross
+        # circuits (no laps in PostTime) stay unmapped -> no splits, time only.
+        tt_splits: Optional[List[float]] = None
+        if self.telemetry is not None and stage_time_ms > 0:
+            n_tt = split_count_for_limit(stage_limit_ms(track))
+            if n_tt:
+                run = self.telemetry.take_run_since(self._telemetry_arm_wall)
+                if run is not None:
+                    segs = run.segment_times(n_tt)
+                    if segs:
+                        tt_splits = scale_segments_to_total(
+                            segs, stage_time_ms / 1000.0)
+
         if self.api_client is not None and stage_time_ms > 0:
             try:
                 ok = self.api_client.submit_time_trial(
@@ -2262,6 +2289,7 @@ class RpcDispatcher:
                     using_wheel=using_wheel,
                     using_assists=using_assists,
                     ghost_data_b64=ghost_b64,
+                    splits=tt_splits,
                 )
                 if ok:
                     print(f"[TT] PostTime accepted: vclass={vclass} track={track} "
@@ -2816,6 +2844,11 @@ class RpcDispatcher:
         # a #39 single-challenge id serves every leg under one challenge_id.
         self._last_begin_stage[(req.challenge_id, sub_index)] = req.stage_index
 
+        # Arm the telemetry run clock: the UDP trajectory for this stage starts
+        # now, so on the clean StageComplete we claim the completed run started
+        # after this wall-clock (never an older one).
+        self._telemetry_arm_wall = time.time()
+
         if event_id:
             self._current_event_id = event_id
         if req.vehicle_id:
@@ -3075,6 +3108,11 @@ class RpcDispatcher:
         finished_cleanly = req.race_status == 0 and not req.recov_to_service
         if event_id and self.api_client is not None and finished_cleanly:
             try:
+                # Real per-segment splits from the UDP run just driven (None when
+                # telemetry is off/unavailable or the stage's split count is
+                # unknown — the web side then stores no splits for this entry).
+                splits = self._compute_stage_splits(
+                    event_id, sub_index, req.stage_index, time_ms)
                 self.api_client.submit_stage(
                     event_id=event_id,
                     username="",  # server uses g.game_user from token
@@ -3093,9 +3131,11 @@ class RpcDispatcher:
                     livery_id=req.livery_id,
                     has_repaired=has_repaired,
                     repair_penalty_ms=0,  # client doesn't send this directly
+                    splits=splits,
                 )
                 print(f"[STAGE] Submitted to API: event={event_id} "
-                      f"stage={req.stage_index} time_ms={time_ms}")
+                      f"stage={req.stage_index} time_ms={time_ms} "
+                      f"splits={'yes' if splits else 'no'}")
             except Exception as exc:
                 print(f"[STAGE] api_client.submit_stage() raised: {exc}")
         elif not finished_cleanly:
@@ -3372,9 +3412,207 @@ class RpcDispatcher:
             })
         return {"ok": True, "Recap": recap}
 
-    @staticmethod
-    def _stage_splits(params: Dict[str, Any]) -> Dict[str, Any]:
-        return {"ok": True, "Splits": [], "Entries": []}
+    def _stage_split_profile(self, event_id: str, sub_index: int,
+                             stage_index: int):
+        """Resolve the served stage's track/laps/limit/split-count for an event
+        leg. Returns ``(legs, limit_ms, split_count)`` or None when any piece is
+        unresolvable (unknown event/leg/stage, unknown track limit, or a rallycross
+        stage whose split count is not yet mapped). Shared by the GetStageSplits
+        answer and the telemetry split capture so both use identical resolution.
+        """
+        if self.api_client is None:
+            return None
+        try:
+            ev = self.api_client.get_event(event_id)
+        except Exception:
+            return None
+        legs = self._events_of(ev or {})
+        if not 0 <= sub_index < len(legs):
+            return None
+        leg = legs[sub_index] or {}
+        stages = leg.get("stages") or []
+        if not 0 <= stage_index < len(stages):
+            return None
+
+        # Max-time limit for this exact stage (RX rows are per-lap).
+        ws = stages[stage_index] or {}
+        try:
+            tid = int(ws.get("track_id") or 0)
+        except (TypeError, ValueError):
+            tid = 0
+        is_rx = False
+        laps = None
+        try:
+            if self._leg_is_rx(ev or {}, leg):
+                is_rx = True
+                raw_laps = leg.get("rx_laps")
+                try:
+                    rx_laps = max(1, int(raw_laps)) \
+                        if raw_laps is not None else None
+                except (TypeError, ValueError):
+                    rx_laps = None
+                plan = rallycross_stage_plan(len(stages), laps=rx_laps)
+                laps = plan[stage_index][1] if stage_index < len(plan) else None
+        except Exception:
+            pass
+        limit = stage_limit_ms(tid, laps=laps)
+        if is_rx:
+            # Rallycross: one split per lap (the fastest split == the fastest
+            # lap). The rally max-time -> count map doesn't cover RX limits.
+            n = laps if laps else None
+        else:
+            n = split_count_for_limit(limit)
+        if not n:
+            return None
+        return legs, limit, n
+
+    def _compute_stage_splits(self, event_id: str, sub_index: int,
+                              stage_index: int, time_ms: int) -> Optional[List[float]]:
+        """Real per-segment splits for a just-driven clean finish, from the UDP
+        telemetry run that matches this stage. Returns a list of ``n`` segment
+        times (seconds) summing to ``time_ms/1000``, or None when no matching
+        completed run is available, the split count is unknown, or the run has
+        too few samples to resolve every split point.
+        """
+        if self.telemetry is None or time_ms <= 0:
+            return None
+        profile = self._stage_split_profile(event_id, sub_index, stage_index)
+        if profile is None:
+            return None
+        _legs, _limit, n = profile
+        run = self.telemetry.take_run_since(self._telemetry_arm_wall)
+        if run is None:
+            return None
+        if run.has_wrap():
+            # Multi-lap circuit whose distance resets each lap — per-segment split
+            # points can't be resolved from a wrapping distance, so fall back to
+            # the even profile rather than store wrong splits.
+            print("[SPLITS] telemetry run wraps (multi-lap); using even profile")
+            return None
+        if run.track_length_m > 0 and run.max_distance() > 1.25 * run.track_length_m:
+            # A cumulative multi-lap counter reports a total distance far beyond
+            # the per-lap length field, so evenly-spaced split points can't be
+            # resolved either — fall back to the even profile.
+            print("[SPLITS] telemetry distance exceeds track length (multi-lap); "
+                  "using even profile")
+            return None
+        segs = run.segment_times(n)
+        if not segs:
+            return None
+        official_s = time_ms / 1000.0
+        # Scale the measured segments to sum exactly to the official stage time
+        # (the wire invariant: Splits sum ~= TotalTime). The run's own clock may
+        # differ slightly from the submitted StageTime.
+        scaled = scale_segments_to_total(segs, official_s)
+        if not scaled:
+            return None
+        print(f"[SPLITS] telemetry -> {len(segs)} segments total={official_s:.3f}s "
+              f"(run clock {run.total_time_s:.3f}s)")
+        return scaled
+
+    def _stage_splits(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Split times for the stage the game is about to drive.
+
+        Live upstream capture (2026-10-31, final official EGO net club,
+        tools/probe_upstream_splits.py):
+            {"SplitsExist": true, "Splits": [{"Time": <f32 s>}, ...],
+             "TotalTime": <f32 s>}
+        the fastest time set in that event for this stage, broken into one
+        entry per split point (per-segment times; they sum to TotalTime).
+        The game never sends split data itself (StageComplete carries only
+        the total StageTime + a ghost blob), so upstream computes them
+        server-side; we synthesize an even profile from the event's fastest
+        clean stage time. Split count follows the stage's max-time limit
+        (900000ms -> 4, 1800000ms -> 8). Any unknown/missing piece falls
+        back to the legacy empty stub (byte-identical to pre-fix behavior,
+        proven safe in-game).
+        """
+        legacy = {"ok": True, "Splits": [], "Entries": []}
+
+        def _int(key: str) -> int:
+            v = params.get(key, 0)
+            return int(getattr(v, "value", v) or 0)
+
+        try:
+            challenge_id = _int("ChallengeId")
+            event_index = _int("EventIndex")
+            stage_index = _int("StageIndex")
+        except (TypeError, ValueError):
+            return legacy
+
+        if self.api_client is None:
+            return legacy
+        event_id = self._resolve_event_id(challenge_id, "Splits")
+        if not event_id:
+            return legacy
+        sub_index = self._challenge_subevent_map.get(challenge_id, event_index)
+
+        profile = self._stage_split_profile(event_id, sub_index, stage_index)
+        if profile is None:
+            return legacy
+        legs, limit, n = profile
+
+        offset = sum(len(l.get("stages") or []) for l in legs[:sub_index])
+        best_ms, best_splits = self._fastest_stage_entry(
+            event_id, offset + stage_index, limit)
+        if best_ms <= 0:
+            return legacy
+
+        total_s = best_ms / 1000.0
+        if isinstance(best_splits, list) and len(best_splits) == n and all(
+                isinstance(x, (int, float)) and x > 0 for x in best_splits):
+            # A real telemetry-derived profile from the fastest finisher — serve
+            # it verbatim (it already sums to total_s by construction).
+            segs = [float(x) for x in best_splits]
+            src = "real telemetry splits"
+        else:
+            seg_s = total_s / n
+            segs = [seg_s for _ in range(n)]
+            src = "even profile (no stored splits yet)"
+        print(f"[SPLITS] challenge={challenge_id} stage={stage_index} "
+              f"n={n} total={total_s:.3f}s ({src}, fastest {best_ms}ms)")
+        return {
+            "ok": True,
+            "SplitsExist": True,
+            "Splits": [{"Time": s} for s in segs],
+            "TotalTime": total_s,
+        }
+
+    def _fastest_stage_entry(self, event_id: str, flat_stage: int,
+                             limit_ms: int):
+        """Fastest clean finish of one stage across all entries of an event, plus
+        the per-segment split list that entry carries (if any). DNF-flagged
+        entries (race_status != 0) are ignored, as is any stored value reaching
+        the stage's exact time limit (the post-wreck pre-persist signature —
+        genuine finishes are always strictly below their limit). Returns
+        ``(best_ms, best_splits)``; ``best_splits`` is None when no candidate
+        entry has a stored split list yet.
+        """
+        try:
+            entries = self.api_client.get_leaderboard(event_id)
+        except Exception:
+            return 0, None
+        best = 0
+        best_splits = None
+        for e in entries or []:
+            stages = e.get("stages") or []
+            if flat_stage >= len(stages):
+                continue
+            s = stages[flat_stage] or {}
+            try:
+                t = int(s.get("time_ms", 0) or 0)
+                rs = int(s.get("race_status", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            if t <= 0 or rs != 0:
+                continue
+            if limit_ms > 0 and t >= limit_ms:
+                continue
+            if best == 0 or t < best:
+                best = t
+                sp = s.get("splits")
+                best_splits = sp if isinstance(sp, list) else None
+        return best, best_splits
 
     @staticmethod
     def _rally_tier_list(params: Dict[str, Any]) -> Dict[str, Any]:

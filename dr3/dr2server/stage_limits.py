@@ -47,6 +47,23 @@ def _load() -> Dict[int, int]:
     return _TABLE
 
 
+# Split points served by RaceNetChallenges.GetStageSplits per max-time limit.
+# Observed from a live upstream EGO net capture (2026-10-31, final official
+# club session, tools/probe_upstream_splits.py): every 900000ms (15 min)
+# stage carried exactly 4 split entries and every 1800000ms (30 min) stage
+# exactly 8. Rallycross was never observed in that session, so RX stages
+# stay unmapped (the dispatcher falls back to the legacy empty stub).
+SPLIT_COUNT_BY_LIMIT: Dict[int, int] = {900000: 4, 1800000: 8}
+
+
+def split_count_for_limit(limit_ms: int) -> Optional[int]:
+    """Split points for a stage with this max-time limit; None if unknown."""
+    try:
+        return SPLIT_COUNT_BY_LIMIT.get(int(limit_ms))
+    except (TypeError, ValueError):
+        return None
+
+
 def stage_limit_ms(track_id: int, laps: Optional[int] = None) -> int:
     """The game's time limit for one run of this stage, in milliseconds.
 

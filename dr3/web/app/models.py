@@ -30,6 +30,11 @@ class User(db.Model):
     hard_currency: int = db.Column(db.Integer, default=0)
     garage_slots: int = db.Column(db.Integer, default=8)
     garage_json: str = db.Column(db.Text, default='{}')
+    # Lifetime driving stats, accumulated from every completed stage the user
+    # drives (club + official dailies/weeklies/monthly). Migrated additively for
+    # pre-existing databases (see _ensure_user_stat_columns in app/__init__.py).
+    total_distance_m: int = db.Column(db.BigInteger, default=0)
+    stages_driven: int = db.Column(db.Integer, default=0)
 
     tokens = db.relationship('GameToken', back_populates='user', cascade='all, delete-orphan')
     notifications = db.relationship('Notification', back_populates='user', cascade='all, delete-orphan')
@@ -195,6 +200,31 @@ class TimeTrialEntry(db.Model):
     __table_args__ = (
         db.UniqueConstraint('vclass', 'track', 'conditions', 'category', 'username'),
     )
+
+
+class StageStat(db.Model):
+    """A driver's best-ever time on a given car at a given stage, with the
+    per-segment splits from that run.
+
+    Keyed by (username, vehicle_id, track_id) so it tracks the best for each
+    car+stage combination regardless of which club or time trial produced it.
+    Updated across clubs and time trials now (and official dailies/weeklies/
+    monthlies later); a new record only lands when it beats the stored best.
+    """
+
+    __tablename__ = 'stage_stats'
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    username: str = db.Column(db.String(64), nullable=False, index=True)
+    vehicle_id: int = db.Column(db.Integer, nullable=False)
+    track_id: int = db.Column(db.Integer, nullable=False)
+    best_time_ms: int = db.Column(db.BigInteger, nullable=False)
+    splits_json: str | None = db.Column(db.Text)   # [segment seconds] or null when unknown
+    source_type: str = db.Column(db.String(16), default='club')  # club/timetrial/daily/weekly/monthly
+    source_event_id: str | None = db.Column(db.String(64))
+    updated_at: datetime = db.Column(db.DateTime, default=utcnow)
+
+    __table_args__ = (db.UniqueConstraint('username', 'vehicle_id', 'track_id'),)
 
 
 class Notification(db.Model):

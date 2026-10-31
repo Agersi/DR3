@@ -660,6 +660,8 @@ KNOWN_CONFIG_KEYS = frozenset({
     "streaming_exit_behavior",
     "streaming_files",
     "verbose_logging",
+    "telemetry_enabled",
+    "telemetry_port",
     "upstream_ip",
 })
 
@@ -1495,6 +1497,31 @@ def run_gui():
             app.dispatcher.verbose_logging = bool(verbose_logging_var.get())
             dispatcher_holder["instance"] = app.dispatcher
 
+            # UDP telemetry listener (real per-segment stage splits). Enabled by
+            # default; binds the game's telemetry port (auto-detected from the
+            # game's hardware_settings_config.xml, overridable via config). A bind
+            # failure just leaves telemetry off — the server still runs.
+            from dr2server.telemetry import TelemetryListener, detect_udp_port
+            telemetry_listener = None
+            if bool(config.get("telemetry_enabled", True)):
+                try:
+                    tel_port = int(config.get("telemetry_port") or 0)
+                except (TypeError, ValueError):
+                    tel_port = 0
+                if not tel_port:
+                    tel_port = detect_udp_port(20777)
+                candidate = TelemetryListener(
+                    port=tel_port,
+                    logger=lambda m: root.after(0, lambda msg=m: log(msg)),
+                )
+                if candidate.start():
+                    app.dispatcher.telemetry = candidate
+                    telemetry_listener = candidate
+                    root.after(0, lambda p=tel_port: log(
+                        f"Telemetry listener started on UDP :{p}"))
+                else:
+                    app.dispatcher.telemetry = None
+
             from dr2server.streaming import StreamingWriter
             streaming_writer["instance"] = StreamingWriter(
                 app.dispatcher,
@@ -1543,6 +1570,15 @@ def run_gui():
                 # files per the Overlay tab's exit-behavior setting.
                 _writer.clear_files()
                 streaming_writer["instance"] = None
+
+            if telemetry_listener is not None:
+                try:
+                    telemetry_listener.stop()
+                except Exception:
+                    pass
+                if app.dispatcher is not None:
+                    app.dispatcher.telemetry = None
+                telemetry_listener = None
 
             app_holder["instance"] = None
 

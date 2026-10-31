@@ -170,6 +170,29 @@ def _create_schema(db) -> None:
                 raise
             time.sleep(0.5 * (attempt + 1))
     _ensure_draft_permanent_column(db)
+    _ensure_user_stat_columns(db)
+
+
+def _ensure_user_stat_columns(db) -> None:
+    """Additive migration for databases created before User.total_distance_m /
+    stages_driven. create_all only creates missing tables, so pre-existing users
+    tables need the columns added explicitly (works on SQLite and MySQL)."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+
+    cols = {c['name'] for c in db.inspect(db.engine).get_columns('users')}
+    wanted = {'total_distance_m': 'BIGINT NOT NULL DEFAULT 0',
+              'stages_driven': 'INTEGER NOT NULL DEFAULT 0'}
+    for name, ddl in wanted.items():
+        if name in cols:
+            continue
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text(f'ALTER TABLE users ADD COLUMN {name} {ddl}'))
+        except OperationalError as e:
+            # Lost the boot race to another worker adding the same column.
+            if '1060' not in str(e) and 'duplicate column' not in str(e):
+                raise
 
 
 def _ensure_draft_permanent_column(db) -> None:

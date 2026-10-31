@@ -284,6 +284,7 @@ class UpstreamClient:
         tuning_setup_b64: Optional[str] = None,
         tyre_compound: Optional[int] = None,
         tyres_remaining: Optional[int] = None,
+        splits: Optional[List[float]] = None,
         **extra: Any,
     ) -> bool:
         """Submit a completed stage to the web API.
@@ -321,6 +322,7 @@ class UpstreamClient:
             ("tuning_setup_b64", tuning_setup_b64),
             ("tyre_compound",    tyre_compound),
             ("tyres_remaining",  tyres_remaining),
+            ("splits",           splits),
         ):
             if value is not None:
                 payload[key] = value
@@ -410,6 +412,7 @@ class UpstreamClient:
         using_wheel: bool,
         using_assists: bool,
         ghost_data_b64: str,
+        splits: Optional[List[float]] = None,
     ) -> bool:
         """Submit a time trial result to the web API.
 
@@ -428,12 +431,53 @@ class UpstreamClient:
             "using_assists": using_assists,
             "ghost_data_b64": ghost_data_b64,
         }
+        if splits is not None:
+            payload["splits"] = splits
         result = self._post("/api/game/time-trial-submit", payload)
         if result and result.get("ok"):
             return True
         log.warning(
             "submit_time_trial: failed vclass=%d track=%d conditions=%d cat=%d",
             vehicle_class_id, track_model_id, conditions_id, category,
+        )
+        return False
+
+    def record_stats(
+        self,
+        source_type: str,
+        vehicle_id: Optional[int] = None,
+        track_id: Optional[int] = None,
+        time_ms: Optional[int] = None,
+        distance_m: Optional[int] = None,
+        clean: bool = False,
+        splits: Optional[List[float]] = None,
+    ) -> bool:
+        """Record driving stats for a proxied (timetrial / official) event.
+
+        Fire-and-forget on the caller's side: this only ever feeds the driver's
+        lifetime stats + per-track best, so a failure is logged and swallowed by
+        the caller rather than breaking the proxied game request.
+        """
+        payload: Dict[str, Any] = {
+            "source_type": source_type,
+            "clean": bool(clean),
+        }
+        if vehicle_id is not None:
+            payload["vehicle_id"] = int(vehicle_id)
+        if track_id is not None:
+            payload["track_id"] = int(track_id)
+        if time_ms is not None:
+            payload["time_ms"] = int(time_ms)
+        if distance_m is not None:
+            payload["distance_m"] = int(distance_m)
+        if splits is not None:
+            payload["splits"] = splits
+        result = self._post("/api/game/stats-record", payload)
+        if result and result.get("ok"):
+            return True
+        log.warning(
+            "record_stats: failed source=%s vehicle=%s track=%s clean=%s",
+            source_type, vehicle_id, track_id, clean,
         )
         return False
 
