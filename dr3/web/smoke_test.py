@@ -620,9 +620,50 @@ def main() -> int:
     check('recent-times short page signals end of list',
           (j.get('rows') or []) == [], str(j))
 
-    # 8. local time-trial endpoints are removed
-    r = client.post('/api/game/time-trial-submit', headers=headers, json={})
-    check('tt submit endpoint removed', r.status_code == 404, f'status={r.status_code}')
+    # 8. time-trial listen-in endpoint: the client files PostTime payloads that
+    #    are also proxied to EGO; personal best per (class, track, conditions,
+    #    category) 4-tuple — only a strictly faster time replaces the stored
+    #    entry (its ghost + splits ride along). The leaderboard endpoints stay
+    #    removed (the in-game board is EGO's real one).
+    from app.models import TimeTrialEntry as _TTE
+    r = client.post('/api/game/time-trial-submit', json={
+        'vehicle_class_id': 101, 'track_model_id': 580, 'stage_time_ms': 183312,
+    })
+    check('tt submit requires auth', r.status_code == 401, f'status={r.status_code}')
+    r = client.post('/api/game/time-trial-submit', headers=headers, json={
+        'vehicle_class_id': 101, 'track_model_id': 580, 'conditions_id': 5,
+        'category': 2, 'vehicle_id': 532, 'livery_id': 2897, 'stage_time_ms': 183312,
+        'nationality_id': 31, 'using_wheel': False, 'using_assists': True,
+        'ghost_data_b64': 'Zg==', 'splits': [45.8, 45.7, 45.9, 45.9],
+    })
+    check('tt submit ok', (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+    r = client.post('/api/game/time-trial-submit', headers=headers, json={
+        'vehicle_class_id': 101, 'track_model_id': 580, 'conditions_id': 5,
+        'category': 2, 'vehicle_id': 532, 'livery_id': 2897, 'stage_time_ms': 190000,
+        'nationality_id': 31, 'using_wheel': False, 'using_assists': True,
+        'ghost_data_b64': 'cw==',
+    })
+    check('tt submit slower ok (ignored)',
+          (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+    r = client.post('/api/game/time-trial-submit', headers=headers, json={
+        'vehicle_class_id': 101, 'track_model_id': 580, 'conditions_id': 5,
+        'category': 2, 'vehicle_id': 532, 'livery_id': 9999, 'stage_time_ms': 170000,
+        'nationality_id': 31, 'using_wheel': True, 'using_assists': False,
+        'ghost_data_b64': 'Zm==', 'splits': [42.5, 42.5, 42.5, 42.5],
+    })
+    check('tt submit faster ok', (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+    with app.app_context():
+        _tt = db.session.query(_TTE).filter_by(
+            vclass='101', track='580', conditions='5', category=2,
+            username='smokedriver').first()
+        _tt_ms = _tt.stage_time_ms if _tt else None
+        _tt_gh = _tt.ghost_data_b64 if _tt else None
+        _tt_liv = _tt.livery_id if _tt else None
+        _tt_splits = json.loads(_tt.splits_json) if _tt and _tt.splits_json else None
+    check('tt entry: faster best stored (170000) with its ghost/splits/livery',
+          _tt_ms == 170000 and _tt_gh == 'Zm==' and _tt_liv == 9999
+          and _tt_splits == [42.5, 42.5, 42.5, 42.5],
+          f'ms={_tt_ms} gh={_tt_gh} liv={_tt_liv} splits={_tt_splits}')
     r = client.get('/api/game/time-trial-leaderboard?vclass=101&track=10&conditions=5', headers=headers)
     check('tt leaderboard endpoint removed', r.status_code == 404, f'status={r.status_code}')
     r = client.get('/api/game/time-trial-leaderboard-id?vclass=101&track=10&conditions=5&category=1', headers=headers)

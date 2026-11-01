@@ -195,6 +195,7 @@ class TimeTrialEntry(db.Model):
     using_wheel: bool = db.Column(db.Boolean, default=False)
     using_assists: bool = db.Column(db.Boolean, default=False)
     ghost_data_b64: str | None = db.Column(db.Text)
+    splits_json: str | None = db.Column(db.Text)   # [segment seconds] or null when unknown
     submitted_at: datetime = db.Column(db.DateTime, default=utcnow)
 
     __table_args__ = (

@@ -171,6 +171,7 @@ def _create_schema(db) -> None:
             time.sleep(0.5 * (attempt + 1))
     _ensure_draft_permanent_column(db)
     _ensure_user_stat_columns(db)
+    _ensure_tt_splits_column(db)
 
 
 def _ensure_user_stat_columns(db) -> None:
@@ -211,6 +212,27 @@ def _ensure_draft_permanent_column(db) -> None:
             conn.execute(text(
                 'ALTER TABLE championship_drafts '
                 'ADD COLUMN permanent BOOLEAN NOT NULL DEFAULT 0'))
+    except OperationalError as e:
+        # Lost the boot race to another worker adding the same column.
+        if '1060' not in str(e) and 'duplicate column' not in str(e):
+            raise
+
+
+def _ensure_tt_splits_column(db) -> None:
+    """Additive migration for databases created before TimeTrialEntry.splits_json.
+
+    create_all only creates missing tables, so pre-existing time_trials
+    tables need the column added explicitly (works on SQLite and MySQL)."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+
+    cols = {c['name'] for c in db.inspect(db.engine).get_columns('time_trials')}
+    if 'splits_json' in cols:
+        return
+    try:
+        with db.engine.begin() as conn:
+            conn.execute(text(
+                'ALTER TABLE time_trials ADD COLUMN splits_json TEXT NULL'))
     except OperationalError as e:
         # Lost the boot race to another worker adding the same column.
         if '1060' not in str(e) and 'duplicate column' not in str(e):

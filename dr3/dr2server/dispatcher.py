@@ -5,6 +5,7 @@ import hashlib
 import secrets
 import time
 from datetime import datetime
+from threading import Thread
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -157,6 +158,9 @@ class RpcDispatcher:
         # circuit load; take_run_since() claims the UDP run started after it, so
         # a just-driven stage is matched to its own run and never to an older one.
         self._telemetry_arm_wall: float = 0.0
+        # One-shot notice flag: splits fell back because no UDP data ever
+        # arrived (port bound but the game/SimHub isn't sending here).
+        self._telemetry_nodata_warned: bool = False
         # Toggle for diagnostic prints emitted alongside state transitions.
         # The GUI sets this from config["verbose_logging"]; default off so
         # released builds stay quiet unless a user opts in for support.
@@ -2274,6 +2278,8 @@ class RpcDispatcher:
                     if segs:
                         tt_splits = scale_segments_to_total(
                             segs, stage_time_ms / 1000.0)
+                else:
+                    self._warn_no_telemetry()
 
         if self.api_client is not None and stage_time_ms > 0:
             try:
@@ -2299,8 +2305,36 @@ class RpcDispatcher:
                           f"(vclass={vclass} track={track} time_ms={stage_time_ms})")
             except Exception as exc:
                 print(f"[TT] submit_time_trial raised: {exc}")
+            # Per-track best for the driver's lifetime stats (timetrials carry
+            # no distance, so only the per-track best is recorded — with the
+            # telemetry splits when we have them).
+            try:
+                self.api_client.record_stats(
+                    source_type='timetrial',
+                    vehicle_id=vehicle_id or None,
+                    track_id=track or None,
+                    time_ms=stage_time_ms,
+                    clean=True,
+                    splits=tt_splits,
+                )
+            except Exception as exc:
+                print(f"[TT] record_stats raised: {exc}")
 
         return {"ok": True, "Accepted": True, "EntryId": entry_id}
+
+    def record_proxied_time_trial(self, params: Dict[str, Any]) -> None:
+        """Listen-in recording of a TimeTrial.PostTime that is ALSO proxied to
+        EGO (default mode): the game keeps talking to the real upstream board,
+        while our site records the time locally via _post_time's web calls
+        (time_trials table + per-track best stat). Fire-and-forget in a daemon
+        thread so a slow or failed web call can never affect the proxied
+        request the game is waiting on."""
+        def _run() -> None:
+            try:
+                self._post_time(params)
+            except Exception as exc:  # stats must never break the proxy path
+                print(f"[TT] record_proxied_time_trial failed: {exc}")
+        Thread(target=_run, name="dr3-tt-record", daemon=True).start()
 
     @staticmethod
     def _status(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -3466,6 +3500,23 @@ class RpcDispatcher:
             return None
         return legs, limit, n
 
+    def _warn_no_telemetry(self) -> None:
+        """One-shot notice that splits fell back because no UDP data ever
+        arrived on the bound port (as opposed to data arriving but no matching
+        completed run, which is normal for DNFs and unwound stages)."""
+        if self._telemetry_nodata_warned or self.telemetry is None:
+            return
+        if getattr(self.telemetry, "packets_seen", 0) > 0:
+            return
+        self._telemetry_nodata_warned = True
+        port = getattr(self.telemetry, "port", "?")
+        print(
+            f"[TELEMETRY] no telemetry data received on UDP :{port} — splits "
+            f"fall back to the even profile (times still record normally). If "
+            f"SimHub owns the game's standard telemetry port, forward its UDP "
+            f"output to this port (see the install page) or set "
+            f'"telemetry_port" in config.json to a free port.')
+
     def _compute_stage_splits(self, event_id: str, sub_index: int,
                               stage_index: int, time_ms: int) -> Optional[List[float]]:
         """Real per-segment splits for a just-driven clean finish, from the UDP
@@ -3482,6 +3533,7 @@ class RpcDispatcher:
         _legs, _limit, n = profile
         run = self.telemetry.take_run_since(self._telemetry_arm_wall)
         if run is None:
+            self._warn_no_telemetry()
             return None
         if run.has_wrap():
             # Multi-lap circuit whose distance resets each lap — per-segment split

@@ -1498,11 +1498,14 @@ def run_gui():
             dispatcher_holder["instance"] = app.dispatcher
 
             # UDP telemetry listener (real per-segment stage splits). Enabled by
-            # default; binds the game's telemetry port (auto-detected from the
-            # game's hardware_settings_config.xml — an enabled <custom_udp>
-            # stream wins so SimHub can keep the standard 20777 port —
-            # overridable via config). A bind failure just leaves telemetry off
-            # — the server still runs.
+            # default; binds the game's telemetry port, auto-detected from the
+            # game's hardware_settings_config.xml: an enabled <custom_udp>
+            # stream wins (the SimHub setup — SimHub keeps the standard 20777
+            # and forwards its UDP output to this port, typically 20999), else
+            # the game's own <udp> port. Overridable via "telemetry_port" in
+            # config.json. A bind failure just leaves telemetry off (with an
+            # actionable log line) — the server still runs and splits fall back
+            # to the even profile.
             from dr2server.telemetry import TelemetryListener, detect_udp_port
             telemetry_listener = None
             if bool(config.get("telemetry_enabled", True)):

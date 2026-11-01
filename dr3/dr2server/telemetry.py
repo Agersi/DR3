@@ -259,7 +259,11 @@ class TelemetryListener:
             sock.bind(("0.0.0.0", self.port))
             sock.settimeout(0.5)
         except OSError as exc:
-            self._log(f"[TELEMETRY] cannot bind UDP :{self.port} ({exc}); telemetry disabled")
+            self._log(
+                f"[TELEMETRY] cannot bind UDP :{self.port} ({exc}); telemetry "
+                f"disabled — splits will use the even profile. If another tool "
+                f"(e.g. SimHub) owns this port, forward its UDP output to a free "
+                f'port and set "telemetry_port" in config.json to that port.')
             return False
         self._sock = sock
         self._stop.clear()

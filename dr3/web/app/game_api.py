@@ -32,7 +32,7 @@ from .events import (
     upsert_result,
     validate_id,
 )
-from .models import Club, ClubMember, GameToken, StageStat, User, utcnow
+from .models import Club, ClubMember, GameToken, StageStat, TimeTrialEntry, User, utcnow
 from .scoring import car_label, championship_points, overall_rank_key
 from .tables import normalize_championship
 
@@ -537,6 +537,63 @@ def api_game_stats_record():
             user.stages_driven = (user.stages_driven or 0) + 1
         db.session.commit()
 
+    return jsonify({'ok': True})
+
+
+@game_api_bp.route('/api/game/time-trial-submit', methods=['POST'])
+@csrf.exempt  # type: ignore[untyped-decorator]
+@game_auth_required
+def api_game_time_trial_submit():
+    """Record a completed time trial from the client's listen-in on
+    TimeTrial.PostTime (the request is still proxied to EGO untouched, so the
+    real global board keeps working; this only files the driver's personal best
+    for the (class, track, conditions, category) 4-tuple on this site). A new
+    entry lands only when it beats the stored best — a slower or equal time is
+    ignored so partial data never corrupts the record. Per-segment splits ride
+    along when the client's telemetry captured them."""
+    data = request.get_json(silent=True) or {}
+    user = g.game_user
+    try:
+        vclass = str(data.get('vehicle_class_id') or '0')[:8]
+        track = str(data.get('track_model_id') or '0')[:8]
+        conditions = str(data.get('conditions_id') or '0')[:8]
+        category = int(data.get('category') or 0)
+        time_ms = int(data.get('stage_time_ms') or 0)
+    except (TypeError, ValueError):
+        return _api_error('bad time trial payload')
+    if time_ms <= 0:
+        return _api_error('missing stage time')
+
+    splits = data.get('splits')
+    splits_json = json.dumps(splits) if isinstance(splits, list) and splits else None
+    entry = db.session.query(TimeTrialEntry).filter_by(
+        vclass=vclass, track=track, conditions=conditions,
+        category=category, username=user.username).first()
+    if entry is None:
+        db.session.add(TimeTrialEntry(
+            vclass=vclass, track=track, conditions=conditions,
+            category=category, username=user.username, stage_time_ms=time_ms,
+            vehicle_id=data.get('vehicle_id'),
+            livery_id=int(data.get('livery_id') or 0),
+            nationality_id=int(data.get('nationality_id') or 0),
+            using_wheel=bool(data.get('using_wheel')),
+            using_assists=bool(data.get('using_assists')),
+            ghost_data_b64=data.get('ghost_data_b64'),
+            splits_json=splits_json))
+    elif time_ms < (entry.stage_time_ms or 0):
+        entry.stage_time_ms = time_ms
+        if data.get('vehicle_id') is not None:
+            entry.vehicle_id = data.get('vehicle_id')
+        entry.livery_id = int(data.get('livery_id') or 0)
+        entry.nationality_id = int(data.get('nationality_id') or 0)
+        entry.using_wheel = bool(data.get('using_wheel'))
+        entry.using_assists = bool(data.get('using_assists'))
+        if data.get('ghost_data_b64'):
+            entry.ghost_data_b64 = data.get('ghost_data_b64')
+        if splits_json is not None:
+            entry.splits_json = splits_json
+        entry.submitted_at = utcnow()
+    db.session.commit()
     return jsonify({'ok': True})
 
 
