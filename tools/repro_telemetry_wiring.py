@@ -124,6 +124,28 @@ def main():
     d.api_client.events = {"evtS": {"stages": [{"track_id": 1}]}}
     check("e: unmapped track -> None", d._compute_stage_splits("evtS", 0, 0, 200000), None)
 
+    # (f)+(g) take_run_since matches on the run's FINISH wall, not its start.
+    # Club rally: the car idles in the start zone (service park) so the buffer
+    # opens — and the run starts — well before StageBegin arms the wall, but the
+    # run finishes after it -> must be claimed. A stale run from an earlier
+    # stage always finishes before the wall -> must not be claimed.
+    from dr2server.telemetry import StageRun
+    listener = TelemetryListener(port=0)
+    club_run = StageRun(start_wall=100.0, finish_wall=276.0,
+                        total_time_s=156.0, track_length_m=4015.4)
+    listener._completed.append(club_run)
+    arm = 225.0  # StageBegin fired after the buffer opened (start_wall=100)
+    check("f: started before wall, finished after -> claimed",
+          listener.take_run_since(arm) is club_run, True)
+
+    stale = StageRun(start_wall=10.0, finish_wall=90.0,
+                     total_time_s=60.0, track_length_m=3000.0)
+    listener._completed.append(stale)
+    arm2 = 200.0  # a later stage began after the stale run had finished
+    check("g: stale run finished before wall -> not claimed",
+          listener.take_run_since(arm2), None)
+    check("g: stale run left unclaimed", len(listener._completed), 1)
+
     print(f"\n{'ALL PASS' if FAILS == 0 else str(FAILS) + ' FAILURE(S)'}")
     return 1 if FAILS else 0
 

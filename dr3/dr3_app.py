@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -742,6 +743,31 @@ def _linux_admin_stop_script() -> str:
     )
 
 
+def tel_status_text(server_up: bool, enabled: bool, holder: dict, listener) -> Optional[tuple]:
+    """(text, color-key) for the Main-tab telemetry row; None hides it.
+
+    States: server stopped (None), disabled in config.json, bind failed
+    (holder carries the busy port), listening with no data yet, connected
+    (fresh packets within 20 s), or listening but silent after having seen
+    data. ``listener`` may be any object exposing .port / .packets_seen /
+    .last_packet_wall (the TelemetryListener does).
+    """
+    if not server_up:
+        return None
+    if not enabled:
+        return ("Telemetry disabled in config.json", "muted")
+    if listener is None:
+        port = holder.get("port") or "?"
+        return (f"\u2717 Telemetry unavailable \u2014 UDP :{port} in use", "bad")
+    port = listener.port
+    fresh = (time.time() - listener.last_packet_wall) <= 20.0
+    if fresh:
+        return (f"\u2713 Telemetry connected on :{port}", "good")
+    if listener.packets_seen == 0:
+        return (f"Telemetry waiting for data on :{port}", "muted")
+    return (f"Telemetry listening on :{port} \u2014 no recent data", "muted")
+
+
 # ---------------------------------------------------------------------------
 # GUI
 # ---------------------------------------------------------------------------
@@ -763,6 +789,10 @@ def run_gui():
     # And for the App, so the same toggle can gate request-capture saving
     # (app.capturing) on the live server instance.
     app_holder: dict = {"instance": None}
+    # Telemetry listener state for the status indicator — which port we tried
+    # and whether the bind failed, so "disabled in config" can be told apart
+    # from "port busy".
+    telemetry_holder: dict = {"port": None, "failed": False}
 
     # Colors (dark tool window; the website uses the retro rally poster theme)
     BG = "#181C14"
@@ -775,6 +805,7 @@ def run_gui():
     TEXT = "#ECDFCC"
     MUTED = "#697565"
     BORDER = "#697565"
+    _TEL_COLORS = {"good": GREEN, "bad": RED, "muted": MUTED}
 
     # --- Window setup ---
     root = tk.Tk()
@@ -1018,17 +1049,46 @@ def run_gui():
     status_frame = tk.Frame(main_tab, bg=BG_CARD, highlightbackground=BORDER, highlightthickness=1)
     status_frame.pack(fill="x", padx=20, pady=5)
 
-    status_dot = tk.Label(status_frame, text="\u25cf", font=(UI_FONT, 14),
+    status_row = tk.Frame(status_frame, bg=BG_CARD)
+    status_row.pack(fill="x")
+
+    status_dot = tk.Label(status_row, text="\u25cf", font=(UI_FONT, 14),
                           fg=MUTED, bg=BG_CARD)
     status_dot.pack(side="left", padx=(15, 5), pady=10)
 
-    status_label = tk.Label(status_frame, text="Stopped", font=(UI_FONT, 12, "bold"),
+    status_label = tk.Label(status_row, text="Stopped", font=(UI_FONT, 12, "bold"),
                             fg=TEXT, bg=BG_CARD)
     status_label.pack(side="left", pady=10)
 
-    status_detail = tk.Label(status_frame, text="", font=(UI_FONT, 9),
+    status_detail = tk.Label(status_row, text="", font=(UI_FONT, 9),
                              fg=MUTED, bg=BG_CARD)
     status_detail.pack(side="right", padx=15, pady=10)
+
+    # Telemetry row — visible while the server runs; surfaces the silent
+    # failure modes (port busy / no data arriving) that used to only show up
+    # as missing splits.
+    tel_label = tk.Label(status_frame, text="", font=(UI_FONT, 9),
+                         fg=MUTED, bg=BG_CARD, anchor="w")
+
+    def _update_tel_indicator():
+        app = app_holder.get("instance")
+        listener = (getattr(app.dispatcher, "telemetry", None)
+                    if app is not None else None)
+        state = tel_status_text(
+            server_up=server_running.is_set(),
+            enabled=bool(config.get("telemetry_enabled", True)),
+            holder=telemetry_holder,
+            listener=listener,
+        )
+        if state is None:
+            tel_label.pack_forget()
+        else:
+            text, color = state
+            tel_label.configure(text=text, fg=_TEL_COLORS[color])
+            tel_label.pack(fill="x", padx=15, pady=(0, 8))
+        root.after(2000, _update_tel_indicator)
+
+    root.after(2000, _update_tel_indicator)
 
     # --- Log area ---
     log_frame = tk.Frame(main_tab, bg=BG)
@@ -1522,10 +1582,14 @@ def run_gui():
                 if candidate.start():
                     app.dispatcher.telemetry = candidate
                     telemetry_listener = candidate
+                    telemetry_holder["port"] = tel_port
+                    telemetry_holder["failed"] = False
                     root.after(0, lambda p=tel_port: log(
                         f"Telemetry listener started on UDP :{p}"))
                 else:
                     app.dispatcher.telemetry = None
+                    telemetry_holder["port"] = tel_port
+                    telemetry_holder["failed"] = True
 
             from dr2server.streaming import StreamingWriter
             streaming_writer["instance"] = StreamingWriter(
@@ -1584,6 +1648,8 @@ def run_gui():
                 if app.dispatcher is not None:
                     app.dispatcher.telemetry = None
                 telemetry_listener = None
+            telemetry_holder["port"] = None
+            telemetry_holder["failed"] = False
 
             app_holder["instance"] = None
 

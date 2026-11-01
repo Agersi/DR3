@@ -240,6 +240,9 @@ class TelemetryListener:
         self._prev_at_finish = False
         self._track_len = 0.0
         self.packets_seen = 0
+        # time.time() of the last valid packet (0.0 until the first arrives) —
+        # lets the GUI tell "connected" (fresh data) from "listening, silent".
+        self.last_packet_wall = 0.0
         # Distinct non-standard packet sizes seen (logged once each) — surfaces
         # a game stream on this port that doesn't match the expected layout.
         self._odd_sizes: dict = {}
@@ -313,6 +316,7 @@ class TelemetryListener:
             except struct.error:
                 continue
             self.packets_seen += 1
+            self.last_packet_wall = time.time()
             if self.packets_seen == 1:
                 self._log(f"[TELEMETRY] first packet received from {_addr[0]}:{_addr[1]}")
             self._on_sample(time.time(), vals)
@@ -366,13 +370,21 @@ class TelemetryListener:
     # ------------------------------------------------------------------
 
     def take_run_since(self, since_wall: float, margin: float = 1.0) -> Optional[StageRun]:
-        """Claim and return the most recent completed run that started at or
+        """Claim and return the most recent completed run that FINISHED at or
         after ``since_wall`` (a small margin absorbs clock skew). None when no
-        such run exists. The run is removed so it cannot be claimed twice."""
+        such run exists. The run is removed so it cannot be claimed twice.
+
+        Matching on the finish — not the start — is what makes club rally
+        stages work: a car idles in the start zone (dist < START_THRESH) while
+        parked in the service area, which opens its telemetry buffer well before
+        StageBegin arms ``since_wall``. So the current stage's run *starts*
+        before the wall but *finishes* after it. A stale run from an earlier
+        stage always finishes before the wall (stages are sequential), so
+        finish-based matching still excludes it."""
         cutoff = since_wall - margin
         with self._lock:
             for i in range(len(self._completed) - 1, -1, -1):
-                if self._completed[i].start_wall >= cutoff:
+                if self._completed[i].finish_wall >= cutoff:
                     return self._completed.pop(i)
         return None
 
