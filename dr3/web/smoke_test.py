@@ -203,6 +203,30 @@ def main() -> int:
           _stat2_splits == [108.5, 107.2, 106.9, 107.4] and _stat2_best == 430000,
           f'splits={_stat2_splits} best={_stat2_best}')
 
+    # #49 source-awareness: a spurious 'timetrial' row (created by the game's
+    # club-stage PostTime) is re-stamped as 'club' when the same-run StageComplete
+    # arrives with the equal time; a genuine faster TT best is never clobbered.
+    with app.app_context():
+        _upsert_stage_stat('smokedriver', 3, 12, 400000, None, 'timetrial', '')
+        _upsert_stage_stat('smokedriver', 3, 12, 400000, [100.0, 100.0], 'club', 'unit-evt')
+        stat3 = db.session.query(StageStat).filter_by(
+            username='smokedriver', vehicle_id=3, track_id=12).first()
+        _stat3_src = stat3.source_type if stat3 else None
+        _stat3_evt = stat3.source_event_id if stat3 else None
+        _stat3_ms = stat3.best_time_ms if stat3 else None
+        _upsert_stage_stat('smokedriver', 4, 13, 300000, None, 'timetrial', '')
+        _upsert_stage_stat('smokedriver', 4, 13, 350000, None, 'club', 'unit-evt')
+        stat4 = db.session.query(StageStat).filter_by(
+            username='smokedriver', vehicle_id=4, track_id=13).first()
+        _stat4_src = stat4.source_type if stat4 else None
+        _stat4_ms = stat4.best_time_ms if stat4 else None
+    check('stage stat: equal-time club re-stamps spurious timetrial (#49)',
+          _stat3_src == 'club' and _stat3_evt == 'unit-evt' and _stat3_ms == 400000,
+          f'src={_stat3_src} evt={_stat3_evt} ms={_stat3_ms}')
+    check('stage stat: genuine faster TT best never clobbered by slower club',
+          _stat4_src == 'timetrial' and _stat4_ms == 300000,
+          f'src={_stat4_src} ms={_stat4_ms}')
+
     # lifetime driving stats: proxied timetrial/official events record through a
     # dedicated endpoint (the game keeps talking to EGO); snapshot the baseline
     # first so the deltas are deterministic regardless of earlier submissions.

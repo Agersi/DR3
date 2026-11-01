@@ -311,7 +311,13 @@ def _upsert_stage_stat(username, vehicle_id, track_id, time_ms, splits,
     splits from that run ride along (None when unknown). Only a strictly faster
     clean finish replaces the stored best — a slower or equal time is ignored so
     partial data never corrupts the record. Missing pieces (no car/track/time)
-    are skipped entirely."""
+    are skipped entirely.
+
+    Source-awareness (#49): the game's PostTime for a club stage can create a
+    spurious 'timetrial' row on this key seconds before the club StageComplete
+    arrives with the SAME time; that same-run club submission re-stamps the row
+    as 'club' (with its event id) instead of being dropped by the equal-time
+    rule. A genuine faster TT best is never touched."""
     if not username or not vehicle_id or not track_id or not time_ms or time_ms <= 0:
         return
     stat = db.session.query(StageStat).filter_by(
@@ -326,6 +332,16 @@ def _upsert_stage_stat(username, vehicle_id, track_id, time_ms, splits,
         stat.best_time_ms = int(time_ms)
         stat.splits_json = splits_json
         stat.source_type = source_type
+        stat.source_event_id = source_event_id
+        stat.updated_at = utcnow()
+    elif (source_type == 'club' and stat.source_type == 'timetrial'
+          and not stat.source_event_id
+          and int(time_ms) <= (stat.best_time_ms or 0)):
+        # Same-run club submission after a spurious timetrial row: re-stamp.
+        stat.best_time_ms = int(time_ms)
+        if splits_json is not None:
+            stat.splits_json = splits_json
+        stat.source_type = 'club'
         stat.source_event_id = source_event_id
         stat.updated_at = utcnow()
 

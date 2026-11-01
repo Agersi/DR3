@@ -180,6 +180,12 @@ class RpcDispatcher:
         # Keyed by (challenge_id, sub_index): a #39 single-challenge id serves
         # every leg of the championship, so the leg must be part of the key.
         self._last_begin_stage: Dict[tuple, int] = {}
+        # Club stages currently being driven: (challenge_id, sub_index,
+        # stage_index) -> track_id. The game fires TimeTrial.PostTime after
+        # every completed CLUB stage too (identical payload shape to a real
+        # time trial), so while one of these is open a PostTime on the same
+        # track is the club stage's and must not be recorded locally (#49).
+        self._open_club_stages: Dict[tuple, int] = {}
         # Challenge ids served as ONE challenge carrying ALL legs of the
         # championship in Events[] (#39 experiment, gated by the event setting
         # ``single_challenge``).  For these ids the game addresses stages with
@@ -2243,6 +2249,17 @@ class RpcDispatcher:
         stage_time_f  = float(_extract("StageTime", 0.0) or 0.0)
         stage_time_ms = int(stage_time_f * 1000)
 
+        # The game fires this same RPC after every completed CLUB stage (the
+        # StageComplete for it arrives seconds later). While a club stage on
+        # this track is in progress, the PostTime is that stage's — recording
+        # it would file club times into time_trials and create spurious
+        # 'timetrial' stats rows (#49). The proxied request still reaches EGO;
+        # we just skip the local web calls.
+        if self._club_stage_open_on(track):
+            print(f"[TT] PostTime skipped: club stage in progress on track "
+                  f"{track} (time_ms={stage_time_ms})")
+            return {"ok": True, "Accepted": True, "EntryId": secrets.token_hex(8)}
+
         # Ghost data is a raw bytes blob in the EgoNet params
         import base64
         ghost_raw = params.get("GhostData", b"")
@@ -2795,6 +2812,33 @@ class RpcDispatcher:
             return 0
         return sum(self._champ_layout(event_id)[:event_index])
 
+    def _stage_track_id(self, event_id: str, sub_index: int,
+                        stage_index: int) -> Optional[int]:
+        """Track id of one leg's stage within a web event (None if unresolvable)."""
+        if self.api_client is None or not event_id:
+            return None
+        try:
+            ev = self.api_client.get_event(event_id)
+        except Exception:
+            return None
+        legs = self._events_of(ev or {})
+        if not 0 <= sub_index < len(legs):
+            return None
+        stages = (legs[sub_index] or {}).get("stages") or []
+        if not 0 <= stage_index < len(stages):
+            return None
+        try:
+            return int((stages[stage_index] or {}).get("track_id"))
+        except (TypeError, ValueError):
+            return None
+
+    def _club_stage_open_on(self, track_id: int) -> bool:
+        """True when a club stage on this track has been begun but not yet
+        completed — its PostTime is a club-stage time, not a real time trial."""
+        if not track_id:
+            return False
+        return any(t == track_id for t in self._open_club_stages.values())
+
     def _subevent_range(self, event_id: str, event_index: int,
                         layout: Optional[List[int]] = None) -> tuple[int, Optional[int]]:
         """``(offset, count)`` flat-ordinal range of sub-event ``event_index``;
@@ -2877,6 +2921,12 @@ class RpcDispatcher:
         # stage they were actually on (see _dnf_skip_plan).  Keyed by leg too —
         # a #39 single-challenge id serves every leg under one challenge_id.
         self._last_begin_stage[(req.challenge_id, sub_index)] = req.stage_index
+
+        # Mark this stage as in-progress on its track so the PostTime the game
+        # fires at the finish is recognized as a club-stage time, not a TT (#49).
+        if event_id:
+            self._open_club_stages[(req.challenge_id, sub_index, req.stage_index)] = (
+                self._stage_track_id(event_id, sub_index, req.stage_index) or 0)
 
         # Arm the telemetry run clock: the UDP trajectory for this stage starts
         # now, so on the clean StageComplete we claim the completed run started
@@ -3121,6 +3171,11 @@ class RpcDispatcher:
         # map; a #39 single-challenge id falls back to the request's EventIndex
         # (leg index), which is authoritative there.
         sub_index = self._challenge_subevent_map.get(req.challenge_id, req.event_index)
+
+        # The stage is closed (clean or DNF close-out): clear its in-progress
+        # mark so later PostTimes on this track are treated as time trials again.
+        self._open_club_stages.pop(
+            (req.challenge_id, sub_index, req.stage_index), None)
 
         # Convert the request payloads back to plain dicts for the API call.
         mud_dict = dataclasses.asdict(req.vehicle_mud)
