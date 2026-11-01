@@ -172,6 +172,7 @@ def _create_schema(db) -> None:
     _ensure_draft_permanent_column(db)
     _ensure_user_stat_columns(db)
     _ensure_tt_splits_column(db)
+    _ensure_tt_vehicle_key(db)
 
 
 def _ensure_user_stat_columns(db) -> None:
@@ -237,6 +238,63 @@ def _ensure_tt_splits_column(db) -> None:
         # Lost the boot race to another worker adding the same column.
         if '1060' not in str(e) and 'duplicate column' not in str(e):
             raise
+
+
+def _ensure_tt_vehicle_key(db) -> None:
+    """Re-key migration for databases created before TimeTrialEntry was keyed per car.
+
+    Old schema: unique (vclass, track, conditions, category, username), vehicle_id nullable.
+    New schema: unique (vehicle_id, track, conditions, category, username), vehicle_id
+    NOT NULL — vclass is kept as a stored column for future class-based UI.
+    No-ops on fresh databases (create_all already builds the new key)."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+
+    insp = db.inspect(db.engine)
+    indexes = insp.get_indexes('time_trials')
+    old_key = ('vclass', 'track', 'conditions', 'category', 'username')
+    if not any(tuple(ix['column_names']) == old_key for ix in indexes):
+        return
+    name = next(ix['name'] for ix in indexes if tuple(ix['column_names']) == old_key)
+    dialect = db.engine.dialect.name
+    try:
+        with db.engine.begin() as conn:
+            if dialect == 'mysql':
+                conn.execute(text(
+                    f'ALTER TABLE time_trials DROP INDEX `{name}`'))
+                conn.execute(text(
+                    'ALTER TABLE time_trials ADD CONSTRAINT uq_time_trials_vehicle '
+                    'UNIQUE (vehicle_id, track, conditions, category, username)'))
+            else:  # sqlite (only reachable on a stale dev DB)
+                conn.execute(text(f'DROP INDEX IF EXISTS {name}'))
+                conn.execute(text(
+                    'CREATE UNIQUE INDEX uq_time_trials_vehicle ON time_trials '
+                    '(vehicle_id, track, conditions, category, username)'))
+    except OperationalError as e:
+        # Lost the boot race to another worker doing the same re-key.
+        if not ('1091' in str(e) or '1061' in str(e)
+                or 'no such index' in str(e).lower()
+                or 'already exists' in str(e).lower()):
+            raise
+
+    # vehicle_id NOT NULL — an independent step (a partially migrated DB must be
+    # able to finish it even after the old key is gone). The COUNT runs on its
+    # own short-lived connection so no transaction is left open while the DDL
+    # waits for an exclusive metadata lock (an open session transaction would
+    # deadlock the ALTER against itself).
+    cols = {c['name']: c for c in db.inspect(db.engine).get_columns('time_trials')}
+    if dialect == 'mysql' and cols.get('vehicle_id', {}).get('nullable'):
+        with db.engine.connect() as conn:
+            nulls = conn.execute(
+                text('SELECT COUNT(*) FROM time_trials WHERE vehicle_id IS NULL')).scalar()
+        if nulls == 0:
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text('SET SESSION lock_wait_timeout = 30'))
+                    conn.execute(text(
+                        'ALTER TABLE time_trials MODIFY COLUMN vehicle_id INTEGER NOT NULL'))
+            except OperationalError:
+                pass  # lost the boot race; another worker applied it
 
 
 def _load_dotenv_local() -> None:

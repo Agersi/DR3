@@ -547,10 +547,11 @@ def api_game_time_trial_submit():
     """Record a completed time trial from the client's listen-in on
     TimeTrial.PostTime (the request is still proxied to EGO untouched, so the
     real global board keeps working; this only files the driver's personal best
-    for the (class, track, conditions, category) 4-tuple on this site). A new
-    entry lands only when it beats the stored best — a slower or equal time is
-    ignored so partial data never corrupts the record. Per-segment splits ride
-    along when the client's telemetry captured them."""
+    for the (car, track, conditions, category) 4-tuple on this site — every
+    distinct car keeps its own row, with the vehicle class stored alongside). A
+    new entry lands only when it beats the stored best — a slower or equal time
+    is ignored so partial data never corrupts the record. Per-segment splits
+    ride along when the client's telemetry captured them."""
     data = request.get_json(silent=True) or {}
     user = g.game_user
     try:
@@ -558,22 +559,25 @@ def api_game_time_trial_submit():
         track = str(data.get('track_model_id') or '0')[:8]
         conditions = str(data.get('conditions_id') or '0')[:8]
         category = int(data.get('category') or 0)
+        vehicle_id = int(data.get('vehicle_id') or 0)
         time_ms = int(data.get('stage_time_ms') or 0)
     except (TypeError, ValueError):
         return _api_error('bad time trial payload')
     if time_ms <= 0:
         return _api_error('missing stage time')
+    if not vehicle_id:
+        return _api_error('missing car id')
 
     splits = data.get('splits')
     splits_json = json.dumps(splits) if isinstance(splits, list) and splits else None
     entry = db.session.query(TimeTrialEntry).filter_by(
-        vclass=vclass, track=track, conditions=conditions,
+        vehicle_id=vehicle_id, track=track, conditions=conditions,
         category=category, username=user.username).first()
     if entry is None:
         db.session.add(TimeTrialEntry(
             vclass=vclass, track=track, conditions=conditions,
             category=category, username=user.username, stage_time_ms=time_ms,
-            vehicle_id=data.get('vehicle_id'),
+            vehicle_id=vehicle_id,
             livery_id=int(data.get('livery_id') or 0),
             nationality_id=int(data.get('nationality_id') or 0),
             using_wheel=bool(data.get('using_wheel')),
@@ -582,8 +586,8 @@ def api_game_time_trial_submit():
             splits_json=splits_json))
     elif time_ms < (entry.stage_time_ms or 0):
         entry.stage_time_ms = time_ms
-        if data.get('vehicle_id') is not None:
-            entry.vehicle_id = data.get('vehicle_id')
+        entry.vclass = vclass
+        entry.vehicle_id = vehicle_id
         entry.livery_id = int(data.get('livery_id') or 0)
         entry.nationality_id = int(data.get('nationality_id') or 0)
         entry.using_wheel = bool(data.get('using_wheel'))

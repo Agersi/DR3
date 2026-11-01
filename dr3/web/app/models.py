@@ -180,6 +180,9 @@ class Result(db.Model):
 
 
 class TimeTrialEntry(db.Model):
+    """Personal time-trial best, keyed per CAR (vehicle_id) — one row per
+    user + car + track + conditions + category. vclass is stored alongside
+    the key (not part of it) for future class-based UI."""
     __tablename__ = 'time_trials'
 
     id: int = db.Column(db.Integer, primary_key=True)
@@ -187,19 +190,20 @@ class TimeTrialEntry(db.Model):
     track: str = db.Column(db.String(8), nullable=False)
     conditions: str = db.Column(db.String(8), nullable=False)
     category: int = db.Column(db.Integer, nullable=False)
-    username: str = db.Column(db.String(64), nullable=False, index=True)
+    username: str = db.Column(db.String(64), nullable=False)
     stage_time_ms: int = db.Column(db.BigInteger, nullable=False)
-    vehicle_id: int | None = db.Column(db.Integer)
-    livery_id: int = db.Column(db.Integer, default=0)
-    nationality_id: int = db.Column(db.Integer, default=0)
-    using_wheel: bool = db.Column(db.Boolean, default=False)
-    using_assists: bool = db.Column(db.Boolean, default=False)
+    vehicle_id: int = db.Column(db.Integer, nullable=False)
+    livery_id: int | None = db.Column(db.Integer)
+    nationality_id: int | None = db.Column(db.Integer)
+    using_wheel: bool | None = db.Column(db.Boolean)
+    using_assists: bool | None = db.Column(db.Boolean)
     ghost_data_b64: str | None = db.Column(db.Text)
-    splits_json: str | None = db.Column(db.Text)   # [segment seconds] or null when unknown
-    submitted_at: datetime = db.Column(db.DateTime, default=utcnow)
+    splits_json: str | None = db.Column(db.Text)
+    submitted_at: datetime | None = db.Column(db.DateTime, default=utcnow)
 
     __table_args__ = (
-        db.UniqueConstraint('vclass', 'track', 'conditions', 'category', 'username'),
+        db.UniqueConstraint('vehicle_id', 'track', 'conditions', 'category', 'username'),
+        db.Index('ix_time_trials_username', 'username'),
     )
 
 
