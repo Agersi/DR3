@@ -1,7 +1,10 @@
 """UDP telemetry listener for DiRT Rally 2.0.
 
-Binds the game's UDP telemetry port (default 20777, auto-detected from the
-game's ``hardware_settings_config.xml``) and records per-stage run trajectories.
+Binds the game's UDP telemetry port — an enabled ``<custom_udp>`` stream when
+the game config has one (SimHub keeps the standard ``<udp>`` port, DR3 is
+secondary), else the standard ``<udp>`` port; auto-detected from the game's
+``hardware_settings_config.xml``, default 20777 — and records per-stage run
+trajectories.
 The game emits one 264-byte datagram (~50 Hz) while a stage is live; field [1]
 is the stage clock (s) and field [2] is distance-along-stage (m), which is all
 that is needed to reproduce the per-segment split times that
@@ -62,12 +65,31 @@ FINISH_THRESH = 10.0        # "finished" when dist > track_len - this
 _MAX_COMPLETED = 6
 
 
-def detect_udp_port(default: int = 20777) -> int:
-    """Return the UDP port the game sends telemetry to.
+def _xml_port(text: str, tag: str, require_enabled: bool) -> Optional[int]:
+    """Port from the ``<tag ... port="NNNN" />`` element of the game's
+    hardware_settings_config.xml; None when absent or unparseable."""
+    m = re.search(r"<%s\b[^>]*/?>" % tag, text)
+    if not m:
+        return None
+    el = m.group(0)
+    if require_enabled and 'enabled="true"' not in el:
+        return None
+    p = re.search(r'port="(\d+)"', el)
+    if p:
+        port = int(p.group(1))
+        if 0 < port < 65536:
+            return port
+    return None
 
-    Reads the ``<udp ... port="NNNN" />`` element from the game's
-    hardware_settings_config.xml (best effort); falls back to ``default`` when
-    the file is missing or unparseable.
+
+def detect_udp_port(default: int = 20777) -> int:
+    """Return the UDP port DR3 should listen on for the game's telemetry.
+
+    Reads the game's hardware_settings_config.xml (best effort). An enabled
+    ``<custom_udp>`` stream wins — SimHub keeps the standard ``<udp>`` port
+    (20777) and DR3 listens on the custom one; otherwise the standard
+    ``<udp>`` port is used. Falls back to ``default`` when the file is missing
+    or unparseable.
     """
     try:
         home = os.path.expanduser("~")
@@ -77,11 +99,10 @@ def detect_udp_port(default: int = 20777) -> int:
         if os.path.isfile(path):
             with open(path, "r", encoding="utf-8", errors="replace") as fh:
                 text = fh.read()
-            m = re.search(r"<udp\b[^>]*port=\"(\d+)\"", text)
-            if m:
-                port = int(m.group(1))
-                if 0 < port < 65536:
-                    return port
+            port = (_xml_port(text, "custom_udp", require_enabled=True)
+                    or _xml_port(text, "udp", require_enabled=False))
+            if port:
+                return port
     except Exception:
         pass
     return default
@@ -219,6 +240,9 @@ class TelemetryListener:
         self._prev_at_finish = False
         self._track_len = 0.0
         self.packets_seen = 0
+        # Distinct non-standard packet sizes seen (logged once each) — surfaces
+        # a game stream on this port that doesn't match the expected layout.
+        self._odd_sizes: dict = {}
 
     @property
     def running(self) -> bool:
@@ -271,6 +295,13 @@ class TelemetryListener:
                 continue
             except OSError:
                 break
+            if len(data) != _PACKET_SIZE:
+                count = self._odd_sizes.get(len(data), 0) + 1
+                self._odd_sizes[len(data)] = count
+                if count == 1:
+                    self._log(
+                        f"[TELEMETRY] packet of unexpected size {len(data)} bytes "
+                        f"from {_addr[0]}:{_addr[1]} (expected {_PACKET_SIZE})")
             if len(data) < _PACKET_SIZE:
                 continue
             try:
@@ -278,6 +309,8 @@ class TelemetryListener:
             except struct.error:
                 continue
             self.packets_seen += 1
+            if self.packets_seen == 1:
+                self._log(f"[TELEMETRY] first packet received from {_addr[0]}:{_addr[1]}")
             self._on_sample(time.time(), vals)
 
     def _on_sample(self, wall: float, vals: Tuple[float, ...]) -> None:
