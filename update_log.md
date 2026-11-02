@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+## 0.1.50
+When Verbose logging is on, closing DR3 now saves that session's debug log to a logs folder so it can be shared when reporting an issue.
+
 ## 0.1.49
 DR3 now updates itself automatically — new versions download in the background and install when you close the app.
 

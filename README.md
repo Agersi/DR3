@@ -77,4 +77,3 @@ python build_exe.py          # -> dist/DR3-windows.zip
 - `dr3/web/smoke_test.py` — end-to-end web smoke (standings, results, API)
 - `dr3/web/render_check.py` — renders every page and asserts 200
 - `tools/repro_*.py` — regression repros for specific bug fixes
-- `dr3/tools/check_tab_scroll.py` — GUI scroll behaviour check

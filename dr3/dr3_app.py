@@ -94,7 +94,9 @@ CERTS_DIR = DR3_DIR / "certs"
 CERT_PATH = CERTS_DIR / "dr2server-cert.pem"
 KEY_PATH = CERTS_DIR / "dr2server-key.pem"
 LOG_PATH = DR3_DIR / "debug.log"
+LOGS_DIR = DR3_DIR / "logs"            # archived session logs (backlog #52)
 CAPTURES_DIR = DR3_DIR / "captures"
+LOG_ARCHIVE_KEEP = 10                  # retention cap for LOGS_DIR
 
 
 class _TeeStream:
@@ -134,6 +136,7 @@ class _TeeStream:
 
 
 _LOG_FILE = None  # set by _setup_file_logging() so log() can tee into it
+_LOG_OPENED_AT: Optional[datetime] = None  # session start (backlog #52)
 
 
 def _setup_file_logging() -> None:
@@ -142,13 +145,14 @@ def _setup_file_logging() -> None:
     Called once at process start so PyInstaller --windowed builds (where
     sys.stdout is None) still leave a debuggable trail on disk.
     """
-    global _LOG_FILE
+    global _LOG_FILE, _LOG_OPENED_AT
     try:
         DR3_DIR.mkdir(parents=True, exist_ok=True)
         # Truncate per-launch so the file reflects the current session, not
         # months of accumulated history. The previous run is rotated to
         # debug.prev.log so we still have it if the user reports an issue
-        # after restarting.
+        # after restarting (crash fallback — clean exits archive the log
+        # into logs/ instead, see _archive_debug_log).
         if LOG_PATH.exists():
             try:
                 prev = LOG_PATH.with_name(f"{LOG_PATH.stem}.prev{LOG_PATH.suffix}")
@@ -162,16 +166,68 @@ def _setup_file_logging() -> None:
         _LOG_FILE = None
         return
 
-    from datetime import datetime as _dt
+    _LOG_OPENED_AT = datetime.now()
     header = (
         f"=== DR3 debug.log opened "
-        f"{_dt.now().isoformat(timespec='seconds')} ===\n"
+        f"{_LOG_OPENED_AT.isoformat(timespec='seconds')} ===\n"
     )
     _LOG_FILE.write(header)
     _LOG_FILE.flush()
 
     sys.stdout = _TeeStream(_LOG_FILE, original=sys.stdout)
     sys.stderr = _TeeStream(_LOG_FILE, original=sys.stderr)
+
+
+def _archive_debug_log(verbose: bool) -> Optional[Path]:
+    """Archive this session's debug.log on clean exit (backlog #52).
+
+    Only when Verbose Logging is ON and the log carries content beyond the
+    startup header line. The file is MOVED into logs/ as
+    <version>.<session-start timestamp>.debug.log (the timestamp marks when
+    this session began); the per-launch rotation to debug.prev.log stays as
+    the crash fallback for sessions that never reach a clean exit. Oldest
+    archives beyond LOG_ARCHIVE_KEEP are pruned. Returns the archive path,
+    or None when nothing was archived.
+    """
+    global _LOG_FILE
+    if not verbose:
+        return None
+    try:
+        if not LOG_PATH.exists() or LOG_PATH.stat().st_size == 0:
+            return None
+        text = LOG_PATH.read_text(encoding="utf-8", errors="replace")
+        lines = text.splitlines()
+        if lines and lines[0].startswith("=== DR3 debug.log opened"):
+            lines = lines[1:]
+        if not any(line.strip() for line in lines):
+            return None
+        LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = (_LOG_OPENED_AT or datetime.now()).strftime("%Y%m%d-%H%M%S")
+        dest = LOGS_DIR / f"{VERSION}.{stamp}.debug.log"
+        n = 1
+        while dest.exists():
+            n += 1
+            dest = LOGS_DIR / f"{VERSION}.{stamp}-{n}.debug.log"
+        LOG_PATH.replace(dest)
+        # The open handle now points at the archived file — close it and drop
+        # the reference so no further line (incl. the archive confirmation)
+        # lands in the archive.
+        if _LOG_FILE is not None:
+            try:
+                _LOG_FILE.close()
+            except OSError:
+                pass
+            _LOG_FILE = None
+    except OSError:
+        return None
+    try:
+        archives = sorted(LOGS_DIR.glob("*.debug.log"),
+                          key=lambda p: p.stat().st_mtime)
+        for old in archives[:-LOG_ARCHIVE_KEEP]:
+            old.unlink()
+    except OSError:
+        pass
+    return dest
 
 REDIRECT_DOMAINS = [
     "prod.egonet.codemasters.com",
@@ -2213,6 +2269,10 @@ def run_gui():
             shutdown_flag.set()
             if server_thread:
                 server_thread.join(timeout=3)
+        # Clean exit → archive this session's log (verbose mode only, #52).
+        archived = _archive_debug_log(bool(verbose_logging_var.get()))
+        if archived is not None:
+            print(f"[LOG] session archived to {archived}")
         _spawn_update_on_exit()
         root.destroy()
 
