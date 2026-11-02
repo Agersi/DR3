@@ -814,20 +814,29 @@ def _wait_for_pid_exit(pid: int, timeout_s: float = 600.0) -> bool:
     return False
 
 
-def _apply_update(zip_path: Path, install_dir: Path, parent_pid: int) -> int:
+def _apply_update(zip_path: Path, install_dir: Path, parent_pid: int,
+                  log=None) -> int:
     """Swap ``install_dir`` for the staged zip (runs as a detached child).
 
     Returns 0 on success; any nonzero code leaves the install in place so the
     next exit can retry. Takes explicit paths so tests can drive it with temp
-    dirs instead of the real bundle."""
+    dirs instead of the real bundle. ``log(msg)`` (optional) receives the same
+    failure lines that are printed, so a detached child can persist them to
+    update.log — its stdout goes to DEVNULL."""
     import zipfile
 
     def fail(code: int, msg: str) -> int:
+        line = (f"[UPDATE] {datetime.now().isoformat(timespec='seconds')} "
+                f"failed ({code}): {msg}")
         try:
-            print(f"[UPDATE] {datetime.now().isoformat(timespec='seconds')} "
-                  f"failed ({code}): {msg}")
+            print(line)
         except Exception:
             pass
+        if log is not None:
+            try:
+                log(f"failed ({code}): {msg}")
+            except Exception:
+                pass
         return code
 
     if not install_dir.exists():
@@ -894,8 +903,15 @@ def _run_apply_update(zip_arg: str, pid_arg: str) -> int:
     if install_dir is None:
         note("not an installed DR3.exe bundle — nothing to update")
         return 0
+    # Our CWD may be inside install_dir (inherited from the GUI, which was
+    # launched by double-clicking DR3.exe) — Windows refuses to rename a
+    # directory that is any process's current working directory.
     try:
-        rc = _apply_update(Path(zip_arg), install_dir, int(pid_arg))
+        os.chdir(install_dir.parent)
+    except OSError:
+        pass
+    try:
+        rc = _apply_update(Path(zip_arg), install_dir, int(pid_arg), log=note)
     except Exception as exc:
         note(f"unexpected error: {exc}")
         return 9
@@ -1111,8 +1127,9 @@ def run_gui():
     # Gold bar above the tabs. Installed Windows builds: a newer version is
     # downloaded automatically and installed by a detached child on exit (see
     # _apply_update / _run_apply_update). Source runs keep the old
-    # click-to-download banner. Clicking the bar always opens the manual
-    # download as a fallback.
+    # click-to-download banner. The bar is only clickable in the manual
+    # fallback state — while downloading or ready there is nothing to fetch,
+    # so clicking does nothing.
     GOLD = ACCENT
     update_bar = tk.Frame(root, bg=GOLD)
     update_label = tk.Label(update_bar, text="", font=(UI_FONT, 9, "bold"),
@@ -1127,8 +1144,10 @@ def run_gui():
             update_label.configure(text=text)
             if url:
                 update_label.bind("<Button-1>", lambda e: webbrowser.open(url))
+                update_label.configure(cursor="hand2")
             else:
                 update_label.unbind("<Button-1>")
+                update_label.configure(cursor="arrow")
             if not update_bar.winfo_ismapped():
                 update_bar.pack(fill="x", padx=20, pady=(5, 0), before=notebook)
         try:
@@ -1161,14 +1180,16 @@ def run_gui():
                 return
             staged = _staged_update()
             if staged and staged[1] == remote:
+                # Nothing to fetch — the install happens on exit, so the bar
+                # is informational only (no click action).
                 update_state["mode"] = "ready"
                 _set_update_bar(
-                    f"Update v{remote_tag} ready — installs when DR3 closes", dl_url)
+                    f"Update v{remote_tag} ready — installs when DR3 closes")
                 return
 
             def on_progress(done, total):
                 pct = f"{int(done * 100 / total)}%" if total else ""
-                _set_update_bar(f"Downloading update v{remote_tag} — {pct}", dl_url)
+                _set_update_bar(f"Downloading update v{remote_tag} — {pct}")
 
             def download():
                 path = _download_update(dl_url, remote_tag, on_progress)
@@ -1185,7 +1206,7 @@ def run_gui():
                             pass
                 update_state["mode"] = "ready"
                 _set_update_bar(
-                    f"Update v{remote_tag} ready — installs when DR3 closes", dl_url)
+                    f"Update v{remote_tag} ready — installs when DR3 closes")
 
             update_state["mode"] = "downloading"
             threading.Thread(target=download, daemon=True).start()
@@ -2223,7 +2244,8 @@ def run_gui():
         """Hand a staged update to a detached child that swaps the install
         folder once this process has fully exited (backlog #51)."""
         staged = _staged_update()
-        if not staged or _install_dir() is None:
+        install_dir = _install_dir()
+        if not staged or install_dir is None:
             return
         zip_path, ver = staged
         try:
@@ -2231,6 +2253,11 @@ def run_gui():
                 [*_self_invocation_args(), "--apply-update", str(zip_path),
                  str(os.getpid())],
                 creationflags=(0x00000008 | 0x00000200) if IS_WIN else 0,
+                # Windows refuses to rename a directory that is any process's
+                # current working directory — the GUI's CWD is usually the
+                # install dir itself (double-clicked exe), so start the child
+                # one level up.
+                cwd=str(install_dir.parent),
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )

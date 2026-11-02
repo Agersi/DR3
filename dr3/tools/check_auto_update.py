@@ -225,6 +225,55 @@ def check_apply(mod, f):
     shutil.rmtree(tmp, ignore_errors=True)
 
 
+def check_cwd_swap(mod, f):
+    """The installer child's CWD may be inside install_dir (inherited from a
+    double-clicked GUI) — Windows refuses to rename a directory that is any
+    process's current working directory. The spawn now starts the child one
+    level up and _run_apply_update chdirs out; this proves the mechanism:
+    with CWD inside the swap fails, with CWD outside it succeeds."""
+    import os as _os
+
+    tmp = Path(tempfile.mkdtemp(prefix="dr3_upd_"))
+    install = tmp / "DR3"
+    (install / "_internal").mkdir(parents=True)
+    (install / "DR3.exe").write_bytes(b"old exe")
+    staged = tmp / "staged"
+    staged.mkdir()
+
+    def make_zip(name: str) -> Path:
+        p = staged / name
+        _make_update_zip(p, b"new exe")
+        return p
+
+    old_cwd = Path.cwd()
+    try:
+        if sys.platform == "win32":
+            zip1 = make_zip("DR3-windows-9.9.8.zip")
+            _os.chdir(install)  # child inherits CWD = install dir
+            rc = mod._apply_update(zip1, install, parent_pid=0)
+            if rc == 0:
+                f["n"] += 1
+                print("FAIL swap with CWD inside install_dir should fail on Windows")
+            else:
+                print(f"OK   swap with CWD inside install_dir fails (rc={rc}) "
+                      f"— avoided by spawn cwd + chdir in _run_apply_update")
+
+        zip2 = make_zip("DR3-windows-9.9.7.zip")
+        _os.chdir(tmp)  # the fix: child starts / chdirs one level up
+        rc = mod._apply_update(zip2, install, parent_pid=0)
+        if rc != 0:
+            f["n"] += 1
+            print(f"FAIL swap with CWD outside install_dir should succeed, rc={rc}")
+        elif (install / "DR3.exe").read_bytes() != b"new exe":
+            f["n"] += 1
+            print("FAIL swap from outside did not replace the bundle")
+        else:
+            print("OK   swap succeeds once CWD is outside install_dir")
+    finally:
+        _os.chdir(old_cwd)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def check_cli_source_mode(mod, f):
     dr3_app = Path(__file__).resolve().parent.parent / "dr3_app.py"
     tmp = Path(tempfile.mkdtemp(prefix="dr3_upd_"))
@@ -322,6 +371,8 @@ def check_gui(mod, f):
                 captured["final_text"] = text
                 captured["final_mapped"] = (
                     label.winfo_ismapped() if label is not None else False)
+                captured["final_binding"] = (
+                    label.bind("<Button-1>") if label is not None else "")
                 self.destroy()
                 return
             self.after(50, tick)
@@ -364,6 +415,13 @@ def check_gui(mod, f):
     else:
         print("OK   check -> auto-download -> 'ready' banner (end-to-end)")
 
+    if captured.get("final_binding"):
+        f["n"] += 1
+        print(f"FAIL ready banner is still clickable: "
+              f"{captured['final_binding']!r}")
+    else:
+        print("OK   ready banner is not clickable (no browser download)")
+
     staged = list(updates.glob("DR3-windows-*.zip"))
     if len(staged) != 1 or not mod._validate_update_zip(staged[0]):
         f["n"] += 1
@@ -382,6 +440,7 @@ def main() -> int:
     check_validate(mod, f)
     check_download_failure(mod, f)
     check_apply(mod, f)
+    check_cwd_swap(mod, f)
     check_cli_source_mode(mod, f)
     check_gui(mod, f)
     if f["n"]:
