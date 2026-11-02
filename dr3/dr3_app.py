@@ -1106,8 +1106,9 @@ def run_gui():
         except tk.TclError:
             pass
 
-    # Center on screen
-    w, h = 440, 560
+    # Center on screen (tall enough that the update banner never forces a
+    # scrollbar on the Main tab)
+    w, h = 440, 610
     x = (root.winfo_screenwidth() - w) // 2
     y = (root.winfo_screenheight() - h) // 2
     root.geometry(f"{w}x{h}+{x}+{y}")
@@ -1222,13 +1223,15 @@ def run_gui():
         except Exception:
             pass  # Silent fail — update check is best-effort
 
+    update_tick = {"id": None}
+
     def _update_check_tick():
         if update_state["mode"] != "downloading":
             threading.Thread(target=_check_for_updates, daemon=True).start()
-        root.after(UPDATE_CHECK_INTERVAL_MS, _update_check_tick)
+        update_tick["id"] = root.after(UPDATE_CHECK_INTERVAL_MS, _update_check_tick)
 
     threading.Thread(target=_check_for_updates, daemon=True).start()
-    root.after(UPDATE_CHECK_INTERVAL_MS, _update_check_tick)
+    update_tick["id"] = root.after(UPDATE_CHECK_INTERVAL_MS, _update_check_tick)
 
     # --- Tabbed layout (each tab is scrollable so long content stays
     #     reachable at the fixed window size) ---
@@ -1418,6 +1421,8 @@ def run_gui():
     tel_label = tk.Label(status_frame, text="", font=(UI_FONT, 9),
                          fg=MUTED, bg=BG_CARD, anchor="w")
 
+    tel_tick = {"id": None}
+
     def _update_tel_indicator():
         app = app_holder.get("instance")
         listener = (getattr(app.dispatcher, "telemetry", None)
@@ -1434,9 +1439,9 @@ def run_gui():
             text, color = state
             tel_label.configure(text=text, fg=_TEL_COLORS[color])
             tel_label.pack(fill="x", padx=15, pady=(0, 8))
-        root.after(2000, _update_tel_indicator)
+        tel_tick["id"] = root.after(2000, _update_tel_indicator)
 
-    root.after(2000, _update_tel_indicator)
+    tel_tick["id"] = root.after(2000, _update_tel_indicator)
 
     # --- Log area ---
     log_frame = tk.Frame(main_tab, bg=BG)
@@ -1532,11 +1537,6 @@ def run_gui():
     # --- Footer ---
     footer = tk.Frame(main_tab, bg=BG)
     footer.pack(fill="x", padx=20, pady=(0, 12))
-
-    uninstall_link = tk.Label(footer, text="Uninstall DR3", font=(UI_FONT, 8, "underline"),
-                              fg=ACCENT, bg=BG, cursor="hand2")
-    uninstall_link.pack(side="left")
-    uninstall_link.bind("<Button-1>", lambda e: on_uninstall())
 
     dash_link = tk.Label(footer, text="byagersi.com/rally/dashboard", font=(UI_FONT, 8, "underline"),
                           fg=ACCENT, bg=BG, cursor="hand2")
@@ -1855,6 +1855,11 @@ def run_gui():
 
     verbose_logging_var.trace_add("write", _apply_verbose_logging)
 
+    uninstall_link = tk.Label(advanced_tab, text="Uninstall DR3", font=(UI_FONT, 8, "underline"),
+                              fg=ACCENT, bg=BG, cursor="hand2")
+    uninstall_link.pack(anchor="w", padx=20, pady=(14, 12))
+    uninstall_link.bind("<Button-1>", lambda e: on_uninstall())
+
     # --- Server control ---
     def set_status(running: bool, detail: str = ""):
         if running:
@@ -2154,11 +2159,9 @@ def run_gui():
 
         threading.Thread(target=setup_and_start, daemon=True).start()
 
-    def on_stop():
-        stop_btn.configure(state="disabled")
-        log("Stopping server...")
-        shutdown_flag.set()
-
+    def _stop_cleanup(after):
+        """The STOP flow: wait for the server thread to exit, remove the hosts
+        entries (elevation), update the status, then call after()."""
         def cleanup():
             # Wait for server to stop
             if server_thread:
@@ -2168,6 +2171,7 @@ def run_gui():
                 root.after(0, lambda: log(
                     "Easy Setup off - leaving hosts unchanged. Remove them manually if desired."))
                 root.after(0, lambda: set_status(False, "Stopped"))
+                root.after(0, after)
                 return
 
             # Remove hosts (needs elevation)
@@ -2207,8 +2211,15 @@ def run_gui():
             else:
                 root.after(0, lambda: log("Stopped. Game will use RaceNet servers now."))
                 root.after(0, lambda: set_status(False, "Hosts restored"))
+            root.after(0, after)
 
         threading.Thread(target=cleanup, daemon=True).start()
+
+    def on_stop():
+        stop_btn.configure(state="disabled")
+        log("Stopping server...")
+        shutdown_flag.set()
+        _stop_cleanup(lambda: None)
 
     def on_uninstall():
         install_dir = _install_dir()
@@ -2294,41 +2305,99 @@ def run_gui():
         log(f"Update v{'.'.join(map(str, ver))} will be installed in the "
             "background after exit.")
 
-    def on_close():
-        # Quitting with the server up leaves the hosts redirect in place, so
-        # the game keeps trying to reach the DR3 proxy and can't talk
-        # to RaceNet.
-        # Only Stop restores the hosts file (it's the elevated path), so warn
-        # and default to keeping the window open.
-        leftover_hosts = easy_setup_var.get() and hosts_configured()
-        if server_running.is_set() or leftover_hosts:
-            if server_running.is_set():
-                lead = ("The server is still running, and your hosts file still points the game "
-                        "at the DR3 proxy.")
-            else:
-                lead = "Your hosts file still points the game at the DR3 proxy."
-            proceed = messagebox.askyesno(
-                "DR3",
-                f"{lead}\n\n"
-                "Click Stop first - that restores your hosts file so DiRT Rally 2.0 can reach "
-                "RaceNet again.\n\n"
-                "If you exit now, the game won't connect until you reopen DR3 and press "
-                "Stop (or edit your hosts file by hand).\n\n"
-                "Exit anyway?",
-                icon="warning",
-                default="no",
-            )
-            if not proceed:
-                return
-            shutdown_flag.set()
-            if server_thread:
-                server_thread.join(timeout=3)
+    def _finish_close():
+        # Cancel the pending status-tick so teardown has no queued callback
+        # left (Tkinter prints a Tcl error for events that outlive their
+        # Python wrapper).
+        for tick in (tel_tick, update_tick):
+            if tick["id"] is not None:
+                try:
+                    root.after_cancel(tick["id"])
+                except tk.TclError:
+                    pass
         # Clean exit → archive this session's log (verbose mode only, #52).
         archived = _archive_debug_log(bool(verbose_logging_var.get()))
         if archived is not None:
             print(f"[LOG] session archived to {archived}")
         _spawn_update_on_exit()
         root.destroy()
+
+    def _ask_close(question: str, proceed_label: str) -> bool:
+        """Modal close-confirmation dialog with a labeled proceed button and
+        Cancel. Returns True when the user chose to proceed."""
+        dlg = tk.Toplevel(root)
+        dlg.title("DR3")
+        dlg.configure(bg=BG)
+        dlg.resizable(False, False)
+        answer = {"proceed": False}
+
+        def _finish(val: bool):
+            if not dlg.winfo_exists():
+                return
+            answer["proceed"] = val
+            dlg.destroy()
+
+        tk.Label(dlg, text=question, font=(UI_FONT, 9), fg=TEXT, bg=BG,
+                 wraplength=320, justify="left", anchor="w").pack(
+            fill="x", padx=16, pady=(14, 10))
+
+        btns = tk.Frame(dlg, bg=BG)
+        btns.pack(fill="x", padx=16, pady=(0, 14))
+        tk.Button(btns, text="Cancel", font=(UI_FONT, 9, "bold"),
+                  bg=BG_ELEVATED, fg=TEXT, activebackground=BORDER,
+                  activeforeground=TEXT, relief="flat", cursor="hand2",
+                  padx=14, pady=6, command=lambda: _finish(False)).pack(side="left")
+        tk.Button(btns, text=proceed_label, font=(UI_FONT, 9, "bold"),
+                  bg=ACCENT, fg=BG, activebackground=ACCENT_BRIGHT,
+                  activeforeground=BG, relief="flat", cursor="hand2",
+                  padx=14, pady=6, command=lambda: _finish(True)).pack(side="right")
+
+        x = root.winfo_rootx() + max((root.winfo_width() - 360) // 2, 0)
+        y = root.winfo_rooty() + max((root.winfo_height() - 200) // 2, 0)
+        dlg.geometry(f"360x170+{x}+{y}")
+        dlg.transient(root)
+        dlg.grab_set()
+        dlg.bind("<Escape>", lambda e: _finish(False))
+        dlg.bind("<Return>", lambda e: _finish(True))
+        root.wait_window(dlg)
+        return answer["proceed"]
+
+    closing = {"in_progress": False}
+
+    def on_close():
+        # Quitting with the server up leaves the hosts redirect in place, so
+        # the game keeps trying to reach the DR3 proxy and can't talk
+        # to RaceNet. Offer to run the full STOP flow (which restores the
+        # hosts file) before exiting.
+        if closing["in_progress"]:
+            return
+        leftover_hosts = easy_setup_var.get() and hosts_configured()
+        server_up = server_running.is_set()
+        if not (server_up or leftover_hosts):
+            _finish_close()
+            return
+        if server_up:
+            question = ("The server is still running, and your hosts file still points the "
+                        "game at the DR3 proxy.\n\n"
+                        "\"Stop and Close\" stops the server, restores your hosts file (an "
+                        "admin prompt may appear), and quits.")
+            proceed_label = "Stop and Close"
+        else:
+            question = ("Your hosts file still points the game at the DR3 proxy.\n\n"
+                        "If you exit now, the game won't connect to RaceNet until you reopen "
+                        "DR3 and press Stop (or edit your hosts file by hand).")
+            proceed_label = "Close anyway"
+        if not _ask_close(question, proceed_label):
+            return
+        if server_up:
+            # Same stop flow as the STOP button — restores hosts, then closes.
+            closing["in_progress"] = True
+            stop_btn.configure(state="disabled")
+            log("Stopping server...")
+            shutdown_flag.set()
+            _stop_cleanup(_finish_close)
+        else:
+            _finish_close()
 
     root.protocol("WM_DELETE_WINDOW", on_close)
     for _bind_wheel in (_main_wheel, _streaming_wheel, _advanced_wheel):

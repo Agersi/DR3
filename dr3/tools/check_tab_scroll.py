@@ -94,7 +94,7 @@ def build(parent, rows: int):
 
 def main() -> int:
     root = tk.Tk()
-    root.geometry("440x560+4000+3000")  # off-screen; still mapped
+    root.geometry("440x610+4000+3000")  # off-screen; still mapped (matches dr3_app.py)
     root.resizable(False, False)
     notebook = ttk.Notebook(root)
     notebook.pack(fill="both", expand=True)

@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+## 0.1.54
+The window is a little taller so the update notice never forces scrolling, Uninstall DR3 moved to the bottom of the Logs tab, and closing while the server is running now offers Stop and Close.
+
 ## 0.1.53
 After an automatic update installs when you close DR3, the install folder now opens so you can restart the app right away.
 
