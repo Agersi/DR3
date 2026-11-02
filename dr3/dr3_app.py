@@ -916,6 +916,14 @@ def _run_apply_update(zip_arg: str, pid_arg: str) -> int:
         note(f"unexpected error: {exc}")
         return 9
     note(f"apply-update done rc={rc}")
+    if rc == 0 and os.name == "nt":
+        # The app just closed itself to install the update — open the install
+        # folder so the user can double-click DR3.exe and relaunch.
+        try:
+            subprocess.Popen(["explorer", str(install_dir)])
+            note("install folder opened in Explorer")
+        except OSError as exc:
+            note(f"could not open install folder: {exc}")
     return rc
 
 

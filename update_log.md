@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+## 0.1.53
+After an automatic update installs when you close DR3, the install folder now opens so you can restart the app right away.
+
 ## 0.1.52
 The server now starts automatically when you open DR3 — you can switch this off with the new option in the Main tab.
 

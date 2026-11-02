@@ -9,6 +9,8 @@
 - _apply_update performs the full swap in temp dirs: new contents land in the
   install dir, the previous one is kept as DR3.bak-<ver>, the staged zip and
   the staging folder are removed; a vanished install dir aborts cleanly;
+- after a successful swap the child opens the install folder in Explorer so
+  the user can relaunch (a failed install must not);
 - the `--apply-update` CLI branch exits before any Tk/logging machinery
   (source mode: not an installed bundle -> rc 0, note in update.log);
 - the real GUI boots with the gold bar hidden, and end-to-end against a local
@@ -274,6 +276,68 @@ def check_cwd_swap(mod, f):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def check_explorer_open(mod, f):
+    """After a successful swap the detached child opens the install folder in
+    Explorer (so the user can relaunch DR3.exe); a failed install must not."""
+    import types
+
+    tmp = Path(tempfile.mkdtemp(prefix="dr3_upd_"))
+    install = tmp / "DR3"
+    (install / "_internal").mkdir(parents=True)
+    (install / "DR3.exe").write_bytes(b"old exe")
+    staged = tmp / "staged"
+    staged.mkdir()
+
+    calls = []
+    real_subprocess = mod.subprocess
+    fake_subprocess = types.SimpleNamespace(
+        Popen=lambda *a, **k: calls.append((a, k)))
+    old_dr3_dir = mod.DR3_DIR
+    old_install_dir = mod._install_dir
+    old_cwd = Path.cwd()
+    try:
+        mod.subprocess = fake_subprocess
+        mod.DR3_DIR = tmp / "appdata" / "DR3"
+        mod._install_dir = lambda: install
+
+        zip_ok = staged / "DR3-windows-9.9.6.zip"
+        _make_update_zip(zip_ok, b"new exe")
+        rc = mod._run_apply_update(str(zip_ok), "-1")
+        if rc != 0:
+            f["n"] += 1
+            print(f"FAIL _run_apply_update success path rc={rc}")
+        elif calls != [((["explorer", str(install)],), {})]:
+            f["n"] += 1
+            print(f"FAIL explorer not opened on success: {calls!r}")
+        else:
+            print("OK   install folder opened in Explorer after successful install")
+        log = mod.DR3_DIR / "update.log"
+        if "install folder opened in Explorer" not in log.read_text():
+            f["n"] += 1
+            print("FAIL update.log missing the explorer note")
+        else:
+            print("OK   update.log carries the explorer note")
+
+        calls.clear()
+        bad = staged / "DR3-windows-9.9.5.zip"
+        bad.write_bytes(b"not a zip")
+        rc = mod._run_apply_update(str(bad), "-1")
+        if rc == 0:
+            f["n"] += 1
+            print("FAIL invalid staged zip should not give rc=0")
+        elif calls:
+            f["n"] += 1
+            print(f"FAIL explorer opened on failed install: {calls!r}")
+        else:
+            print("OK   failed install does not open Explorer")
+    finally:
+        mod.subprocess = real_subprocess
+        mod.DR3_DIR = old_dr3_dir
+        mod._install_dir = old_install_dir
+        os.chdir(old_cwd)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def check_cli_source_mode(mod, f):
     dr3_app = Path(__file__).resolve().parent.parent / "dr3_app.py"
     tmp = Path(tempfile.mkdtemp(prefix="dr3_upd_"))
@@ -453,6 +517,7 @@ def main() -> int:
     check_download_failure(mod, f)
     check_apply(mod, f)
     check_cwd_swap(mod, f)
+    check_explorer_open(mod, f)
     check_cli_source_mode(mod, f)
     check_gui(mod, f)
     if f["n"]:
