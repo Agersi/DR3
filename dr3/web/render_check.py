@@ -61,12 +61,12 @@ def main() -> int:
 
     # install page: auto-launch panel with the launcher recipe
     html = client.get('/install').get_data(as_text=True)
-    check('install: auto-launch panel + launcher bat + non-Steam-game steps',
+    check('install: auto-launch panel + launcher bat + Steam launch options',
           'id="auto-launch"' in html
           and 'Start automatically when DR3 opens' in html
           and 'start "" "C:\\DR3\\DR3.exe"' in html
-          and 'steam://run/690790' in html
-          and "Add a game that's not on Steam" in html, '')
+          and '%*' in html
+          and '"%USERPROFILE%\\Desktop\\DR3.bat" %command%' in html, '')
 
     r = client.post('/login', data={'username': 'smokedriver', 'password': 'password123'})
     check('login', r.status_code in (302, 200), f'status={r.status_code}')
