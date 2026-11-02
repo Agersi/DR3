@@ -65,7 +65,7 @@ def main() -> int:
           'id="auto-launch"' in html
           and 'Start automatically when DR3 opens' in html
           and 'start "" "C:\\DR3\\DR3.exe"' in html
-          and 'dirtrally2.exe' in html
+          and 'steam://run/690790' in html
           and "Add a game that's not on Steam" in html, '')
 
     r = client.post('/login', data={'username': 'smokedriver', 'password': 'password123'})

@@ -47,14 +47,16 @@
      default, so simply opening DR3 gets everything ready before a session. Untick it
      if you prefer to press START yourself.</p>
   <p>To start DR3 and DiRT Rally 2.0 with one click from Steam, make a small launcher
-     file: create a new text file, paste in the lines below (adjust the two paths to your
-     own install folders), and save it as e.g. <code>DR3 + Rally.bat</code> on your Desktop
+     file: create a new text file, paste in the lines below (adjust the DR3 path to your
+     own install folder), and save it as e.g. <code>DR3 + Rally.bat</code> on your Desktop
      or anywhere else permanent — not inside the <code>DR3</code> folder itself, since
      updates replace its contents:</p>
   <pre><code>@echo off
 start "" "C:\DR3\DR3.exe"
 timeout /t 5 /nobreak &gt;nul
-start "" "C:\Program Files (x86)\Steam\steamapps\common\DiRT Rally 2.0\dirtrally2.exe"</code></pre>
+start "" steam://run/690790</code></pre>
+  <p>The last line asks Steam itself to start DiRT Rally 2.0 (the same as pressing Play),
+     so your playtime keeps counting to the game.</p>
   <p>Then in Steam: <strong>Add a game that's not on Steam</strong> →
      <strong>Browse…</strong> → pick the <code>.bat</code> file. It appears as its own tile in
      your library — one click opens DR3 and launches DiRT Rally 2.0 a few seconds later.</p>
