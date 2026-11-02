@@ -190,6 +190,8 @@ UPSTREAM_IP = "159.153.126.42"
 # Update-banner source: the site's public client-version endpoint (latest
 # version + download link). Empty = disabled.
 VERSION_CHECK_URL = "https://byagersi.com/rally/api/client-version"
+UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000  # re-check while the app is open
+UPDATES_DIR = DR3_DIR / "updates"          # staged auto-updater downloads
 
 
 # ---------------------------------------------------------------------------
@@ -644,6 +646,208 @@ def has_port_capability(binary: Path) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Auto-updater (backlog #51)
+#
+# The Windows build is a PyInstaller --onedir bundle: DR3.exe plus _internal/
+# are locked while the process runs, so files can only be swapped AFTER exit.
+# Flow: the GUI checks VERSION_CHECK_URL at startup and every 30 minutes,
+# auto-downloads a newer zip into UPDATES_DIR, and on window close spawns a
+# detached child of itself (`DR3.exe --apply-update <zip> <parent_pid>`) that
+# waits for the parent to die, then swaps the install folder (the previous one
+# is kept as DR3.bak-<oldver>, like the VPS keeps .bak zips). No relaunch —
+# the next manual start runs the new version.
+# ---------------------------------------------------------------------------
+
+def _version_tuple(tag: str) -> Optional[tuple]:
+    """Digit segments of a version tag; None when it carries no digits."""
+    parts = tuple(int(x) for x in str(tag).lstrip("v").split(".") if x.isdigit())
+    return parts or None
+
+
+def _staged_update() -> Optional[tuple]:
+    """Best staged download: ``(path, version_tuple)`` of the newest
+    ``DR3-windows-<ver>.zip`` in UPDATES_DIR whose version is NEWER than the
+    running one; None when nothing installable is staged."""
+    local = _version_tuple(VERSION)
+    best: Optional[tuple] = None
+    try:
+        entries = list(UPDATES_DIR.glob("DR3-windows-*.zip"))
+    except OSError:
+        return None
+    for p in entries:
+        ver = _version_tuple(p.name[len("DR3-windows-"):-len(".zip")])
+        if not ver or (local is not None and not ver > local):
+            continue
+        if best is None or ver > best[1]:
+            best = (p, ver)
+    return best
+
+
+def _validate_update_zip(path: Path) -> bool:
+    """A client zip must be a real archive carrying the onedir bundle —
+    top-level ``DR3/`` with ``DR3.exe`` inside (build_exe.py's layout)."""
+    import zipfile
+    try:
+        if not zipfile.is_zipfile(path):
+            return False
+        with zipfile.ZipFile(path) as zf:
+            names = set(zf.namelist())
+        return "DR3/DR3.exe" in names
+    except Exception:
+        return False
+
+
+def _download_update(url: str, version: str, progress_cb) -> Optional[Path]:
+    """Download ``url`` into UPDATES_DIR as ``DR3-windows-<version>.zip``.
+
+    ``progress_cb(done_bytes, total_bytes_or_None)`` is called per chunk from
+    the calling thread (the GUI hops to Tk with root.after). Returns the final
+    path, or None — a partial/invalid file is removed."""
+    import urllib.request
+    safe = "".join(c for c in str(version) if c.isalnum() or c in "._-")
+    UPDATES_DIR.mkdir(parents=True, exist_ok=True)
+    final = UPDATES_DIR / f"DR3-windows-{safe}.zip"
+    part = final.with_name(final.name + ".part")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "DR3"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            total = int(resp.headers.get("Content-Length") or 0) or None
+            done = 0
+            with open(part, "wb") as out:
+                while True:
+                    chunk = resp.read(262144)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+                    done += len(chunk)
+                    progress_cb(done, total)
+        if not _validate_update_zip(part):
+            return None
+        part.replace(final)
+        return final
+    except Exception:
+        try:
+            part.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return None
+
+
+def _wait_for_pid_exit(pid: int, timeout_s: float = 600.0) -> bool:
+    """True once the given process has exited (or is already gone)."""
+    if pid <= 0:
+        return True
+    if IS_WIN:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        WAIT_TIMEOUT = 0x102
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return True  # already gone (or inaccessible — treat as gone)
+        try:
+            return kernel32.WaitForSingleObject(handle, int(timeout_s * 1000)) != WAIT_TIMEOUT
+        finally:
+            kernel32.CloseHandle(handle)
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return True
+        time.sleep(0.5)
+    return False
+
+
+def _apply_update(zip_path: Path, install_dir: Path, parent_pid: int) -> int:
+    """Swap ``install_dir`` for the staged zip (runs as a detached child).
+
+    Returns 0 on success; any nonzero code leaves the install in place so the
+    next exit can retry. Takes explicit paths so tests can drive it with temp
+    dirs instead of the real bundle."""
+    import zipfile
+
+    def fail(code: int, msg: str) -> int:
+        try:
+            print(f"[UPDATE] {datetime.now().isoformat(timespec='seconds')} "
+                  f"failed ({code}): {msg}")
+        except Exception:
+            pass
+        return code
+
+    if not install_dir.exists():
+        return fail(4, f"install dir gone ({install_dir}) — uninstalled?")
+    ver_str = zip_path.name[len("DR3-windows-"):-len(".zip")]
+    if not _wait_for_pid_exit(parent_pid):
+        return fail(5, "parent process still running after timeout — aborting swap")
+    if not _validate_update_zip(zip_path):
+        return fail(6, f"staged zip invalid: {zip_path.name}")
+
+    staging = install_dir.parent / f"DR3.update-{ver_str}"
+    try:
+        if staging.exists():
+            shutil.rmtree(staging)
+        staging.mkdir()
+        with zipfile.ZipFile(zip_path) as zf:
+            zf.extractall(staging)
+        new_root = staging / "DR3"
+        if not (new_root / "DR3.exe").is_file():
+            return fail(7, "extracted zip is missing DR3/DR3.exe")
+
+        # Keep exactly one backup of the previous install (the VPS keeps
+        # .bak-<oldver> zips for the same reason).
+        for old_bak in install_dir.parent.glob("DR3.bak-*"):
+            if old_bak.is_dir():
+                shutil.rmtree(old_bak, ignore_errors=True)
+        bak = install_dir.parent / f"DR3.bak-{VERSION}"
+        install_dir.rename(bak)
+        try:
+            new_root.rename(install_dir)
+        except OSError:
+            bak.rename(install_dir)  # roll back, then report
+            raise
+    except Exception as exc:
+        return fail(8, f"swap failed: {exc}")
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    try:
+        zip_path.unlink()
+    except OSError:
+        pass
+    print(f"[UPDATE] installed v{ver_str} (previous kept as DR3.bak-{VERSION})")
+    return 0
+
+
+def _run_apply_update(zip_arg: str, pid_arg: str) -> int:
+    """Entry point for the detached `--apply-update` child.
+
+    Runs BEFORE _setup_file_logging() on purpose: the parent GUI is still
+    alive holding debug.log open, and rotating it here would scatter the tail
+    of the parent session into debug.prev.log. Logs to update.log instead."""
+    log_path = DR3_DIR / "update.log"
+
+    def note(msg: str) -> None:
+        try:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(f"[{datetime.now().isoformat(timespec='seconds')}] {msg}\n")
+        except OSError:
+            pass
+
+    note(f"apply-update start zip={zip_arg} parent_pid={pid_arg}")
+    install_dir = _install_dir()
+    if install_dir is None:
+        note("not an installed DR3.exe bundle — nothing to update")
+        return 0
+    try:
+        rc = _apply_update(Path(zip_arg), install_dir, int(pid_arg))
+    except Exception as exc:
+        note(f"unexpected error: {exc}")
+        return 9
+    note(f"apply-update done rc={rc}")
+    return rc
+
+
+# ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
@@ -847,12 +1051,34 @@ def run_gui():
         foreground=[("selected", ACCENT)],
     )
 
-    # --- Update check (non-blocking) ---
+    # --- Auto-updater (backlog #51) ---
+    # Gold bar above the tabs. Installed Windows builds: a newer version is
+    # downloaded automatically and installed by a detached child on exit (see
+    # _apply_update / _run_apply_update). Source runs keep the old
+    # click-to-download banner. Clicking the bar always opens the manual
+    # download as a fallback.
     GOLD = ACCENT
     update_bar = tk.Frame(root, bg=GOLD)
     update_label = tk.Label(update_bar, text="", font=(UI_FONT, 9, "bold"),
                             fg=BG, bg=GOLD, cursor="hand2")
     update_label.pack(padx=10, pady=4)
+    update_state = {"mode": "idle"}  # idle | downloading | ready | manual
+
+    def _set_update_bar(text: str, url: Optional[str] = None):
+        def show():
+            if not text:
+                return
+            update_label.configure(text=text)
+            if url:
+                update_label.bind("<Button-1>", lambda e: webbrowser.open(url))
+            else:
+                update_label.unbind("<Button-1>")
+            if not update_bar.winfo_ismapped():
+                update_bar.pack(fill="x", padx=20, pady=(5, 0), before=notebook)
+        try:
+            root.after(0, show)
+        except RuntimeError:
+            pass  # Tk event loop already gone (shutdown race) — skip the UI update
 
     def _check_for_updates():
         import urllib.request
@@ -867,20 +1093,56 @@ def run_gui():
             dl_url = data.get("download_url", "")
             if not remote_tag or not dl_url:
                 return
-            # Simple version compare (works for semver with same segment count)
-            remote_parts = [int(x) for x in remote_tag.split(".") if x.isdigit()]
-            local_parts = [int(x) for x in VERSION.split(".") if x.isdigit()]
-            if remote_parts and local_parts and remote_parts > local_parts:
-                def show():
-                    update_label.configure(
-                        text=f"Update available: v{remote_tag}  —  click to download")
-                    update_label.bind("<Button-1>", lambda e: webbrowser.open(dl_url))
-                    update_bar.pack(fill="x", padx=20, pady=(5, 0), before=notebook)
-                root.after(0, show)
+            remote = _version_tuple(remote_tag)
+            local = _version_tuple(VERSION)
+            if not (remote and local and remote > local):
+                return
+            manual_text = f"Update available: v{remote_tag}  —  click to download"
+            if _install_dir() is None:
+                # Source run / foreign layout — nothing to auto-install into.
+                update_state["mode"] = "manual"
+                _set_update_bar(manual_text, dl_url)
+                return
+            staged = _staged_update()
+            if staged and staged[1] == remote:
+                update_state["mode"] = "ready"
+                _set_update_bar(
+                    f"Update v{remote_tag} ready — installs when DR3 closes", dl_url)
+                return
+
+            def on_progress(done, total):
+                pct = f"{int(done * 100 / total)}%" if total else ""
+                _set_update_bar(f"Downloading update v{remote_tag} — {pct}", dl_url)
+
+            def download():
+                path = _download_update(dl_url, remote_tag, on_progress)
+                if path is None:
+                    update_state["mode"] = "manual"
+                    _set_update_bar(manual_text, dl_url)
+                    return
+                # Only the newest staged zip can install — drop older ones.
+                for old in UPDATES_DIR.glob("DR3-windows-*.zip"):
+                    if old != path:
+                        try:
+                            old.unlink()
+                        except OSError:
+                            pass
+                update_state["mode"] = "ready"
+                _set_update_bar(
+                    f"Update v{remote_tag} ready — installs when DR3 closes", dl_url)
+
+            update_state["mode"] = "downloading"
+            threading.Thread(target=download, daemon=True).start()
         except Exception:
             pass  # Silent fail — update check is best-effort
 
+    def _update_check_tick():
+        if update_state["mode"] != "downloading":
+            threading.Thread(target=_check_for_updates, daemon=True).start()
+        root.after(UPDATE_CHECK_INTERVAL_MS, _update_check_tick)
+
     threading.Thread(target=_check_for_updates, daemon=True).start()
+    root.after(UPDATE_CHECK_INTERVAL_MS, _update_check_tick)
 
     # --- Tabbed layout (each tab is scrollable so long content stays
     #     reachable at the fixed window size) ---
@@ -1875,6 +2137,8 @@ def run_gui():
             log("Automatic uninstall is only available on Windows — delete the DR3 folder "
                 f"and {DR3_DIR} manually.")
             return
+        # Drop staged auto-updates so no installer child can race the removal.
+        shutil.rmtree(UPDATES_DIR, ignore_errors=True)
         # The exe is still running from install_dir, so a detached cmd removes
         # both folders shortly after this process exits.
         script = (f'timeout /t 2 >nul & rmdir /s /q "{install_dir}" '
@@ -1898,6 +2162,27 @@ def run_gui():
     # automatically so the user doesn't have to.
     if os.environ.pop("DR3_AUTO_START", "") == "1":
         root.after(800, on_start)
+
+    def _spawn_update_on_exit():
+        """Hand a staged update to a detached child that swaps the install
+        folder once this process has fully exited (backlog #51)."""
+        staged = _staged_update()
+        if not staged or _install_dir() is None:
+            return
+        zip_path, ver = staged
+        try:
+            subprocess.Popen(
+                [*_self_invocation_args(), "--apply-update", str(zip_path),
+                 str(os.getpid())],
+                creationflags=(0x00000008 | 0x00000200) if IS_WIN else 0,
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception as exc:
+            print(f"[UPDATE] failed to start installer child: {exc}")
+            return
+        log(f"Update v{'.'.join(map(str, ver))} will be installed in the "
+            "background after exit.")
 
     def on_close():
         # Quitting with the server up leaves the hosts redirect in place, so
@@ -1928,6 +2213,7 @@ def run_gui():
             shutdown_flag.set()
             if server_thread:
                 server_thread.join(timeout=3)
+        _spawn_update_on_exit()
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_close)
@@ -1941,6 +2227,11 @@ def run_gui():
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    # Auto-updater child (backlog #51): must run BEFORE _setup_file_logging —
+    # the parent GUI is still alive holding debug.log open, and rotating it
+    # here would scatter the tail of the parent session into debug.prev.log.
+    if len(sys.argv) >= 4 and sys.argv[1] == "--apply-update":
+        sys.exit(_run_apply_update(sys.argv[2], sys.argv[3]))
     _setup_file_logging()
     # Elevated-helper entry: when re-launched via UAC/pkexec with
     # `--admin-helper <op>`, do the privileged work and exit before

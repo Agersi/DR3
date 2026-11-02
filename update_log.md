@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+## 0.1.49
+DR3 now updates itself automatically — new versions download in the background and install when you close the app.
+
 ## 0.1.48
 The main window now shows a small telemetry status line while the server is running, so you can see at a glance whether stage splits are being recorded.
 

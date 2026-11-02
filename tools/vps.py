@@ -5,6 +5,7 @@ Reads credentials from .env at the project root. Never prints the password.
 Usage:  python tools/vps.py "command" ["cmd2" ...]   (each runs, exit codes shown)
         python tools/vps.py --sudo "command"
         python tools/vps.py [--sudo] --run-script <script.sh> [ARG ...]
+        python tools/vps.py --upload LOCAL_PATH REMOTE_PATH   (SFTP put)
 """
 import os
 import sys
@@ -113,11 +114,24 @@ def main():
     try:
         if args[0] == "--run-script" and len(args) >= 2:
             rc, out, err = vps.run_script(args[1], script_args=tuple(args[2:]),
-                                          use_sudo=use_sudo)
+                                           use_sudo=use_sudo)
             print(out, end=(" " if out and not out.endswith("\n") else ""))
             if err.strip():
                 print("[stderr]\n" + err, end=(" " if not err.endswith("\n") else ""))
             print(f"[exit {rc}]" if rc else "")
+            return
+        if args[0] == "--upload" and len(args) >= 3:
+            local, remote = args[1], args[2]
+            sftp = vps.client.open_sftp()
+            try:
+                st = sftp.stat(remote)
+                print(f"[overwrite] {remote} exists ({st.st_size} bytes)")
+            except IOError:
+                pass
+            with open(local, "rb") as f:
+                sftp.putfo(f, remote)
+            st = sftp.stat(remote)
+            print(f"uploaded {local} -> {remote} ({st.st_size} bytes)")
             return
         for cmd in args:
             fn = vps.sudo if use_sudo else vps.run
