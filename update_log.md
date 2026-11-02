@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+## 0.1.52
+The server now starts automatically when you open DR3 — you can switch this off with the new option in the Main tab.
+
 ## 0.1.51
 Fixed a bug where the automatic update was not installed when closing DR3.
 

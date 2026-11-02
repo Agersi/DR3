@@ -59,6 +59,15 @@ def main() -> int:
     r = client.get('/download/DR3-windows.zip')
     check('anon GET /download/DR3-windows.zip', r.status_code == want_dl, f'status={r.status_code}')
 
+    # install page: auto-launch panel with the launcher recipe
+    html = client.get('/install').get_data(as_text=True)
+    check('install: auto-launch panel + launcher bat + non-Steam-game steps',
+          'id="auto-launch"' in html
+          and 'Start automatically when DR3 opens' in html
+          and 'start "" "C:\\DR3\\DR3.exe"' in html
+          and 'dirtrally2.exe' in html
+          and "Add a game that's not on Steam" in html, '')
+
     r = client.post('/login', data={'username': 'smokedriver', 'password': 'password123'})
     check('login', r.status_code in (302, 200), f'status={r.status_code}')
 

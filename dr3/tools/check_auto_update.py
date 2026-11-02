@@ -380,15 +380,27 @@ def check_gui(mod, f):
         self.after(100, tick)
         orig_mainloop(self)
 
+    # This e2e runs the real mainloop for up to 15 s — long enough for the
+    # "start automatically" timer (800 ms) to fire. Keep the test hermetic:
+    # serve a config with auto_start_server off so no real server starts.
+    orig_load_config = mod.load_config
+
+    def quiet_load_config():
+        cfg = orig_load_config()
+        cfg["auto_start_server"] = False
+        return cfg
+
     orig_mainloop = tk.Tk.mainloop
     try:
         mod.VERSION_CHECK_URL = f"http://127.0.0.1:{port}/version.json"
         mod.UPDATES_DIR = updates
         mod._install_dir = lambda: install_stub
+        mod.load_config = quiet_load_config
         tk.Tk.mainloop = fake_mainloop
         mod.run_gui()
     finally:
         tk.Tk.mainloop = orig_mainloop
+        mod.load_config = orig_load_config
         httpd.shutdown()
 
     root = captured.get("root")

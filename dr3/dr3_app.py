@@ -940,6 +940,7 @@ KNOWN_CONFIG_KEYS = frozenset({
     "telemetry_enabled",
     "telemetry_port",
     "upstream_ip",
+    "auto_start_server",
 })
 
 
@@ -1502,7 +1503,23 @@ def run_gui():
         relief="flat", cursor="hand2", padx=20, pady=8,
         state="disabled",
     )
-    stop_btn.pack(fill="x")
+    stop_btn.pack(side="left")
+
+    # Shares STOP's row (side packing) so the Main tab gains no height.
+    auto_start_var = tk.BooleanVar(value=config.get("auto_start_server", True))
+    auto_cb = tk.Checkbutton(
+        btn_frame, text="Start automatically when DR3 opens",
+        variable=auto_start_var, bg=BG, fg=TEXT,
+        activebackground=BG, activeforeground=TEXT, selectcolor=BG,
+        font=(UI_FONT, 9), highlightthickness=0, bd=0, anchor="w",
+    )
+    auto_cb.pack(side="right")
+
+    def _update_auto_start():
+        config["auto_start_server"] = auto_start_var.get()
+        save_config(config)
+
+    auto_cb.configure(command=_update_auto_start)
 
     # --- Footer ---
     footer = tk.Frame(main_tab, bg=BG)
@@ -2235,9 +2252,11 @@ def run_gui():
     start_btn.configure(command=on_start)
     stop_btn.configure(command=on_stop)
 
-    # If we were just relaunched after a successful setcap, click START
-    # automatically so the user doesn't have to.
-    if os.environ.pop("DR3_AUTO_START", "") == "1":
+    # Auto-click START when we were just relaunched after a successful setcap,
+    # or when the "start automatically" option is on (default). on_start
+    # disables the START button first, so a manual click can't double-start.
+    if os.environ.pop("DR3_AUTO_START", "") == "1" \
+            or config.get("auto_start_server", True):
         root.after(800, on_start)
 
     def _spawn_update_on_exit():

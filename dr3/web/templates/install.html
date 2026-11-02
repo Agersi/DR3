@@ -8,13 +8,14 @@
   <li><strong>Download the DR3 client:</strong>
       <a href="{{ url_for('pages.download_client') }}">DR3-windows.zip</a>.
       Extract it anywhere — keep the <code>DR3</code> folder intact.</li>
-  <li><strong>Run <code>DR3\DR3.exe</code></strong> and press <strong>START</strong>.
+  <li><strong>Run <code>DR3\DR3.exe</code></strong> — the server starts automatically.
       Easy Setup (on by default) asks for admin rights once and configures everything:
       the hosts redirect + a self-signed certificate for the game's online domains.</li>
   <li><a href="{{ url_for('pages.register') }}">Register</a> on this site and verify your email.</li>
   <li>Generate a game token on your <a href="{{ url_for('pages.dashboard') }}">dashboard</a>.</li>
-   <li>Paste the token into the DR3 app, press <strong>Save</strong>, then <strong>START</strong>.
-        Launch DiRT Rally 2.0 — club championships and results sync to this site, while official game content stays on the normal game servers.</li>
+    <li>Paste the token into the DR3 app and press <strong>Save</strong>, then press
+         <strong>STOP</strong> and <strong>START</strong> again so the running server picks it up.
+         Launch DiRT Rally 2.0 — club championships and results sync to this site, while official game content stays on the normal game servers.</li>
 </ol>
 
 <p class="meta">To uninstall later: open DR3 and click <strong>Uninstall DR3</strong> under the STOP button — it removes the program folder and your settings. Press STOP first if the server is running.</p>
@@ -37,6 +38,29 @@
      message and splits simply fall back to an even profile — stage times and time
      trials still record normally. You can also pin a specific port with
      <code>"telemetry_port"</code> in the DR3 <code>config.json</code>.</p>
+</div>
+
+<div class="panel" id="auto-launch">
+  <h2>Auto-launching DR3 and the game</h2>
+  <p>DR3 starts its server automatically when you open it — the
+     <strong>Start automatically when DR3 opens</strong> option in the Main tab is on by
+     default, so simply opening DR3 gets everything ready before a session. Untick it
+     if you prefer to press START yourself.</p>
+  <p>To start DR3 and DiRT Rally 2.0 with one click from Steam, make a small launcher
+     file: create a new text file, paste in the lines below (adjust the two paths to your
+     own install folders), and save it as e.g. <code>DR3 + Rally.bat</code> on your Desktop
+     or anywhere else permanent — not inside the <code>DR3</code> folder itself, since
+     updates replace its contents:</p>
+  <pre><code>@echo off
+start "" "C:\DR3\DR3.exe"
+timeout /t 5 /nobreak &gt;nul
+start "" "C:\Program Files (x86)\Steam\steamapps\common\DiRT Rally 2.0\dirtrally2.exe"</code></pre>
+  <p>Then in Steam: <strong>Add a game that's not on Steam</strong> →
+     <strong>Browse…</strong> → pick the <code>.bat</code> file. It appears as its own tile in
+     your library — one click opens DR3 and launches DiRT Rally 2.0 a few seconds later.</p>
+  <p class="meta">Steam's launch options can only pass arguments to the game itself, so they
+     can't start another program — a launcher file added as a non-Steam game is the standard
+     way to chain the two together.</p>
 </div>
 
 <div class="panel">
