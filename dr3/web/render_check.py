@@ -66,7 +66,8 @@ def main() -> int:
           and 'Start automatically when DR3 opens' in html
           and 'start "" "C:\\DR3\\DR3.exe"' in html
           and '%*' in html
-          and '"%USERPROFILE%\\Desktop\\DR3.bat" %command%' in html, '')
+          and '"C:\\Users\\YOURNAME\\Desktop\\DR3.bat" %command%' in html
+          and 'does not expand Windows environment variables' in html, '')
 
     r = client.post('/login', data={'username': 'smokedriver', 'password': 'password123'})
     check('login', r.status_code in (302, 200), f'status={r.status_code}')

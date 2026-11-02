@@ -56,9 +56,12 @@
  timeout /t 5 /nobreak &gt;nul
  %*</code></pre>
   <p>Then in Steam: right-click <strong>DiRT Rally 2.0</strong> → <strong>Properties</strong> →
-      <strong>Launch Options</strong>, and enter (adjust the <code>.bat</code> name/path if yours
-      differs):</p>
-  <pre><code>"%USERPROFILE%\Desktop\DR3.bat" %command%</code></pre>
+      <strong>Launch Options</strong>, and enter the full path to your launcher file (replace
+      <code>YOURNAME</code> with your Windows username, and adjust if you saved the
+      <code>.bat</code> somewhere else):</p>
+  <pre><code>"C:\Users\YOURNAME\Desktop\DR3.bat" %command%</code></pre>
+  <p class="meta">Use a real full path — Steam does not expand Windows environment variables
+      like <code>%USERPROFILE%</code> in launch options, only the <code>%command%</code> part.</p>
   <p>Now just press <strong>Play</strong> on DiRT Rally 2.0 as usual: Steam runs the launcher,
       which opens DR3, waits a few seconds, and then starts the game itself — so your playtime,
       overlay and everything else keep working normally.</p>
