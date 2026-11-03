@@ -63,13 +63,13 @@
       {% if logged_in and not role %}
       <form method="post" action="{{ url_for('clubs.join_club', club_id=c.id) }}" class="card-action">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="next" value="/clubs?{{ request.query_string.decode() }}">
+        <input type="hidden" name="next" value="{{ url_for('clubs.clubs_list') }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}">
         <button type="submit" class="btn small">{{ 'Request to join' if c.join_policy == 'approval' else 'Join' }}</button>
       </form>
       {% elif logged_in and role and role != 'owner' %}
       <form method="post" action="{{ url_for('clubs.leave_club', club_id=c.id) }}" class="card-action">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="next" value="/clubs?{{ request.query_string.decode() }}">
+        <input type="hidden" name="next" value="{{ url_for('clubs.clubs_list') }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}">
         <button type="submit" class="btn small danger">Leave</button>
       </form>
       {% endif %}

@@ -78,9 +78,10 @@ def main() -> int:
           and "box.checked ? 'Show all clubs'" in html, '')
     check('clubs: card chips row — space-between, stretched members chip, full-width live chip',
           'class="chip chip-warn members-chip"' in html
-          and '.chips-row { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; justify-content: space-between;' in css
-          and '.chips-row .members-chip { flex: 1; text-align: center; padding: 0.28rem 0.7rem; font-size: 0.78rem; }' in css
-          and '.chips-row .chip-ok { width: 100%; text-align: center; }' in css, '')
+          and '.chips-row { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; margin: 0.3rem 0 0.8rem; }' in css
+          and '.club-card .chips-row { justify-content: space-between; }' in css
+          and '.club-card .chips-row .members-chip { flex: 1; text-align: center; padding: 0.28rem 0.7rem; font-size: 0.78rem; }' in css
+          and '.club-card .chips-row .chip-ok { width: 100%; text-align: center; }' in css, '')
 
     # home recent-times box (backlog #42): server-rendered first page +
     # infinite-scroll JS wired to the public endpoint
@@ -171,6 +172,13 @@ def main() -> int:
     for path in auth_pages:
         r = client.get(path)
         check(f'auth GET {path}', r.status_code == 200, f'status={r.status_code}')
+
+    # join/leave forms (logged-in only): next field must carry the prefixed
+    # list URL + active filters so the post-action redirect lands on /clubs,
+    # not a bare /clubs path that 404s under the VPS subpath.
+    auth_clubs = client.get('/clubs?active=1').get_data(as_text=True)
+    check('clubs: join/leave next field carries prefixed list URL + filters',
+          'name="next" value="/clubs?active=1"' in auth_clubs, '')
 
     with app.app_context():
         club = Club.query.first()

@@ -517,9 +517,12 @@ def edit_club(club_id: str):
 
 def _back_to_list() -> str | None:
     """Join/leave posted from the list page returns there (filters included);
-    only local /clubs paths are accepted."""
+    only local clubs-list paths are accepted (with or without the SITE_URL
+    subpath prefix, e.g. /rally/clubs on the VPS)."""
     nxt = request.form.get('next') or ''
-    return nxt if nxt.startswith('/clubs') else None
+    root = request.script_root.rstrip('/')
+    prefixes = ('/clubs',) + ((root + '/clubs',) if root else ())
+    return nxt if nxt.startswith(prefixes) else None
 
 
 @clubs_bp.route('/clubs/<club_id>/join', methods=['POST'])

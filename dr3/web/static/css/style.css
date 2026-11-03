@@ -266,9 +266,10 @@ table.table, .table-wrap table { width: 100%; border-collapse: collapse; backgro
 .chip-accent { background: var(--accent); color: var(--bg); }
 .chip-ok { background: var(--olive); color: var(--bg); }
 .chip-warn { background: var(--mustard); color: var(--bg); }
-.chips-row { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; justify-content: space-between; margin: 0.3rem 0 0.8rem; }
-.chips-row .members-chip { flex: 1; text-align: center; padding: 0.28rem 0.7rem; font-size: 0.78rem; }
-.chips-row .chip-ok { width: 100%; text-align: center; }
+.chips-row { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; margin: 0.3rem 0 0.8rem; }
+.club-card .chips-row { justify-content: space-between; }
+.club-card .chips-row .members-chip { flex: 1; text-align: center; padding: 0.28rem 0.7rem; font-size: 0.78rem; }
+.club-card .chips-row .chip-ok { width: 100%; text-align: center; }
 
 /* ── Flash messages ─────────────────────────────────── */
 
