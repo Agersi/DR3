@@ -54,6 +54,40 @@ def main() -> int:
           and 'data-url="/api/home/recent-times"' in html
           and "addEventListener('scroll'" in html, '')
 
+    # home hero: three panels for anonymous visitors (Join Now / What's New / Discord)
+    check('home anon: Join Now panel with Register + How it works',
+          '<h3>Join Now</h3>' in html
+          and 'Create an account to start competing in the DR3 clubs!' in html
+          and 'Register</a>' in html
+          and 'How it works' in html, '')
+    check('home anon: What\'s New panel lists DR3 additions',
+          "<h3>What's New</h3>" in html
+          and 'RallyCross cars and tracks' in html
+          and 'Multi-Location' in html
+          and 'Better stats' in html, '')
+    check('home anon: Join Now notes unaffected original features',
+          'The Career System, Dailies, Weeklies, Monthlies, Time Trials and Multiplayer Lobbies are unaffected'
+          in html
+          and 'continue to work as usual' in html
+          and html.index('<h3>Join Now</h3>') < html.index('The Career System,'), '')
+    check('home anon: Discord panel lists what to join for',
+          '<li>Suggest features</li>' in html
+          and '<li>Report bugs and errors</li>' in html
+          and '<li>Chat with other Rally Enthusiasts!</li>' in html, '')
+    check('home anon: Discord panel links to the invite',
+          '<h3>Discord</h3>' in html and 'Join the Discord' in html
+          and 'discord.com/invite/U3h9dWGgGY' in html, '')
+    check('home anon: What\'s New + Discord intro lines removed',
+          'What DR3 adds on top of the original club system' not in html
+          and 'Join the Discord to:' not in html, '')
+    check('home anon: old single hero removed', 'class="hero"' not in html, '')
+    css = client.get('/static/css/style.css').get_data(as_text=True)
+    check('home panels CSS: wider middle + equal-height + smaller list text',
+          'grid-template-columns: 1.2fr 1.5fr 1fr' in css
+          and 'align-items: stretch' in css
+          and 'padding-left: 1.25rem; font-size: .9rem' in css
+          and '.home-panels .discord-list { font-size: 1rem; }' in css, '')
+
     zip_path = HERE.parent / 'dist' / 'DR3-windows.zip'
     want_dl = 200 if zip_path.is_file() else 404
     r = client.get('/download/DR3-windows.zip')
@@ -71,6 +105,16 @@ def main() -> int:
 
     r = client.post('/login', data={'username': 'smokedriver', 'password': 'password123'})
     check('login', r.status_code in (302, 200), f'status={r.status_code}')
+
+    # home hero: first panel becomes "Setup" with a link to the account page
+    auth_home = client.get('/').get_data(as_text=True)
+    check('home auth: Setup panel links to the account page',
+          '<h3>Setup</h3>' in auth_home and 'Open account' in auth_home
+          and '/account"' in auth_home, '')
+    check('home auth: Join Now panel replaced by Setup',
+          '<h3>Join Now</h3>' not in auth_home, '')
+    check('home auth: What\'s New + Discord panels unchanged',
+          "<h3>What's New</h3>" in auth_home and '<h3>Discord</h3>' in auth_home, '')
 
     auth_pages = ['/dashboard', '/account', '/notifications', '/profile/smokedriver']
     for path in auth_pages:

@@ -1,17 +1,54 @@
 {% extends "base.html" %}
 {% block title %}Dirt Rally 3.0 — Home{% endblock %}
 {% block content %}
-<div class="hero">
-  <div class="hero-copy">
-    <h1>Dirt Rally 3.0</h1>
-    <p class="tagline">Community club championship server for DiRT Rally 2.0 — create clubs, run championships, and sync results from the game.</p>
+<div class="home-panels">
+  <div class="club-card">
     {% if session.get('user_id') %}
-      <a class="btn" href="{{ url_for('pages.dashboard') }}">Open dashboard</a>
-      <a class="btn ghost" href="{{ url_for('clubs.clubs_list') }}">Browse clubs</a>
+      <h3>Setup</h3>
+      <span class="desc">Install the local game server and grab your token.</span>
+      <div class="card-actions">
+        <a class="btn" href="{{ url_for('pages.account') }}">Open account</a>
+        <a class="btn ghost" href="{{ url_for('pages.install') }}">How it works</a>
+      </div>
     {% else %}
-      <a class="btn" href="{{ url_for('pages.register') }}">Join now</a>
-      <a class="btn ghost" href="{{ url_for('pages.install') }}">How it works</a>
+      <h3>Join Now</h3>
+      <span class="desc">Create an account to start competing in the DR3 clubs!</span>
+      <p class="meta">The Career System, Dailies, Weeklies, Monthlies, Time Trials and Multiplayer Lobbies are unaffected and will continue to work as usual.</p>
+      <div class="card-actions">
+        <a class="btn" href="{{ url_for('pages.register') }}">Register</a>
+        <a class="btn ghost" href="{{ url_for('pages.install') }}">How it works</a>
+      </div>
     {% endif %}
+  </div>
+
+  <div class="club-card">
+    <h3>What's New</h3>
+    <ul class="whats-new">
+      <li>Proceeds to the next service on retirement or terminal damage.</li>
+      <li>Added RallyCross cars and tracks to the clubs system.
+        <ul><li>Be aware RallyCross cars have no lights!</li></ul>
+      </li>
+      <li>Introduces "Multi-Location" rallies.
+        <ul>
+          <li>Allows mixing different locations in one event, including RallyCross.</li>
+          <li>Returns to the clubs screen after each leg and can be continued from there.</li>
+        </ul>
+      </li>
+      <li>Better stats</li>
+      <li>And much more coming in the future!</li>
+    </ul>
+  </div>
+
+  <div class="club-card">
+    <h3>Discord</h3>
+    <ul class="discord-list">
+      <li>Suggest features</li>
+      <li>Report bugs and errors</li>
+      <li>Chat with other Rally Enthusiasts!</li>
+    </ul>
+    <div class="card-actions">
+      <a class="btn" href="{{ DISCORD_URL }}" target="_blank" rel="noopener">Join the Discord</a>
+    </div>
   </div>
 </div>
 

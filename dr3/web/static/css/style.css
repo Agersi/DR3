@@ -152,22 +152,18 @@ hr {
 .stat-num { font-family: var(--display); font-weight: 700; font-size: 2rem; line-height: 1; color: var(--accent); }
 .stat-label { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.85rem; color: var(--muted); }
 
-/* ── Hero (home) ────────────────────────────────────── */
+/* ── Home panels (hero replacement) ────────────────── */
 
-.hero {
-  position: relative; overflow: hidden;
-  display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
-  background: var(--card); border: 2px solid var(--line);
-  box-shadow: 6px 6px 0 var(--shadow);
-  margin-top: 1.5rem; padding: 2.2rem 2rem 2rem 2.6rem;
-}
-.hero::before {
-  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 18px;
-  background: repeating-linear-gradient(-45deg, var(--accent) 0 14px, var(--bg) 14px 28px);
-}
-.hero-copy { flex: 1 1 320px; min-width: 0; }
-.hero h1 { margin-top: 0; font-size: clamp(2.3rem, 6vw, 3.4rem); }
-.hero .tagline { font-size: 1.15rem; color: var(--muted); max-width: 52ch; margin: 0.6rem 0 1.2rem; }
+.home-panels { display: grid; grid-template-columns: 1.2fr 1.5fr 1fr; gap: 1.1rem; margin: 1.5rem 0 1.1rem; align-items: stretch; }
+.home-panels .club-card .desc { flex: none; }
+.home-panels .card-actions { margin-top: auto; display: flex; flex-direction: column; gap: 0.6rem; }
+.home-panels .card-actions .btn { margin-top: 0; width: 100%; }
+
+.home-panels ul { list-style: disc; margin: 0.2rem 0 0; padding-left: 1.25rem; font-size: .9rem; }
+.home-panels ul li { margin: 0.35rem 0; line-height: 1.4; }
+.home-panels .discord-list { font-size: 1rem; }
+.whats-new ul { list-style: circle; margin: 0.3rem 0 0.1rem; padding-left: 1.15rem; }
+.whats-new ul li { font-size: 0.92em; color: var(--muted); line-height: 1.4; }
 
 /* ── Buttons ────────────────────────────────────────── */
 
@@ -349,11 +345,11 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
 @media (max-width: 900px) {
   .grid-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid-3 { grid-template-columns: 1fr; }
+  .home-panels { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 640px) {
   html { font-size: 18px; }
   .header-inner { gap: 0.8rem; }
-  .hero { padding: 1.6rem 1.3rem 1.5rem 2rem; }
   main { padding: 0 0.9rem 2rem; }
 }
