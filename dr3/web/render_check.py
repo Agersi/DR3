@@ -49,9 +49,10 @@ def main() -> int:
     html = client.get('/clubs').get_data(as_text=True)
     check('clubs: filter form + partial-reload script',
           'name="drivetrain"' in html and 'name="mode"' in html
-          and 'id="club-results"' in html and 'requestSubmit' in html
+          and 'id="club-results"' in html
           and "getElementById('club-results')" in html
-          and 'history.pushState' in html, '')
+          and "addEventListener('input'" in html and 'clearTimeout' in html
+          and '>Search</button>' not in html, '')
 
     # home recent-times box (backlog #42): server-rendered first page +
     # infinite-scroll JS wired to the public endpoint

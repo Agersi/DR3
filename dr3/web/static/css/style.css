@@ -274,9 +274,7 @@ table.table, .table-wrap table { width: 100%; border-collapse: collapse; backgro
 .flash.warning { border-left-color: var(--text); }
 .flash.info { border-left-color: var(--muted); }
 
-.inline-search { display: flex; gap: 0.6rem; align-items: center; }
-.inline-search input { margin-top: 0; max-width: none; flex: 1; }
-.inline-search button { margin-top: 0; flex: none; }
+input[type='search'] { max-width: none; }
 
 /* ── Clubs list: filters, create toggle, membership tints ── */
 

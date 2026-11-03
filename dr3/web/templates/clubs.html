@@ -5,15 +5,12 @@
 
 <div class="panel">
   <form method="get" action="{{ url_for('clubs.clubs_list') }}">
-    <div class="inline-search">
-      <input type="search" name="q" value="{{ query or '' }}" placeholder="Search clubs by name or description">
-      <button type="submit">Search</button>
-    </div>
+    <input type="search" name="q" value="{{ query or '' }}" placeholder="Search clubs by name or description">
     <div class="filter-grid">
-      <label class="checkrow"><input type="checkbox" name="active" value="1" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()" {{ 'checked' if filters.active }}> Show only active clubs</label>
+      <label class="checkrow"><input type="checkbox" name="active" value="1" {{ 'checked' if filters.active }}> Show only active clubs</label>
       <div class="filter-field">
         <span>Hardcore damage</span>
-        <select name="hardcore" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
+        <select name="hardcore">
           <option value="" {{ 'selected' if filters.hardcore is none }}>Any</option>
           <option value="on" {{ 'selected' if filters.hardcore is true }}>On</option>
           <option value="off" {{ 'selected' if filters.hardcore is false }}>Off</option>
@@ -21,7 +18,7 @@
       </div>
       <div class="filter-field">
         <span>External cameras allowed</span>
-        <select name="cameras" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
+        <select name="cameras">
           <option value="" {{ 'selected' if filters.cameras is none }}>Any</option>
           <option value="on" {{ 'selected' if filters.cameras is true }}>On</option>
           <option value="off" {{ 'selected' if filters.cameras is false }}>Off</option>
@@ -29,7 +26,7 @@
       </div>
       <div class="filter-field">
         <span>Assists allowed</span>
-        <select name="assists" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
+        <select name="assists">
           <option value="" {{ 'selected' if filters.assists is none }}>Any</option>
           <option value="on" {{ 'selected' if filters.assists is true }}>On</option>
           <option value="off" {{ 'selected' if filters.assists is false }}>Off</option>
@@ -37,7 +34,7 @@
       </div>
       <div class="filter-field">
         <span>Drivetrain used</span>
-        <select name="drivetrain" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
+        <select name="drivetrain">
           <option value="" {{ 'selected' if not filters.drivetrain }}>Any</option>
           {% for d in drivetrains %}
           <option value="{{ d | lower }}" {{ 'selected' if filters.drivetrain == d }}>{{ d }}</option>
@@ -46,7 +43,7 @@
       </div>
       <div class="filter-field">
         <span>Championship mode</span>
-        <select name="mode" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
+        <select name="mode">
           <option value="" {{ 'selected' if not filters.mode }}>Any</option>
           <option value="season" {{ 'selected' if filters.mode == 'season' }}>Rally Season only</option>
           <option value="multi" {{ 'selected' if filters.mode == 'multi' }}>Multi-Location only</option>
@@ -140,20 +137,36 @@
     });
 
     // Filter changes: swap only the results section, no page reload.
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
+    var seq = 0;
+    function applyForm(push) {
+      var my = ++seq;
       var parts = [];
       for (var pair of new FormData(form).entries()) {
         if (pair[1] !== '') parts.push(pair[0] + '=' + encodeURIComponent(pair[1]));
       }
       var url = form.action + (parts.length ? '?' + parts.join('&') : '');
-      history.pushState(null, '', url);
+      history[push ? 'pushState' : 'replaceState'](null, '', url);
       fetch(url).then(function (res) { return res.text(); }).then(function (text) {
+        if (my !== seq) return;
         var next = new DOMParser().parseFromString(text, 'text/html')
           .getElementById('club-results');
         if (next) { results.replaceWith(next); results = next; }
       });
-    });
+    }
+
+    // Selects + checkbox: apply immediately (one history entry each).
+    form.addEventListener('change', function () { applyForm(true); });
+    // Search box: live search while typing, debounced, no history spam.
+    var timer = null;
+    var search = form.querySelector('input[name="q"]');
+    if (search) {
+      search.addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(function () { applyForm(false); }, 300);
+      });
+    }
+    // Enter in the search box.
+    form.addEventListener('submit', function (e) { e.preventDefault(); applyForm(false); });
   })();
 </script>
 {% endblock %}
