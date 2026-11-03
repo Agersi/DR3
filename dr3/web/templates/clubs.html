@@ -34,7 +34,6 @@
       <label class="opt">
         <input type="checkbox" name="active" value="1" {{ 'checked' if active }}>
         <span class="opt-title">Show only active clubs</span>
-        <span class="opt-desc">Hides clubs without a championship that is live right now.</span>
       </label>
       {% for t in tiles %}
       <label class="opt fcycle" data-states="{{ t.states|join(',') }}" data-labels="{{ t.labels|join(',') }}">
