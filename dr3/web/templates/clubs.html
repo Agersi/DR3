@@ -13,7 +13,7 @@
       <label class="checkrow"><input type="checkbox" name="active" value="1" {{ 'checked' if filters.active }}> Show only active clubs</label>
       <div class="filter-field">
         <span>Hardcore damage</span>
-        <select name="hardcore" onchange="this.form.submit()">
+        <select name="hardcore" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
           <option value="" {{ 'selected' if filters.hardcore is none }}>Any</option>
           <option value="on" {{ 'selected' if filters.hardcore is true }}>On</option>
           <option value="off" {{ 'selected' if filters.hardcore is false }}>Off</option>
@@ -21,7 +21,7 @@
       </div>
       <div class="filter-field">
         <span>External cameras allowed</span>
-        <select name="cameras" onchange="this.form.submit()">
+        <select name="cameras" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
           <option value="" {{ 'selected' if filters.cameras is none }}>Any</option>
           <option value="on" {{ 'selected' if filters.cameras is true }}>On</option>
           <option value="off" {{ 'selected' if filters.cameras is false }}>Off</option>
@@ -29,7 +29,7 @@
       </div>
       <div class="filter-field">
         <span>Assists allowed</span>
-        <select name="assists" onchange="this.form.submit()">
+        <select name="assists" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
           <option value="" {{ 'selected' if filters.assists is none }}>Any</option>
           <option value="on" {{ 'selected' if filters.assists is true }}>On</option>
           <option value="off" {{ 'selected' if filters.assists is false }}>Off</option>
@@ -37,7 +37,7 @@
       </div>
       <div class="filter-field">
         <span>Drivetrain used</span>
-        <select name="drivetrain" onchange="this.form.submit()">
+        <select name="drivetrain" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
           <option value="" {{ 'selected' if not filters.drivetrain }}>Any</option>
           {% for d in drivetrains %}
           <option value="{{ d | lower }}" {{ 'selected' if filters.drivetrain == d }}>{{ d }}</option>
@@ -46,7 +46,7 @@
       </div>
       <div class="filter-field">
         <span>Championship mode</span>
-        <select name="mode" onchange="this.form.submit()">
+        <select name="mode" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
           <option value="" {{ 'selected' if not filters.mode }}>Any</option>
           <option value="season" {{ 'selected' if filters.mode == 'season' }}>Rally Season only</option>
           <option value="multi" {{ 'selected' if filters.mode == 'multi' }}>Multi-Location only</option>
@@ -80,6 +80,7 @@
 </details>
 {% endif %}
 
+<div id="club-results">
 <h2>{% if query %}Results for “{{ query }}”{% else %}All clubs{% endif %}</h2>
 {% if clubs %}
 <div class="grid">
@@ -119,24 +120,39 @@
 {% else %}
 <p>No clubs found.</p>
 {% endif %}
+</div>
 <script>
   (function () {
     var KEY = 'dr3-clubs-scroll';
+    var results = document.getElementById('club-results');
     var form = document.querySelector('form[method="get"]');
-    if (!form) return;
-    // 'change' covers the auto-submitting selects (programmatic form.submit()
-    // does not fire the submit event); 'submit' covers the Search button.
-    form.addEventListener('change', function () {
-      sessionStorage.setItem(KEY, String(window.scrollY));
-    });
-    form.addEventListener('submit', function () {
-      sessionStorage.setItem(KEY, String(window.scrollY));
-    });
+    if (!results || !form) return;
+
+    // Full-page reloads (Join/Leave redirects, old browsers): keep position.
+    function saveScroll() { sessionStorage.setItem(KEY, String(window.scrollY)); }
+    document.addEventListener('submit', saveScroll);
+    document.addEventListener('change', saveScroll);
     window.addEventListener('load', function () {
       var y = sessionStorage.getItem(KEY);
       if (y === null) return;
       sessionStorage.removeItem(KEY);
       window.scrollTo(0, parseInt(y, 10));
+    });
+
+    // Filter changes: swap only the results section, no page reload.
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var parts = [];
+      for (var pair of new FormData(form).entries()) {
+        if (pair[1] !== '') parts.push(pair[0] + '=' + encodeURIComponent(pair[1]));
+      }
+      var url = form.action + (parts.length ? '?' + parts.join('&') : '');
+      history.pushState(null, '', url);
+      fetch(url).then(function (res) { return res.text(); }).then(function (text) {
+        var next = new DOMParser().parseFromString(text, 'text/html')
+          .getElementById('club-results');
+        if (next) results.replaceWith(next);
+      });
     });
   })();
 </script>
