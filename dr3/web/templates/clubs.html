@@ -124,6 +124,11 @@
     var KEY = 'dr3-clubs-scroll';
     var form = document.querySelector('form[method="get"]');
     if (!form) return;
+    // 'change' covers the auto-submitting selects (programmatic form.submit()
+    // does not fire the submit event); 'submit' covers the Search button.
+    form.addEventListener('change', function () {
+      sessionStorage.setItem(KEY, String(window.scrollY));
+    });
     form.addEventListener('submit', function () {
       sessionStorage.setItem(KEY, String(window.scrollY));
     });
