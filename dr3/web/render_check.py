@@ -45,6 +45,12 @@ def main() -> int:
         r = client.get(path)
         check(f'anon GET {path}', r.status_code == want, f'status={r.status_code}')
 
+    # clubs list: filter form + scroll position kept across filter changes
+    html = client.get('/clubs').get_data(as_text=True)
+    check('clubs: filter form + scroll-restore script',
+          'name="drivetrain"' in html and 'name="mode"' in html
+          and 'form[method="get"]' in html and 'dr3-clubs-scroll' in html, '')
+
     # home recent-times box (backlog #42): server-rendered first page +
     # infinite-scroll JS wired to the public endpoint
     html = client.get('/').get_data(as_text=True)

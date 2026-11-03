@@ -119,4 +119,20 @@
 {% else %}
 <p>No clubs found.</p>
 {% endif %}
+<script>
+  (function () {
+    var KEY = 'dr3-clubs-scroll';
+    var form = document.querySelector('form[method="get"]');
+    if (!form) return;
+    form.addEventListener('submit', function () {
+      sessionStorage.setItem(KEY, String(window.scrollY));
+    });
+    window.addEventListener('load', function () {
+      var y = sessionStorage.getItem(KEY);
+      if (y === null) return;
+      sessionStorage.removeItem(KEY);
+      window.scrollTo(0, parseInt(y, 10));
+    });
+  })();
+</script>
 {% endblock %}
