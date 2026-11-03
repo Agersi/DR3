@@ -281,8 +281,9 @@ input[type='search'] { max-width: none; }
 .filters { position: sticky; top: 0; z-index: 20; padding: 0.9rem; }
 .filters .opt-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin: 0.6rem 0 0 0; }
 .filters .opt-title { text-align: center; letter-spacing: 0.01em; }
-.opt-state { display: block; color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
-.opt:has(input:checked) .opt-state { color: var(--surface); }
+.filters .opt { display: flex; flex-direction: column; }
+.opt-state { display: block; margin-top: auto; text-align: center; text-transform: uppercase; color: var(--text); font-size: 0.9rem; line-height: 1.45; }
+.opt:has(input:checked) .opt-state { color: var(--bg); }
 
 details.create-club { padding: 0; }
 details.create-club summary.create-toggle {
