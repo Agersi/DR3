@@ -76,6 +76,11 @@ def main() -> int:
           'Show only active clubs' in html
           and 'Show all clubs' in client.get('/clubs?active=1').get_data(as_text=True)
           and "box.checked ? 'Show all clubs'" in html, '')
+    check('clubs: card chips row — space-between, stretched members chip, full-width live chip',
+          'class="chip chip-warn members-chip"' in html
+          and '.chips-row { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; justify-content: space-between;' in css
+          and '.chips-row .members-chip { flex: 1; text-align: center; padding: 0.28rem 0.7rem; font-size: 0.78rem; }' in css
+          and '.chips-row .chip-ok { width: 100%; text-align: center; }' in css, '')
 
     # home recent-times box (backlog #42): server-rendered first page +
     # infinite-scroll JS wired to the public endpoint
