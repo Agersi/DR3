@@ -61,6 +61,10 @@ def main() -> int:
           'class="opt fcycle"' in html and 'data-states' in html
           and 'opt-state' in html and 'name="active"' in html
           and '<select name=' not in html, '')
+    check('clubs: active-tile label flips with state',
+          'Show only active clubs' in html
+          and 'Show all clubs' in client.get('/clubs?active=1').get_data(as_text=True)
+          and "box.checked ? 'Show all clubs'" in html, '')
 
     # home recent-times box (backlog #42): server-rendered first page +
     # infinite-scroll JS wired to the public endpoint

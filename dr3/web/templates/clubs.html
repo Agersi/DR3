@@ -31,9 +31,9 @@
   <form method="get" action="{{ url_for('clubs.clubs_list') }}">
     <input type="search" name="q" value="{{ query or '' }}" placeholder="Search clubs by name or description">
     <div class="opt-grid">
-      <label class="opt">
+      <label class="opt active-tile">
         <input type="checkbox" name="active" value="1" {{ 'checked' if active }}>
-        <span class="opt-title">Show only active clubs</span>
+        <span class="opt-title">{{ 'Show all clubs' if active else 'Show only active clubs' }}</span>
       </label>
       {% for t in tiles %}
       <label class="opt fcycle" data-states="{{ t.states|join(',') }}" data-labels="{{ t.labels|join(',') }}">
@@ -124,8 +124,16 @@
       });
     }
 
-    // Active checkbox: native toggle, apply immediately.
-    form.addEventListener('change', function () { applyForm(true); });
+    // Active checkbox: native toggle, apply immediately; label flips with state.
+    var activeTile = document.querySelector('.active-tile');
+    form.addEventListener('change', function () {
+      if (activeTile) {
+        var box = activeTile.querySelector('input[type="checkbox"]');
+        activeTile.querySelector('.opt-title').textContent =
+          box.checked ? 'Show all clubs' : 'Show only active clubs';
+      }
+      applyForm(true);
+    });
     // Cycling filter tiles: each click advances Any -> ... -> Any.
     document.querySelectorAll('.fcycle').forEach(function (tile) {
       var box = tile.querySelector('input[type="checkbox"]');
