@@ -278,8 +278,8 @@ input[type='search'] { max-width: none; }
 
 /* ── Clubs list: filters, create toggle, membership tints ── */
 
-.filters { position: sticky; top: 0; z-index: 20; }
-.filters .opt-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.filters { position: sticky; top: 0; z-index: 20; padding: 0.9rem; }
+.filters .opt-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin: 0.6rem 0 0 0; }
 .filters .opt-title { text-align: center; letter-spacing: 0.01em; }
 .opt-state { display: block; color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
 .opt:has(input:checked) .opt-state { color: var(--surface); }

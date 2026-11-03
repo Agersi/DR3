@@ -59,7 +59,8 @@ def main() -> int:
           .find('.filters { position: sticky; top: 0') != -1, '')
     css = client.get('/static/css/style.css').get_data(as_text=True)
     check('clubs: filter tile styling scoped to .filters (builder page untouched)',
-          '.filters .opt-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));' in css
+          '.filters { position: sticky; top: 0; z-index: 20; padding: 0.9rem; }' in css
+          and '.filters .opt-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin: 0.6rem 0 0 0; }' in css
           and '.filters .opt-title { text-align: center; letter-spacing: 0.01em; }' in css
           and '.opt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));' in css
           and 'letter-spacing: 0.07em' in css, '')
