@@ -310,8 +310,7 @@ details.create-club form { padding: 0 1.25rem 1.1rem; margin-top: 0.6rem; }
 .club-card.in { background-image: linear-gradient(rgba(175, 255, 149, 0.08), rgba(175, 255, 149, 0.08)); border-color: #7f9a72; }
 .club-card.out { background-image: linear-gradient(rgba(226, 122, 102, 0.1), rgba(226, 122, 102, 0.1)); border-color: #9c6a5e; }
 
-.card-action { margin-top: auto; display: flex; justify-content: flex-end; }
-.card-action button { margin-top: 0.3rem; }
+.card-action { display: flex; align-items: center; }
 
 .duration-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
 .duration-row select { flex: 1; min-width: 120px; max-width: none; }
