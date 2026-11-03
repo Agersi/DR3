@@ -141,7 +141,7 @@ hr {
 .club-card .title-link:hover { color: var(--text); text-decoration: underline; }
 .club-card .desc { color: var(--muted); font-size: 0.95rem; flex: 1; }
 
-.grid-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.1rem; margin: 1.1rem 0; }
+.grid-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1.1rem; margin: 1.1rem 0; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.1rem; margin: 1.1rem 0; }
 
 .stat-card {
@@ -151,6 +151,12 @@ hr {
 }
 .stat-num { font-family: var(--display); font-weight: 700; font-size: 2rem; line-height: 1; color: var(--accent); }
 .stat-label { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.85rem; color: var(--muted); }
+.stat-sub { font-family: var(--body); text-transform: none; letter-spacing: normal; font-size: 0.78rem; color: var(--muted); }
+a.stat-card { text-decoration: none; transition: transform 0.12s ease, box-shadow 0.12s ease; }
+a.stat-card:hover {
+  transform: scale(1.03); z-index: 1;
+  box-shadow: inset 0 0 18px -8px rgba(175, 175, 175, 0.6), 4px 4px 0 var(--shadow), 0 8px 20px rgba(0, 0, 0, 0.35);
+}
 
 /* ── Home panels (hero replacement) ────────────────── */
 

@@ -27,7 +27,7 @@ sys.path.insert(0, str(HERE))
 
 from app import create_app  # noqa: E402
 from app.db import db  # noqa: E402
-from app.models import User  # noqa: E402
+from app.models import User, utcnow  # noqa: E402
 
 
 def main() -> int:
@@ -1648,6 +1648,41 @@ def main() -> int:
           and nums.get('Stages completed') == str(n_stages), str(nums))
     check('home lists recent stage time (smokedriver 6:59.000)',
           'Smoke Driver' in html and '6:59.000' in html)
+    # stat cards link out; stages card stays static
+    check('home stat cards: drivers/clubs/active link, stages static',
+          '<a class="stat-card" href="/drivers">' in html
+          and '<a class="stat-card" href="/clubs">' in html
+          and '<a class="stat-card" href="/clubs?active=1">' in html
+          and 'Days without a Terminal Damage' in html)
+    # terminal-damage card reflects the newest rs 4/5 stage slot
+    with app.app_context():
+        from datetime import datetime as _dt
+        last_at, last_user = None, None
+        for rr in _Result2.query.all():
+            for s in json.loads(rr.stages_json or '[]'):
+                if int(s.get('race_status', 0) or 0) not in (4, 5):
+                    continue
+                sa = s.get('submitted_at')
+                if sa and (last_at is None or sa > last_at):
+                    last_at, last_user = sa, rr.username
+        names = {u.username: u.display_name for u in User.query.all()}
+    if last_at:
+        exp_days = max((utcnow() - _dt.fromisoformat(last_at)).days, 0)
+        check('home terminal-damage card shows days + most recent driver',
+              f'>{exp_days}</span><span class="stat-label">Days without a Terminal Damage' in html
+              and f'last: {names[last_user]}' in html, str(exp_days))
+    else:
+        check('home terminal-damage card empty state',
+              'none recorded yet' in html, '')
+    # /drivers lists every registered driver with stats + profile links
+    r = client.get('/drivers')
+    dhtml = r.get_data(as_text=True)
+    with app.app_context():
+        all_users = User.query.all()
+    check('drivers page renders every registered driver',
+          r.status_code == 200
+          and all(f'href="/profile/{u.username}"' in dhtml for u in all_users),
+          f'status={r.status_code}')
 
     # 24. club delete: confirm page, owner-only, destructive cascade
     r = client.post('/clubs', data={

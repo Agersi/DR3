@@ -54,10 +54,21 @@
 
 <h2>DR3 in numbers</h2>
 <div class="grid-stats">
-  <div class="stat-card"><span class="stat-num">{{ stats.drivers }}</span><span class="stat-label">Drivers</span></div>
-  <div class="stat-card"><span class="stat-num">{{ stats.clubs }}</span><span class="stat-label">Clubs</span></div>
-  <div class="stat-card"><span class="stat-num">{{ stats.active_clubs }}</span><span class="stat-label">Active clubs</span></div>
+  <a class="stat-card" href="{{ url_for('pages.drivers') }}">
+    <span class="stat-num">{{ stats.drivers }}</span><span class="stat-label">Drivers</span>
+  </a>
+  <a class="stat-card" href="{{ url_for('clubs.clubs_list') }}">
+    <span class="stat-num">{{ stats.clubs }}</span><span class="stat-label">Clubs</span>
+  </a>
+  <a class="stat-card" href="{{ url_for('clubs.clubs_list', active='1') }}">
+    <span class="stat-num">{{ stats.active_clubs }}</span><span class="stat-label">Active clubs</span>
+  </a>
   <div class="stat-card"><span class="stat-num">{{ stats.stages_done }}</span><span class="stat-label">Stages completed</span></div>
+  <div class="stat-card">
+    <span class="stat-num">{{ stats.last_terminal.days if stats.last_terminal else '–' }}</span>
+    <span class="stat-label">Days without a Terminal Damage</span>
+    <span class="stat-sub">{% if stats.last_terminal %}last: {{ stats.last_terminal.driver }}{% else %}none recorded yet{% endif %}</span>
+  </div>
 </div>
 
 {% if stats.recent %}

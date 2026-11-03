@@ -90,6 +90,18 @@ def main() -> int:
           and 'Smoke Driver' in html
           and 'data-url="/api/home/recent-times"' in html
           and "addEventListener('scroll'" in html, '')
+    check('home: stat cards link out (drivers/clubs/active) + terminal-damage card',
+          '<a class="stat-card" href="/drivers">' in html
+          and '<a class="stat-card" href="/clubs">' in html
+          and '<a class="stat-card" href="/clubs?active=1">' in html
+          and 'Days without a Terminal Damage' in html
+          and 'stat-sub' in html
+          and client.get('/static/css/style.css').get_data(as_text=True)
+          .find('a.stat-card:hover {') != -1, '')
+    r = client.get('/drivers')
+    check('drivers page renders with the smoke driver',
+          r.status_code == 200 and 'Smoke Driver' in r.get_data(as_text=True),
+          f'status={r.status_code}')
 
     # home hero: three panels for anonymous visitors (Join Now / What's New / Discord)
     check('home anon: Join Now panel with Register + How it works',

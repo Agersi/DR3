@@ -124,11 +124,33 @@ def _home_stats(now) -> dict:
             if int(s.get('time_ms', 0) or 0) > 0:
                 stages_done += 1
 
+    last_terminal_at = None
+    last_terminal_user = None
+    for r in Result.query.all():
+        for s in json.loads(r.stages_json or '[]'):
+            if int(s.get('race_status', 0) or 0) not in (4, 5):
+                continue
+            sa = s.get('submitted_at')
+            if sa and (last_terminal_at is None or sa > last_terminal_at):
+                last_terminal_at, last_terminal_user = sa, r.username
+
+    last_terminal = None
+    if last_terminal_at:
+        from datetime import datetime
+
+        at = datetime.fromisoformat(last_terminal_at)
+        owner = User.query.filter_by(username=last_terminal_user).first()
+        last_terminal = {
+            'days': max((now - at).days, 0),
+            'driver': owner.display_name if owner else last_terminal_user,
+        }
+
     return {
         'drivers': User.query.count(),
         'clubs': Club.query.count(),
         'active_clubs': len(active_clubs),
         'stages_done': stages_done,
+        'last_terminal': last_terminal,
         'recent': _recent_stage_times(0, 10),
     }
 
@@ -444,6 +466,28 @@ def notifications():
 
 
 # ── Placeholders (full pages land with M3/M4) ───────────
+
+@pages_bp.route('/drivers')
+def drivers():
+    """All registered drivers with their career stats, most active first."""
+    club_count: dict[str, int] = {}
+    for c in Club.query.all():
+        for m in c.members:
+            uname = m.user.username if m.user else None
+            if uname:
+                club_count[uname] = club_count.get(uname, 0) + 1
+    users = User.query.order_by(
+        User.stages_driven.desc(), User.display_name).all()
+    rows = [{
+        'username': u.username,
+        'display_name': u.display_name,
+        'country': u.country or '',
+        'clubs': club_count.get(u.username, 0),
+        'stages': u.stages_driven or 0,
+        'distance_km': (u.total_distance_m or 0) / 1000.0,
+    } for u in users]
+    return render_template('drivers.html', rows=rows)
+
 
 @pages_bp.route('/profile/<username>')
 def profile(username: str):

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Drivers — Dirt Rally 3.0{% endblock %}
+{% block content %}
+<div class="panel">
+  <h1>Drivers</h1>
+  <p class="meta">{{ rows|length }} registered driver{{ 's' if rows|length != 1 else '' }}</p>
+</div>
+<div class="table-wrap">
+<table>
+  <tr><th>Driver</th><th>Clubs</th><th>Stages driven</th><th>Distance</th></tr>
+  {% for d in rows %}
+  <tr>
+    <td>{{ flag_img(flag_url(d.country)) }}<a href="{{ url_for('pages.profile', username=d.username) }}">{{ d.display_name }}</a></td>
+    <td>{{ d.clubs }}</td>
+    <td>{{ d.stages }}</td>
+    <td>{{ '%.1f'|format(d.distance_km) }} km</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" class="meta">No drivers registered yet.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}
