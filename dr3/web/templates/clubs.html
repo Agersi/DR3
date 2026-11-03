@@ -10,7 +10,7 @@
       <button type="submit">Search</button>
     </div>
     <div class="filter-grid">
-      <label class="checkrow"><input type="checkbox" name="active" value="1" {{ 'checked' if filters.active }}> Show only active clubs</label>
+      <label class="checkrow"><input type="checkbox" name="active" value="1" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()" {{ 'checked' if filters.active }}> Show only active clubs</label>
       <div class="filter-field">
         <span>Hardcore damage</span>
         <select name="hardcore" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
