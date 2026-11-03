@@ -57,6 +57,12 @@ def main() -> int:
           'class="panel filters"' in html
           and client.get('/static/css/style.css').get_data(as_text=True)
           .find('.filters { position: sticky; top: 0') != -1, '')
+    css = client.get('/static/css/style.css').get_data(as_text=True)
+    check('clubs: filter tile styling scoped to .filters (builder page untouched)',
+          '.filters .opt-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));' in css
+          and '.filters .opt-title { text-align: center; letter-spacing: 0.01em; }' in css
+          and '.opt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));' in css
+          and 'letter-spacing: 0.07em' in css, '')
     check('clubs: opt-style filter tiles (active toggle + cycling states)',
           'class="opt fcycle"' in html and 'data-states' in html
           and 'opt-state' in html and 'name="active"' in html
