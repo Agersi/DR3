@@ -75,6 +75,7 @@ from ..models import ChampionshipDraft, Club, ClubInvite, Event, Result, User, u
 from ..results_view import (
     championship_rounds,
     effective_end,
+    event_profile,
     event_status,
     mode_label,
     overall_table,
@@ -88,6 +89,7 @@ from ..tables import (
     CHAMP_MODES,
     CONDITIONS_BY_LOCATION,
     DEFAULT_CHAMP_SETTINGS,
+    DRIVETRAIN_OPTIONS,
     LOCATION_SURFACE,
     MAX_CHAMP_DURATION,
     MAX_CHAMP_EVENTS,
@@ -245,8 +247,74 @@ def clubs_list():
         return (0, end_ts, -created)
 
     all_clubs.sort(key=sort_key)
-    return render_template('clubs.html', clubs=all_clubs, query=query,
-                           logged_in=user is not None, event_by_club=event_by_club)
+
+    # List filters — all applied to the club's soonest live/upcoming
+    # championship (the one shown on its card).
+    args = request.args
+    f_active = args.get('active') == '1'
+    f_hardcore = _onoff(args.get('hardcore'))
+    f_cameras = _onoff(args.get('cameras'))
+    f_assists = _onoff(args.get('assists'))
+    f_drive = (args.get('drivetrain') or '').strip().upper()
+    f_mode = (args.get('mode') or '').strip().lower()
+    if f_drive not in DRIVETRAIN_OPTIONS:
+        f_drive = ''
+    if f_mode not in ('season', 'multi'):
+        f_mode = ''
+
+    profiles: dict[str, dict | None] = {}
+    for c in all_clubs:
+        info = event_by_club.get(c.id)
+        profiles[c.id] = event_profile(info['event'], now) if info else None
+
+    def passes(c):
+        info = event_by_club.get(c.id)
+        prof = profiles[c.id]
+        if f_active and (info is None or not info['live']):
+            return False
+        if (f_hardcore is None and f_cameras is None and f_assists is None
+                and not f_drive and not f_mode):
+            return True
+        if prof is None:
+            return False
+        if f_hardcore is not None and prof['hardcore_damage'] != f_hardcore:
+            return False
+        if f_cameras is not None and prof['external_cameras'] != f_cameras:
+            return False
+        if f_assists is not None and prof['allow_assists'] != f_assists:
+            return False
+        if f_drive and f_drive not in prof['drivetrains']:
+            return False
+        if f_mode and prof['mode'] != f_mode:
+            return False
+        return True
+
+    shown = [c for c in all_clubs if passes(c)]
+
+    # Membership role per visible club: drives the card tint + Join/Leave.
+    roles: dict[str, str | None] = {}
+    if user is not None:
+        uname = user.username
+        for c in shown:
+            roles[c.id] = club_role(c, uname)
+
+    return render_template(
+        'clubs.html', clubs=shown, query=query, logged_in=user is not None,
+        event_by_club=event_by_club,
+        filters={'active': f_active, 'hardcore': f_hardcore,
+                 'cameras': f_cameras, 'assists': f_assists,
+                 'drivetrain': f_drive, 'mode': f_mode},
+        drivetrains=list(DRIVETRAIN_OPTIONS), roles=roles)
+
+
+def _onoff(value: str | None) -> bool | None:
+    """Tri-state filter value: 'on' → True, 'off' → False, else not set."""
+    v = (value or '').strip().lower()
+    if v == 'on':
+        return True
+    if v == 'off':
+        return False
+    return None
 
 
 @clubs_bp.route('/clubs', methods=['POST'])
@@ -430,6 +498,13 @@ def edit_club(club_id: str):
 
 # ── Join / request flow ──────────────────────────────────
 
+def _back_to_list() -> str | None:
+    """Join/leave posted from the list page returns there (filters included);
+    only local /clubs paths are accepted."""
+    nxt = request.form.get('next') or ''
+    return nxt if nxt.startswith('/clubs') else None
+
+
 @clubs_bp.route('/clubs/<club_id>/join', methods=['POST'])
 @verified_required
 def join_club(club_id: str):
@@ -458,7 +533,7 @@ def join_club(club_id: str):
         flash('Your request is already pending approval.', 'info')
     elif outcome == REQ_COOLDOWN:
         flash('Please wait before requesting to join again.', 'warning')
-    return redirect(url_for('clubs.club_detail', club_id=club_id))
+    return redirect(_back_to_list() or url_for('clubs.club_detail', club_id=club_id))
 
 
 def _post_request_notify(club: Club, requester_username: str) -> None:
@@ -602,7 +677,7 @@ def leave_club(club_id: str):
     db.session.commit()
     if left:
         flash(f'Left {club.name}.', 'info')
-    return redirect(url_for('clubs.club_detail', club_id=club_id))
+    return redirect(_back_to_list() or url_for('clubs.club_detail', club_id=club_id))
 
 
 # ── Roles (owner / admin) ────────────────────────────────

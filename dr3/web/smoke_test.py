@@ -1478,6 +1478,122 @@ def main() -> int:
     check('season card counts down to current leg end, not last leg end',
           '3d 2' in season_card and '11d' not in season_card, season_card[:400])
 
+    # 21e. club list: filters + join/leave buttons + membership tint
+    with app.app_context():
+        now = _utcnow()
+        other = User.query.filter(User.username != 'smokedriver').first()
+        check('filter fixture: a second user exists', other is not None)
+        owner_id = other.id if other else user.id
+        fr = Club(id='club-filter-rally', name='Filter Rally', description='',
+                  visibility='public', join_policy='open', created_by=owner_id)
+        fs = Club(id='club-filter-season', name='Filter Season', description='',
+                  visibility='public', join_policy='approval', created_by=owner_id)
+        fe = Club(id='club-filter-empty', name='Filter Empty', description='',
+                  visibility='public', join_policy='open', created_by=owner_id)
+        db.session.add_all([fr, fs, fe])
+        db.session.add(Event(id='evt-filter-rally', name='Filter Rally', club_id=fr.id,
+                             start_time=now - _td(hours=1), end_time=now + _td(days=3),
+                             settings_json=json.dumps({
+                                 'mode': 'multi', 'hardcore_damage': False,
+                                 'force_cockpit_camera': False, 'allow_assists': True}),
+                             legs_json=json.dumps([
+                                 {'location': 'Monte Carlo', 'car_class': 'Group A',
+                                  'duration': {'days': 3, 'hours': 0, 'mins': 0},
+                                  'stages': [{'track_id': 1, 'conditions_id': 1}]}]),
+                             active=True))
+        db.session.add(Event(id='evt-filter-season', name='Filter Season', club_id=fs.id,
+                             start_time=now - _td(hours=1), end_time=now + _td(days=2, hours=23),
+                             settings_json=json.dumps({
+                                 'mode': 'season', 'hardcore_damage': True,
+                                 'force_cockpit_camera': True, 'allow_assists': False}),
+                             legs_json=json.dumps([
+                                 {'location': 'Spain', 'car_class': 'Rally GT',
+                                  'duration': {'days': 1, 'hours': 0, 'mins': 0},
+                                  'stages': [{'track_id': 2, 'conditions_id': 1}]},
+                                 {'location': 'Hell', 'car_class': 'Group B (4WD)',
+                                  'duration': {'days': 1, 'hours': 0, 'mins': 0},
+                                  'stages': [{'track_id': 3, 'conditions_id': 1}]}]),
+                             active=True))
+        db.session.commit()
+        # Ids must be read before the context ends (attributes expire on commit).
+        fr_id, fs_id, fe_id = fr.id, fs.id, fe.id
+        alpha_row = Club.query.filter_by(name='Order Alpha').first()
+        alpha_id = alpha_row.id if alpha_row else ''
+
+    def _card(html_text, cid):
+        pos = html_text.find(f'href="/clubs/{cid}"')
+        if pos < 0:
+            return ''
+        start = html_text.rfind('<div class="club-card', 0, pos)
+        return html_text[start:start + 900]
+
+    # Drivetrain data is user-supplied (tables.CLASS_DRIVETRAINS); the test
+    # registers its own fixture entries and restores them afterwards.
+    from app import tables as _tables
+    saved_dt = dict(_tables.CLASS_DRIVETRAINS)
+    _tables.CLASS_DRIVETRAINS['Group A'] = frozenset({'4WD'})
+    _tables.CLASS_DRIVETRAINS['Rally GT'] = frozenset({'RWD'})
+
+    r = client.get('/clubs')
+    html = r.get_data(as_text=True)
+    check('create-club panel is a collapsed details block',
+          '<details class="panel create-club">' in html and 'Create a club' in html)
+    check('club list has filter controls',
+          all(f'name="{n}"' in html for n in ('active', 'hardcore', 'cameras',
+                                              'assists', 'drivetrain', 'mode')))
+    check('non-member cards tinted red with Join button',
+          'club-card out' in _card(html, fr_id)
+          and f'action="/clubs/{fr_id}/join"' in _card(html, fr_id))
+    check('owner cards tinted green without join/leave buttons',
+          'club-card in' in html and f'action="/clubs/{alpha_id}/join"' not in html)
+    check('approval-policy club offers Request to join',
+          'Request to join' in _card(html, fs_id))
+
+    r = client.get('/clubs?active=1')
+    html = r.get_data(as_text=True)
+    check('active-only filter hides eventless clubs',
+          f'/clubs/{fe_id}' not in html and f'/clubs/{fr_id}' in html)
+
+    r = client.get('/clubs?drivetrain=4wd')
+    html = r.get_data(as_text=True)
+    check('drivetrain filter matches the active leg class (4WD)',
+          f'/clubs/{fr_id}' in html and f'/clubs/{fs_id}' not in html)
+
+    r = client.get('/clubs?mode=season')
+    html = r.get_data(as_text=True)
+    check('mode filter isolates Rally Seasons',
+          f'/clubs/{fs_id}' in html and f'/clubs/{fr_id}' not in html)
+
+    r = client.get('/clubs?hardcore=off&cameras=on&assists=on')
+    html = r.get_data(as_text=True)
+    check('settings filters match the live championship',
+          f'/clubs/{fr_id}' in html and f'/clubs/{fs_id}' not in html)
+
+    r = client.post(f'/clubs/{fr_id}/join', data={'next': '/clubs?active=1'},
+                    follow_redirects=False)
+    check('join from list redirects back to the filtered list',
+          r.status_code == 302 and r.headers.get('Location') == '/clubs?active=1',
+          f"loc={r.headers.get('Location')}")
+    r = client.get('/clubs?active=1')
+    html = r.get_data(as_text=True)
+    check('joined club tinted green with Leave button',
+          'club-card in' in _card(html, fr_id)
+          and f'action="/clubs/{fr_id}/leave"' in _card(html, fr_id))
+
+    r = client.post(f'/clubs/{fr_id}/leave', data={'next': '/clubs'},
+                    follow_redirects=False)
+    check('leave from list redirects back to the list',
+          r.status_code == 302 and r.headers.get('Location') == '/clubs',
+          f"loc={r.headers.get('Location')}")
+    r = client.get('/clubs')
+    html = r.get_data(as_text=True)
+    check('left club tinted red with Join button again',
+          'club-card out' in _card(html, fr_id)
+          and f'action="/clubs/{fr_id}/join"' in _card(html, fr_id))
+
+    _tables.CLASS_DRIVETRAINS.clear()
+    _tables.CLASS_DRIVETRAINS.update(saved_dt)
+
     # 21c. in-game club list uses the same ordering (bug #15)
     r = client.get('/api/game/clubs', headers=headers)
     j = r.get_json() or {}

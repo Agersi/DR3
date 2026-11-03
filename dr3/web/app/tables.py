@@ -122,6 +122,37 @@ RX_CAR_CLASSES: dict[str, list[str]] = {
 # run RX cars on rally stages and rally cars on RX circuits.
 ALL_CAR_CLASSES: dict[str, list[str]] = {**CAR_CLASSES, **RX_CAR_CLASSES}
 
+# Drivetrain per car class (user-supplied 2026-11-03), for filtering clubs by
+# the drivetrain their current championship uses. No class mixes drivetrains;
+# unknown/missing labels match no filter.
+CLASS_DRIVETRAINS: dict[str, frozenset[str]] = {
+    'H1 (FWD)': frozenset({'FWD'}),
+    'H2 (FWD)': frozenset({'FWD'}),
+    'H2 (RWD)': frozenset({'RWD'}),
+    'H3 (RWD)': frozenset({'RWD'}),
+    'R2': frozenset({'FWD'}),
+    'Group A': frozenset({'4WD'}),
+    'Group B (4WD)': frozenset({'4WD'}),
+    'Group B (RWD)': frozenset({'RWD'}),
+    'R5': frozenset({'4WD'}),
+    'NR4/R4': frozenset({'4WD'}),
+    'Rally GT': frozenset({'RWD'}),
+    'F2 Kit Car': frozenset({'FWD'}),
+    '2000cc': frozenset({'4WD'}),
+    'RX Super 1600': frozenset({'FWD'}),
+    'Cross Kart': frozenset({'RWD'}),
+    'Group B Rallycross': frozenset({'4WD'}),
+    'RX2': frozenset({'4WD'}),
+    'RX Supercars': frozenset({'4WD'}),
+    'RX Supercars 2019': frozenset({'4WD'}),
+}
+
+DRIVETRAIN_OPTIONS: tuple[str, ...] = ('4WD', 'FWD', 'RWD')
+
+
+def drivetrains_for_class(label: str | None) -> frozenset[str]:
+    return CLASS_DRIVETRAINS.get((label or '').strip(), frozenset())
+
 CONDITIONS_BY_LOCATION: dict[str, list[tuple[int, str]]] = {
     loc: stage_conditions_options_for_location(loc) for loc in STAGES
 }

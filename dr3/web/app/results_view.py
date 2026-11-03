@@ -21,6 +21,7 @@ from .scoring import (
 from .tables import (
     CHAMP_MODE_SEASON,
     RX_LOCATIONS,
+    drivetrains_for_class,
     enrich_stage,
     leg_duration,
     normalize_championship,
@@ -129,6 +130,40 @@ def effective_end(event: dict, now: datetime) -> datetime | None:
             break
     end = windows[idx][1]
     return end if end is not None else fallback
+
+
+def current_leg_index(event: dict, now: datetime) -> int:
+    """The leg a Rally Season is in right now (0 before the first window)."""
+    windows = leg_windows(normalize_championship(event))
+    idx = 0
+    for i, (ws, _we) in enumerate(windows):
+        if ws is None or now >= ws:
+            idx = i
+        else:
+            break
+    return idx
+
+
+def event_profile(event: dict | None, now: datetime) -> dict | None:
+    """Filterable profile of a championship for the club list page.
+
+    Drivetrain comes from the active leg's car class — seasons switch legs,
+    Multi-Location rallies run one class throughout (the first leg's)."""
+    if not event:
+        return None
+    champ = normalize_championship(event)
+    settings = champ['settings']
+    legs = champ['events']
+    idx = current_leg_index(event, now) if champ['mode'] == CHAMP_MODE_SEASON else 0
+    car_class = (legs[idx].get('car_class') or '') if legs else ''
+    return {
+        'mode': champ['mode'],
+        'hardcore_damage': bool(settings.get('hardcore_damage')),
+        'external_cameras': not bool(settings.get('force_cockpit_camera')),
+        'allow_assists': bool(settings.get('allow_assists')),
+        'car_class': car_class,
+        'drivetrains': drivetrains_for_class(car_class),
+    }
 
 
 def window_status(start: datetime | None, end: datetime | None, now: datetime) -> str:

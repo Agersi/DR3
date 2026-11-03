@@ -4,15 +4,61 @@
 <h1>Clubs</h1>
 
 <div class="panel">
-  <form method="get" action="{{ url_for('clubs.clubs_list') }}" class="inline-search">
-    <input type="search" name="q" value="{{ query or '' }}" placeholder="Search clubs by name or description">
-    <button type="submit">Search</button>
+  <form method="get" action="{{ url_for('clubs.clubs_list') }}">
+    <div class="inline-search">
+      <input type="search" name="q" value="{{ query or '' }}" placeholder="Search clubs by name or description">
+      <button type="submit">Search</button>
+    </div>
+    <div class="filter-grid">
+      <label class="checkrow"><input type="checkbox" name="active" value="1" {{ 'checked' if filters.active }}> Show only active clubs</label>
+      <div class="filter-field">
+        <span>Hardcore damage</span>
+        <select name="hardcore" onchange="this.form.submit()">
+          <option value="" {{ 'selected' if filters.hardcore is none }}>Any</option>
+          <option value="on" {{ 'selected' if filters.hardcore is true }}>On</option>
+          <option value="off" {{ 'selected' if filters.hardcore is false }}>Off</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <span>External cameras allowed</span>
+        <select name="cameras" onchange="this.form.submit()">
+          <option value="" {{ 'selected' if filters.cameras is none }}>Any</option>
+          <option value="on" {{ 'selected' if filters.cameras is true }}>On</option>
+          <option value="off" {{ 'selected' if filters.cameras is false }}>Off</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <span>Assists allowed</span>
+        <select name="assists" onchange="this.form.submit()">
+          <option value="" {{ 'selected' if filters.assists is none }}>Any</option>
+          <option value="on" {{ 'selected' if filters.assists is true }}>On</option>
+          <option value="off" {{ 'selected' if filters.assists is false }}>Off</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <span>Drivetrain used</span>
+        <select name="drivetrain" onchange="this.form.submit()">
+          <option value="" {{ 'selected' if not filters.drivetrain }}>Any</option>
+          {% for d in drivetrains %}
+          <option value="{{ d | lower }}" {{ 'selected' if filters.drivetrain == d }}>{{ d }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field">
+        <span>Championship mode</span>
+        <select name="mode" onchange="this.form.submit()">
+          <option value="" {{ 'selected' if not filters.mode }}>Any</option>
+          <option value="season" {{ 'selected' if filters.mode == 'season' }}>Rally Season only</option>
+          <option value="multi" {{ 'selected' if filters.mode == 'multi' }}>Multi-Location only</option>
+        </select>
+      </div>
+    </div>
   </form>
 </div>
 
 {% if logged_in %}
-<div class="panel">
-  <h2>Create a club</h2>
+<details class="panel create-club">
+  <summary class="create-toggle"><span class="plus" aria-hidden="true">+</span>Create a club</summary>
   <form method="post" action="{{ url_for('clubs.create_club') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label for="club_name">Name</label>
@@ -31,7 +77,7 @@
     </select>
     <button type="submit">Create club</button>
   </form>
-</div>
+</details>
 {% endif %}
 
 <h2>{% if query %}Results for “{{ query }}”{% else %}All clubs{% endif %}</h2>
@@ -39,7 +85,9 @@
 <div class="grid">
   {% for c in clubs %}
   {%- set info = event_by_club.get(c.id) -%}
-  <div class="club-card">
+  {%- set role = roles.get(c.id) -%}
+  {%- set tint = 'in' if role else ('out' if logged_in else '') -%}
+  <div class="club-card {{ tint }}">
     <h3><a class="title-link" href="{{ url_for('clubs.club_detail', club_id=c.id) }}">{{ c.name }}</a></h3>
     <p class="desc">{{ c.description or 'No description yet.' }}</p>
     <div class="chips-row">
@@ -52,6 +100,19 @@
         {% endif %}
       {% endif %}
     </div>
+    {% if logged_in and not role %}
+    <form method="post" action="{{ url_for('clubs.join_club', club_id=c.id) }}" class="card-action">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="/clubs?{{ request.query_string.decode() }}">
+      <button type="submit" class="btn small">{{ 'Request to join' if c.join_policy == 'approval' else 'Join' }}</button>
+    </form>
+    {% elif logged_in and role and role != 'owner' %}
+    <form method="post" action="{{ url_for('clubs.leave_club', club_id=c.id) }}" class="card-action">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="/clubs?{{ request.query_string.decode() }}">
+      <button type="submit" class="btn small danger">Leave</button>
+    </form>
+    {% endif %}
   </div>
   {% endfor %}
 </div>

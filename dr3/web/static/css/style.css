@@ -278,6 +278,37 @@ table.table, .table-wrap table { width: 100%; border-collapse: collapse; backgro
 .inline-search input { margin-top: 0; max-width: none; flex: 1; }
 .inline-search button { margin-top: 0; flex: none; }
 
+/* ── Clubs list: filters, create toggle, membership tints ── */
+
+.filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 0.5rem 1.1rem; margin-top: 0.9rem; }
+.filter-field span { display: block; font-weight: 600; font-size: 0.92rem; letter-spacing: 0.02em; margin-bottom: 0.3rem; }
+.filter-field select { max-width: none; }
+.filter-grid .checkrow { align-self: center; }
+
+details.create-club { padding: 0; }
+details.create-club summary.create-toggle {
+  cursor: pointer; list-style: none; user-select: none; margin: 0;
+  display: flex; align-items: center; gap: 0.6rem;
+  font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em;
+  font-size: 1.3rem; font-weight: 600; color: var(--text);
+  padding: 1.1rem 1.25rem;
+}
+details.create-club summary.create-toggle::-webkit-details-marker { display: none; }
+details.create-club .plus {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 1.3em; height: 1.3em; font-weight: 700; line-height: 1;
+  background: var(--bg); border: 2px solid var(--line); box-shadow: 2px 2px 0 var(--shadow);
+  transition: transform 0.15s ease;
+}
+details.create-club[open] .plus { transform: rotate(45deg); }
+details.create-club form { padding: 0 1.25rem 1.1rem; margin-top: 0.6rem; }
+
+.club-card.in { background-image: linear-gradient(rgba(175, 255, 149, 0.08), rgba(175, 255, 149, 0.08)); border-color: #7f9a72; }
+.club-card.out { background-image: linear-gradient(rgba(226, 122, 102, 0.1), rgba(226, 122, 102, 0.1)); border-color: #9c6a5e; }
+
+.card-action { margin-top: auto; display: flex; justify-content: flex-end; }
+.card-action button { margin-top: 0.3rem; }
+
 .duration-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
 .duration-row select { flex: 1; min-width: 120px; max-width: none; }
 
