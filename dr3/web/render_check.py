@@ -53,6 +53,10 @@ def main() -> int:
           and "getElementById('club-results')" in html
           and "addEventListener('input'" in html and 'clearTimeout' in html
           and '>Search</button>' not in html, '')
+    check('clubs: filter panel below create-club + sticky',
+          'class="panel filters"' in html
+          and client.get('/static/css/style.css').get_data(as_text=True)
+          .find('.filters { position: sticky; top: 0') != -1, '')
 
     # home recent-times box (backlog #42): server-rendered first page +
     # infinite-scroll JS wired to the public endpoint
