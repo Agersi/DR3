@@ -243,7 +243,11 @@ input[type='checkbox'] { width: auto; max-width: none; }
 /* ── Tables ─────────────────────────────────────────── */
 
 .table-wrap { overflow-x: auto; background: var(--card); border: 2px solid var(--line); box-shadow: 4px 4px 0 var(--shadow); margin: 1rem 0; }
-.recent-box { max-height: 360px; overflow-y: auto; }
+.recent-box { max-height: 360px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }
+.recent-box::-webkit-scrollbar { width: 10px; }
+.recent-box::-webkit-scrollbar-track { background: rgba(24, 28, 20, 0.5); }
+.recent-box::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--card); }
+.recent-box::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 table.table, .table-wrap table { width: 100%; border-collapse: collapse; background: var(--card); margin: 0; }
 .table th, .table-wrap th {
   font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em;

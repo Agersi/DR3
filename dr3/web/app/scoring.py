@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from dr2server.game_data import VEHICLES  # noqa: E402
+from dr2server.game_data import VEHICLE_CLASSES, VEHICLES  # noqa: E402
 
 from .tables import RX_LOCATIONS, STAGES, normalize_championship  # noqa: E402
 
@@ -202,6 +202,19 @@ def car_label(entry: dict) -> str:
         if not car:
             return f'Vehicle {vid_int}'
     return car
+
+
+def vehicle_meta(vid):
+    """(display name, class label) for a vehicle id. Unknown ids get a
+    generic name and no class so links to them still render a page."""
+    try:
+        vid_int = int(vid)
+    except (TypeError, ValueError):
+        return None, ''
+    meta = VEHICLES.get(vid_int)
+    if not meta:
+        return f'Vehicle {vid_int}', ''
+    return str(meta['name']), VEHICLE_CLASSES.get(int(meta['class']), '')
 
 
 def rally_standings(entries: list[dict], rally: dict) -> list[dict]:

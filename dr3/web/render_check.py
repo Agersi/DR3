@@ -95,6 +95,17 @@ def main() -> int:
           and 'Smoke Driver' in html
           and 'data-url="/api/home/recent-times"' in html
           and "addEventListener('scroll'" in html, '')
+    check('home: recent-times rows link driver + car pages',
+          '<a href="/profile/smokedriver">Smoke Driver</a>' in html
+          and '<a href="/cars/1">Vehicle 1</a>' in html, '')
+    r = client.get('/cars/565')
+    check('car stats page renders name + class',
+          r.status_code == 200 and 'Porsche 911 RGT Rally Spec' in r.get_data(as_text=True)
+          and 'Rally GT' in r.get_data(as_text=True), f'status={r.status_code}')
+    check('recent-box uses a custom scrollbar matching the palette',
+          '.recent-box { max-height: 360px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }' in css
+          and '.recent-box::-webkit-scrollbar { width: 10px; }' in css
+          and '.recent-box::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--card); }' in css, '')
     check('home: stat cards link out (drivers/clubs/active) + terminal-damage card',
           '<a class="stat-card" href="/drivers">' in html
           and '<a class="stat-card" href="/clubs">' in html

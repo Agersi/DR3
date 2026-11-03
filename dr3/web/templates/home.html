@@ -84,9 +84,9 @@
            data-limit="25">
       {% for row in stats.recent %}
       <tr>
-        <td>{{ flag_img(row.driver_flag) }}{{ row.driver }}</td>
-        <td>{{ row.club or '—' }}</td>
-        <td>{{ row.car or '—' }}</td>
+        <td>{{ flag_img(row.driver_flag) }}<a href="{{ url_for('pages.profile', username=row.driver_username) }}">{{ row.driver }}</a></td>
+        <td>{% if row.club_id %}<a href="{{ url_for('clubs.club_detail', club_id=row.club_id) }}">{{ row.club }}</a>{% else %}—{% endif %}</td>
+        <td>{% if row.vehicle_id %}<a href="{{ url_for('pages.car_stats', vehicle_id=row.vehicle_id) }}">{{ row.car }}</a>{% else %}{{ row.car or '—' }}{% endif %}</td>
         <td class="num">{{ row.time_text }}</td>
         <td class="meta">{{ row.at|timeago }}</td>
       </tr>
@@ -105,9 +105,16 @@
   var loading = false;
   var done = false;
 
-  function cell(text, cls) {
+  function cell(text, cls, url) {
     var td = document.createElement('td');
-    td.textContent = text || '—';
+    if (url && text) {
+      var a = document.createElement('a');
+      a.href = url;
+      a.textContent = text;
+      td.appendChild(a);
+    } else {
+      td.textContent = text || '—';
+    }
     if (cls) td.className = cls;
     return td;
   }
@@ -123,7 +130,14 @@
       td.appendChild(img);
       td.appendChild(document.createTextNode(' '));
     }
-    td.appendChild(document.createTextNode(row.driver || '—'));
+    if (row.driver_url && row.driver) {
+      var a = document.createElement('a');
+      a.href = row.driver_url;
+      a.textContent = row.driver;
+      td.appendChild(a);
+    } else {
+      td.appendChild(document.createTextNode(row.driver || '—'));
+    }
     return td;
   }
 
@@ -139,8 +153,8 @@
         rows.forEach(function (row) {
           var tr = document.createElement('tr');
           tr.appendChild(driverCell(row));
-          tr.appendChild(cell(row.club));
-          tr.appendChild(cell(row.car));
+          tr.appendChild(cell(row.club, '', row.club_url));
+          tr.appendChild(cell(row.car, '', row.car_url));
           tr.appendChild(cell(row.time_text, 'num'));
           tr.appendChild(cell(row.at_text, 'meta'));
           tbody.appendChild(tr);

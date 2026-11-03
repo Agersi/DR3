@@ -93,9 +93,12 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
                 continue
             rows.append({
                 'driver': display_name.get(r.username, r.username),
+                'driver_username': r.username,
                 'driver_flag': flag_url(country_of.get(r.username, '')),
                 'club': club,
+                'club_id': ev.club_id if ev and ev.club_id else '',
                 'car': car,
+                'vehicle_id': r.vehicle_id,
                 'time_text': format_ms(t),
                 'at': sa,
             })
@@ -178,8 +181,11 @@ def home_recent_times():
         rows.append({
             'driver': row['driver'],
             'driver_flag': row.get('driver_flag', ''),
+            'driver_url': url_for('pages.profile', username=row['driver_username']),
             'club': row['club'],
+            'club_url': url_for('clubs.club_detail', club_id=row['club_id']) if row['club_id'] else '',
             'car': row['car'],
+            'car_url': url_for('pages.car_stats', vehicle_id=row['vehicle_id']) if row['vehicle_id'] else '',
             'time_text': row['time_text'],
             'at_text': _timeago(dt) if dt else '',
         })
@@ -495,6 +501,16 @@ def profile(username: str):
     if user is None:
         return render_template('not_found.html'), 404
     return render_template('profile.html', target=user)
+
+
+@pages_bp.route('/cars/<int:vehicle_id>')
+def car_stats(vehicle_id: int):
+    """Super-simple per-car page (more stats land later)."""
+    from ..scoring import vehicle_meta
+
+    title, class_label = vehicle_meta(vehicle_id)
+    return render_template('car.html', vehicle_id=vehicle_id,
+                           title=title, class_label=class_label)
 
 
 @pages_bp.route('/event/<event_id>')

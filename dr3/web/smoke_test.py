@@ -639,10 +639,74 @@ def main() -> int:
           and rows[0].get('driver') == 'Smoke Driver'
           and rows[0].get('time_text')
           and rows[0].get('at_text'), str(j)[:300])
+    check('recent-times row carries driver/car links (no club on this event)',
+          rows[0].get('driver_url') == '/profile/smokedriver'
+          and rows[0].get('car_url') == '/cars/1'
+          and rows[0].get('club_url') == '', str(rows)[:300])
     r = client.get('/api/home/recent-times?offset=1&limit=25')
     j = r.get_json() or {}
     check('recent-times short page signals end of list',
           (j.get('rows') or []) == [], str(j))
+
+    # 7c-2. recent-times rows link driver/club/car to their pages; the car
+    # stats page is a super-simple name+class panel for now.
+    with app.app_context():
+        from datetime import timedelta
+        from app.models import Club, ClubMember, Event, Result
+        u = db.session.query(User).filter_by(username='smokedriver').first()
+        db.session.add(Club(id='smoke-link-club', name='Smoke Link Club',
+                            created_by=u.id))
+        db.session.add(ClubMember(club_id='smoke-link-club', user_id=u.id))
+        st = {'name': 'Link Stage', 'track_id': 20, 'distance_km': 5.0,
+              'conditions_id': 5, 'conditions': 'Dry', 'surface_deg': 'Medium',
+              'service_area': 'Medium'}
+        db.session.add(Event(
+            id='smoke-link-event', schema_version=2, name='Smoke Link Event',
+            type='daily', location='Lydden Hill', car_class='Rally GT',
+            surface='Gravel', conditions='Dry',
+            stages_json=json.dumps([st]), settings_json=json.dumps({}),
+            legs_json=json.dumps([{
+                'location': 'Lydden Hill', 'car_class': 'Rally GT',
+                'surface': 'Gravel', 'duration': {'days': 0, 'hours': 1, 'mins': 0},
+                'stages': [st],
+            }]),
+            start_time=utcnow() - timedelta(minutes=3),
+            end_time=utcnow() + timedelta(hours=1),
+            active=True, featured=False, club_id='smoke-link-club', system=False,
+        ))
+        db.session.add(Result(
+            event_id='smoke-link-event', username='smokedriver', vehicle_id=565,
+            total_time_ms=200000, stages_json=json.dumps([
+                {'time_ms': 200000, 'submitted_at': (utcnow() - timedelta(minutes=1)).isoformat()}]),
+        ))
+        db.session.commit()
+
+    r = client.get('/api/home/recent-times?offset=0&limit=25')
+    rows = (r.get_json() or {}).get('rows') or []
+    link = next((x for x in rows if x.get('club_url')), None)
+    check('recent-times row links driver/club/car pages',
+          link is not None
+          and link['driver_url'] == '/profile/smokedriver'
+          and link['club_url'] == '/clubs/smoke-link-club'
+          and link['car_url'] == '/cars/565'
+          and link['car'] == 'Porsche 911 RGT Rally Spec', str(link or rows)[:300])
+
+    r = client.get('/cars/565')
+    check('car stats page shows name + class',
+          r.status_code == 200 and 'Porsche 911 RGT Rally Spec' in r.get_data(as_text=True)
+          and 'Rally GT' in r.get_data(as_text=True), f'status={r.status_code}')
+    r = client.get('/cars/1')
+    check('car stats page falls back for unknown vehicle ids',
+          r.status_code == 200 and 'Vehicle 1' in r.get_data(as_text=True),
+          f'status={r.status_code}')
+
+    with app.app_context():
+        from app.models import Club, ClubMember, Event, Result
+        db.session.query(Result).filter_by(event_id='smoke-link-event').delete()
+        db.session.query(Event).filter_by(id='smoke-link-event').delete()
+        db.session.query(ClubMember).filter_by(club_id='smoke-link-club').delete()
+        db.session.query(Club).filter_by(id='smoke-link-club').delete()
+        db.session.commit()
 
     # 8. time-trial listen-in endpoint: the client files PostTime payloads that
     #    are also proxied to EGO; personal best per (car, track, conditions,
