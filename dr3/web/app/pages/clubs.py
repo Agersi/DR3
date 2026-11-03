@@ -279,7 +279,7 @@ def clubs_list():
          'value': f_drive.lower()},
         {'name': 'mode', 'title': 'Championship mode',
          'states': ['', 'season', 'multi'],
-         'labels': ['Any', 'Rally Season only', 'Multi-Location only'],
+         'labels': ['Any', 'Rally Season', 'Multi-Location'],
          'value': f_mode},
     ]
 

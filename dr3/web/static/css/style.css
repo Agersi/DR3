@@ -206,7 +206,7 @@ input[type='checkbox'] { width: auto; max-width: none; }
 .checkrow input { margin: 0; }
 
 /* Option cards — radio groups rendered as selectable tiles */
-.opt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 0.9rem; margin: 0.6rem 0 1rem; }
+.opt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 0.9rem; margin: 0.6rem 0 1rem; user-select: none; }
 .opt {
   position: relative; display: block; cursor: pointer; width: auto; max-width: none; margin: 0;
   background: var(--bg); border: 2px solid var(--line); box-shadow: 3px 3px 0 var(--shadow);
