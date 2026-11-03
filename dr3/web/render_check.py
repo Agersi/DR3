@@ -57,6 +57,10 @@ def main() -> int:
           'class="panel filters"' in html
           and client.get('/static/css/style.css').get_data(as_text=True)
           .find('.filters { position: sticky; top: 0') != -1, '')
+    check('clubs: opt-style filter tiles (active toggle + cycling states)',
+          'class="opt fcycle"' in html and 'data-states' in html
+          and 'opt-state' in html and 'name="active"' in html
+          and '<select name=' not in html, '')
 
     # home recent-times box (backlog #42): server-rendered first page +
     # infinite-scroll JS wired to the public endpoint

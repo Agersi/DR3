@@ -30,49 +30,20 @@
 <div class="panel filters">
   <form method="get" action="{{ url_for('clubs.clubs_list') }}">
     <input type="search" name="q" value="{{ query or '' }}" placeholder="Search clubs by name or description">
-    <div class="filter-grid">
-      <label class="checkrow"><input type="checkbox" name="active" value="1" {{ 'checked' if filters.active }}> Show only active clubs</label>
-      <div class="filter-field">
-        <span>Hardcore damage</span>
-        <select name="hardcore">
-          <option value="" {{ 'selected' if filters.hardcore is none }}>Any</option>
-          <option value="on" {{ 'selected' if filters.hardcore is true }}>On</option>
-          <option value="off" {{ 'selected' if filters.hardcore is false }}>Off</option>
-        </select>
-      </div>
-      <div class="filter-field">
-        <span>External cameras allowed</span>
-        <select name="cameras">
-          <option value="" {{ 'selected' if filters.cameras is none }}>Any</option>
-          <option value="on" {{ 'selected' if filters.cameras is true }}>On</option>
-          <option value="off" {{ 'selected' if filters.cameras is false }}>Off</option>
-        </select>
-      </div>
-      <div class="filter-field">
-        <span>Assists allowed</span>
-        <select name="assists">
-          <option value="" {{ 'selected' if filters.assists is none }}>Any</option>
-          <option value="on" {{ 'selected' if filters.assists is true }}>On</option>
-          <option value="off" {{ 'selected' if filters.assists is false }}>Off</option>
-        </select>
-      </div>
-      <div class="filter-field">
-        <span>Drivetrain used</span>
-        <select name="drivetrain">
-          <option value="" {{ 'selected' if not filters.drivetrain }}>Any</option>
-          {% for d in drivetrains %}
-          <option value="{{ d | lower }}" {{ 'selected' if filters.drivetrain == d }}>{{ d }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="filter-field">
-        <span>Championship mode</span>
-        <select name="mode">
-          <option value="" {{ 'selected' if not filters.mode }}>Any</option>
-          <option value="season" {{ 'selected' if filters.mode == 'season' }}>Rally Season only</option>
-          <option value="multi" {{ 'selected' if filters.mode == 'multi' }}>Multi-Location only</option>
-        </select>
-      </div>
+    <div class="opt-grid">
+      <label class="opt">
+        <input type="checkbox" name="active" value="1" {{ 'checked' if active }}>
+        <span class="opt-title">Show only active clubs</span>
+        <span class="opt-desc">Hides clubs without a championship that is live right now.</span>
+      </label>
+      {% for t in tiles %}
+      <label class="opt fcycle" data-states="{{ t.states|join(',') }}" data-labels="{{ t.labels|join(',') }}">
+        <input type="checkbox" class="fstate" {{ 'checked' if t.value }}>
+        <input type="hidden" name="{{ t.name }}" value="{{ t.value }}">
+        <span class="opt-title">{{ t.title }}</span>
+        <span class="opt-state">{{ t.labels[t.states.index(t.value)] }}</span>
+      </label>
+      {% endfor %}
     </div>
   </form>
 </div>
@@ -154,8 +125,24 @@
       });
     }
 
-    // Selects + checkbox: apply immediately (one history entry each).
+    // Active checkbox: native toggle, apply immediately.
     form.addEventListener('change', function () { applyForm(true); });
+    // Cycling filter tiles: each click advances Any -> ... -> Any.
+    document.querySelectorAll('.fcycle').forEach(function (tile) {
+      var box = tile.querySelector('input[type="checkbox"]');
+      var hidden = tile.querySelector('input[type="hidden"]');
+      var stateEl = tile.querySelector('.opt-state');
+      var states = tile.dataset.states.split(',');
+      var labels = tile.dataset.labels.split(',');
+      tile.addEventListener('click', function (e) {
+        e.preventDefault();
+        var idx = (states.indexOf(hidden.value) + 1) % states.length;
+        hidden.value = states[idx];
+        box.checked = idx > 0;
+        stateEl.textContent = labels[idx];
+        applyForm(true);
+      });
+    });
     // Search box: live search while typing, debounced, no history spam.
     var timer = null;
     var search = form.querySelector('input[name="q"]');

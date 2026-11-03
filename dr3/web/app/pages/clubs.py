@@ -262,6 +262,27 @@ def clubs_list():
     if f_mode not in ('season', 'multi'):
         f_mode = ''
 
+    # Cycling filter tiles: each carries its own state list; the template
+    # renders a hidden input per tile so the GET form keeps working.
+    tiles = [
+        {'name': 'hardcore', 'title': 'Hardcore damage',
+         'states': ['', 'on', 'off'], 'labels': ['Any', 'On', 'Off'],
+         'value': '' if f_hardcore is None else ('on' if f_hardcore else 'off')},
+        {'name': 'cameras', 'title': 'External cameras allowed',
+         'states': ['', 'on', 'off'], 'labels': ['Any', 'On', 'Off'],
+         'value': '' if f_cameras is None else ('on' if f_cameras else 'off')},
+        {'name': 'assists', 'title': 'Assists allowed',
+         'states': ['', 'on', 'off'], 'labels': ['Any', 'On', 'Off'],
+         'value': '' if f_assists is None else ('on' if f_assists else 'off')},
+        {'name': 'drivetrain', 'title': 'Drivetrain used',
+         'states': ['', '4wd', 'fwd', 'rwd'], 'labels': ['Any', '4WD', 'FWD', 'RWD'],
+         'value': f_drive.lower()},
+        {'name': 'mode', 'title': 'Championship mode',
+         'states': ['', 'season', 'multi'],
+         'labels': ['Any', 'Rally Season only', 'Multi-Location only'],
+         'value': f_mode},
+    ]
+
     profiles: dict[str, dict | None] = {}
     for c in all_clubs:
         info = event_by_club.get(c.id)
@@ -300,11 +321,7 @@ def clubs_list():
 
     return render_template(
         'clubs.html', clubs=shown, query=query, logged_in=user is not None,
-        event_by_club=event_by_club,
-        filters={'active': f_active, 'hardcore': f_hardcore,
-                 'cameras': f_cameras, 'assists': f_assists,
-                 'drivetrain': f_drive, 'mode': f_mode},
-        drivetrains=list(DRIVETRAIN_OPTIONS), roles=roles)
+        event_by_club=event_by_club, active=f_active, tiles=tiles, roles=roles)
 
 
 def _onoff(value: str | None) -> bool | None:
