@@ -82,6 +82,10 @@ def main() -> int:
           and '.club-card .chips-row { justify-content: space-between; }' in css
           and '.club-card .chips-row .members-chip { flex: 1; text-align: center; padding: 0.28rem 0.7rem; font-size: 0.78rem; }' in css
           and '.club-card .chips-row .chip-ok { width: 100%; text-align: center; }' in css, '')
+    check('site-wide: bordered boxes get 0.3rem border radius',
+          'border-radius: 0.3rem;' in css
+          and '.panel, .club-card, .stat-card, .btn, button, input, select, textarea,' in css
+          and '.opt, .num-tile, .table-wrap, .chip, .flash' in css, '')
 
     # home recent-times box (backlog #42): server-rendered first page +
     # infinite-scroll JS wired to the public endpoint

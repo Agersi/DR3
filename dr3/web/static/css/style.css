@@ -385,6 +385,12 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
 .token-box code { flex: 1 1 260px; margin: 0; background: var(--bg); color: var(--text); border: 2px solid var(--line); padding: 0.55rem 0.7rem; font-size: 0.95rem; }
 .token-box button { flex: none; align-self: center; margin-top: 0; }
 
+/* Rounded corners on every bordered box (edge rules like header/footer/table-row borders stay square) */
+.panel, .club-card, .stat-card, .btn, button, input, select, textarea,
+.opt, .num-tile, .table-wrap, .chip, .flash, code, pre, .codeblock,
+.steps li, .steps li::before, .big404 .num-plate, .token-box code,
+details.create-club .plus { border-radius: 0.3rem; }
+
 @media (max-width: 900px) {
   .grid-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid-3 { grid-template-columns: 1fr; }
