@@ -87,6 +87,8 @@ def main() -> int:
           and 'align-items: stretch' in css
           and 'padding-left: 1.25rem; font-size: .9rem' in css
           and '.home-panels .discord-list { font-size: 1rem; }' in css, '')
+    check('home: support section Twitch line',
+          "Follow me on Twitch, it's a free way to show your support for the project" in html, '')
 
     zip_path = HERE.parent / 'dist' / 'DR3-windows.zip'
     want_dl = 200 if zip_path.is_file() else 404
