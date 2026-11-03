@@ -151,7 +151,7 @@
       fetch(url).then(function (res) { return res.text(); }).then(function (text) {
         var next = new DOMParser().parseFromString(text, 'text/html')
           .getElementById('club-results');
-        if (next) results.replaceWith(next);
+        if (next) { results.replaceWith(next); results = next; }
       });
     });
   })();
