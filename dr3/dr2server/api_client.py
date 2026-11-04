@@ -481,6 +481,24 @@ class UpstreamClient:
         )
         return False
 
+    def record_stage_detail(self, detail: Dict[str, Any]) -> bool:
+        """Record a merged per-stage run detail (StageEnded snapshot + the
+        StageComplete RPC) to the web API.
+
+        Fire-and-forget on the caller's side (StageDetailBuffer runs this on a
+        daemon thread): the payload is the small merged dict only — None values
+        are dropped so a half-merged record still stores what it has.
+        """
+        payload = {k: v for k, v in detail.items() if v is not None}
+        result = self._post("/api/game/stage-detail", payload)
+        if result and result.get("ok"):
+            return True
+        log.warning(
+            "record_stage_detail: failed challenge=%s stage=%s",
+            detail.get("challenge_id"), detail.get("stage_index"),
+        )
+        return False
+
     def get_time_trial_leaderboard(
         self,
         vclass: int,

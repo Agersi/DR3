@@ -76,14 +76,15 @@
 {% if st.results %}
 <div class="table-wrap">
   <table>
-    <tr><th>#</th><th>Driver</th><th>Car</th><th>Time</th><th>Gap</th></tr>
+    <tr><th>#</th><th>Driver</th><th>Car</th><th>Time</th><th>Gap</th><th>Dist.</th></tr>
     {% for x in st.results %}
     <tr>
       <td class="num">{{ x.pos }}</td>
-      <td>{{ flag_img(flag_for(x.username)) }}{{ x.username }}</td>
+      <td>{{ flag_img(flag_for(x.username)) }}{{ x.username }}{% if x.wheel %}<span class="chip">wheel</span>{% endif %}</td>
       <td>{{ x.car or '' }}</td>
       <td class="num">{{ x.time_text }}</td>
       <td class="num">{{ x.gap_str }}</td>
+      <td class="num">{% if x.distance_m %}{{ '%.2f'|format(x.distance_m / 1000) }} km{% endif %}</td>
     </tr>
     {% endfor %}
   </table>

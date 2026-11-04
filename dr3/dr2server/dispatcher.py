@@ -154,6 +154,11 @@ class RpcDispatcher:
         # its port could not be bound. Used to derive real per-segment splits
         # from a just-driven run on club StageComplete / TimeTrial.PostTime.
         self.telemetry: Optional[Any] = None
+        # Per-stage run detail merge buffer (dr2server.stage_detail), set by the
+        # host (httpd.App) after construction; None in standalone capture-only
+        # usage. Club StageCompletes feed its RPC half here; the StageEnded
+        # snapshot half is fed from httpd under the same key.
+        self.stage_detail: Optional[Any] = None
         # Wall-clock (time.time()) of the most recent stage begin / time-trial
         # circuit load; take_run_since() claims the UDP run started after it, so
         # a just-driven stage is matched to its own run and never to an older one.
@@ -3183,6 +3188,33 @@ class RpcDispatcher:
         _qr = getattr(req.comp_damage.quick_repairs, "value", req.comp_damage.quick_repairs)
         has_repaired = req.recov_to_service or _qr > 0
         time_ms = int(req.stage_time * 1000)
+
+        # Per-stage run detail: feed the RPC half of the merge (the StageEnded
+        # snapshot half arrives from httpd under the same key). Clean finishes
+        # and DNF close-outs both feed — the web side stores the row either way.
+        if self.stage_detail is not None:
+            try:
+                self.stage_detail.merge_rpc(
+                    (req.challenge_id, req.event_index, req.stage_index),
+                    {
+                        "challenge_id": req.challenge_id,
+                        "event_index": req.event_index,
+                        "stage_index": req.stage_index,
+                        "vehicle_id": req.vehicle_id or None,
+                        "livery_id": req.livery_id or None,
+                        "stage_time_ms": time_ms if time_ms > 0 else None,
+                        "race_status": req.race_status,
+                        "recov_to_service": bool(req.recov_to_service),
+                        "meters_driven": req.meters_driven or None,
+                        "distance_driven": req.distance_driven or None,
+                        "using_wheel": bool(req.using_wheel),
+                        "using_assists": bool(req.using_assists),
+                        # Club runs carry the web event id; official/TT paths
+                        # (httpd._record_proxy_stats) feed without one.
+                        "event_id": event_id,
+                    })
+            except Exception as exc:  # never let detail recording break the stage flow
+                print(f"[STAGE] stage-detail feed failed: {exc}")
 
         # Persist only clean finishes. Two non-finish shapes close a stage
         # (backlog 32, step 2): race_status != 0 (club terminal-damage

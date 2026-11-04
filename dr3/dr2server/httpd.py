@@ -19,6 +19,7 @@ from .account_store import AccountStore
 from .api_client import UpstreamClient
 from .dispatcher import RpcDispatcher
 from .egonet import Int64, Timestamp, UInt16, UInt32, UInt8, decode_stream, encode_stream
+from .stage_detail import StageDetailBuffer
 
 
 class _UpstreamHTTPSConnection(http.client.HTTPSConnection):
@@ -117,6 +118,14 @@ class App:
             api_client = UpstreamClient(base_url=api_url, api_token=api_token)
             print(f"[API] Connected to DR3 API at {api_url}")
         self.dispatcher = RpcDispatcher(self.account_store, api_client=api_client)
+        # Per-stage run detail: pairs the StageEnded telemetry snapshot with
+        # the StageComplete RPC (club + official/TT paths both feed it) and
+        # posts the merged record to the web API. None when there is no web
+        # API connection (standalone capture-only usage).
+        self.stage_detail: Optional[StageDetailBuffer] = None
+        if api_client is not None:
+            self.stage_detail = StageDetailBuffer(api_client.record_stage_detail)
+            self.dispatcher.stage_detail = self.stage_detail
         self.capture_root = capture_root
         # Request-capture saving — driven by the GUI's "Verbose logging"
         # checkbox (toggled live); standalone usage defaults to on.
@@ -320,6 +329,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             fields: Dict[str, Any] = {}
             if isinstance(keys, list) and isinstance(values, list):
                 fields = dict(zip(keys, values))
+            if event == "StageEnded" and self.app.stage_detail is not None and fields:
+                try:
+                    flat = {k: self._datamining_display(v) for k, v in fields.items()}
+                    self.app.stage_detail.feed_datamining(flat)
+                except Exception as exc:  # never let the feed break the proxy path
+                    print(f"[DATA] StageEnded detail feed failed: {exc}")
             interesting = {
                 key: self._datamining_display(fields[key])
                 for key in (
@@ -377,6 +392,32 @@ class RequestHandler(BaseHTTPRequestHandler):
             distance_m = int(_val("DistanceDriven") or 0)
         except (TypeError, ValueError):
             return
+
+        # Per-stage run detail: feed the RPC half of the merge. The StageEnded
+        # snapshot half arrives via _log_datamining_event under the same key;
+        # DNF close-outs feed too (they may carry zero time/distance).
+        if self.app.stage_detail is not None:
+            try:
+                self.app.stage_detail.merge_rpc(
+                    (int(_val("ChallengeId") or 0),
+                     int(_val("EventIndex") or 0),
+                     int(_val("StageIndex") or 0)),
+                    {
+                        "challenge_id": _val("ChallengeId"),
+                        "event_index": _val("EventIndex"),
+                        "stage_index": _val("StageIndex"),
+                        "vehicle_id": vehicle_id,
+                        "livery_id": int(_val("LiveryId") or 0),
+                        "stage_time_ms": time_ms if time_ms > 0 else None,
+                        "race_status": race_status,
+                        "recov_to_service": recov,
+                        "meters_driven": int(_val("MetersDriven") or 0),
+                        "distance_driven": distance_m if distance_m > 0 else None,
+                        "using_wheel": bool(_val("UsingWheel")),
+                        "using_assists": bool(_val("UsingAssists")),
+                    })
+            except (TypeError, ValueError):
+                pass
 
         if time_ms <= 0 and distance_m <= 0:
             return

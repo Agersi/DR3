@@ -268,10 +268,16 @@ def round_results(rally: dict, entries: list[dict]) -> dict:
             t = int((st or {}).get('time_ms', 0) or 0)
             if t <= 0:
                 continue
+            # Per-run extras stored on the stage entry (club submissions carry
+            # them; official/TT rows don't — both render blank then).
             results.append({
                 'username': e.get('username', ''),
                 'car': car_label(e),
                 'time_ms': t + int((st or {}).get('penalties_ms', 0) or 0),
+                'wheel': bool((st or {}).get('using_wheel')),
+                'distance_m': int(
+                    (st or {}).get('distance_driven')
+                    or (st or {}).get('meters_driven') or 0),
             })
         results.sort(key=lambda x: x['time_ms'])
         leader = results[0]['time_ms'] if results else 0

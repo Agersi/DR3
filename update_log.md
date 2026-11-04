@@ -2,6 +2,8 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.55**- Your profile page now shows your driving stats — favorite car and location, most driven car and location, stages completed, distance, and input device — and you can pick on the account page which of those to show.
+
 ## 0.1.54
 The window is a little taller so the update notice never forces scrolling, Uninstall DR3 moved to the bottom of the Logs tab, and closing while the server is running now offers Stop and Close.
 

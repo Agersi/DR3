@@ -32,7 +32,7 @@ from .events import (
     upsert_result,
     validate_id,
 )
-from .models import Club, ClubMember, GameToken, StageStat, TimeTrialEntry, User, utcnow
+from .models import Club, ClubMember, GameToken, StageRun, StageStat, TimeTrialEntry, User, utcnow
 from .scoring import car_label, championship_points, overall_rank_key
 from .tables import normalize_championship
 
@@ -552,6 +552,102 @@ def api_game_stats_record():
             user.total_distance_m = (user.total_distance_m or 0) + max(0, distance_m)
             user.stages_driven = (user.stages_driven or 0) + 1
         db.session.commit()
+
+    return jsonify({'ok': True})
+
+
+@game_api_bp.route('/api/game/stage-detail', methods=['POST'])
+@csrf.exempt  # type: ignore[untyped-decorator]
+@game_auth_required
+def api_game_stage_detail():
+    """Record a merged per-stage run detail posted by the client (the StageEnded
+    telemetry snapshot paired with the StageComplete RPC — see
+    dr2server/stage_detail.py).
+
+    Append-only: every run lands as its own stage_runs row, so profile stats are
+    plain aggregations. Half-merged records (only one of the two sources ever
+    arrived) store whatever they carry — every column but username is optional.
+    """
+    data = request.get_json(silent=True) or {}
+    user = g.game_user
+
+    def _int(key: str):
+        try:
+            v = data.get(key)
+            return int(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def _float(key: str) -> float:
+        try:
+            v = data.get(key)
+            return float(v) if v is not None else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _bool(key: str) -> bool:
+        return bool(data.get(key))
+
+    # Time: prefer the RPC's exact milliseconds; fall back to the snapshot's
+    # seconds.
+    time_ms = _int('stage_time_ms') or 0
+    if not time_ms:
+        time_ms = int(round(_float('stage_time_seconds') * 1000))
+
+    # Distance: the RPC ints are exact; fall back to the camera-metres sum.
+    distance_m = _int('distance_driven') or _int('meters_driven') or 0
+    if not distance_m:
+        distance_m = int(round(sum(
+            _float(k) for k in (
+                'metres_cam_bonnet', 'metres_cam_bumper', 'metres_cam_chase_close',
+                'metres_cam_chase_far', 'metres_cam_dash', 'metres_cam_head',
+            ))))
+
+    # Source type from the snapshot's challenge_type (-1 TT / 1 official / 2 club).
+    source_type = {-1: 'timetrial', 1: 'official', 2: 'club'}.get(
+        _int('challenge_type'), 'unknown')
+
+    db.session.add(StageRun(
+        username=user.username,
+        source_type=source_type,
+        event_id=str(data['event_id'])[:64] if data.get('event_id') else None,
+        challenge_id=_int('challenge_id'),
+        event_index=_int('event_index') or 0,
+        stage_index=_int('stage_index') or 0,
+        track_id=_int('track_id'),
+        track_model_id=_int('track_model_id'),
+        location_id=_int('location_id'),
+        vehicle_id=_int('vehicle_id'),
+        vehicle_class_id=_int('vehicle_class_id'),
+        time_ms=time_ms,
+        player_finished=_bool('player_finished'),
+        player_end_status=_int('player_end_status') or 0,
+        race_position=_int('race_position') or 0,
+        distance_m=distance_m,
+        using_wheel=_bool('using_wheel'),
+        using_assists=_bool('using_assists'),
+        hardcore_damage=_bool('is_hardcore_damage_enabled'),
+        assists_enabled=_bool('is_any_assists_enabled'),
+        input_library=str(data['library_id'])[:64] if data.get('library_id') else None,
+        input_device=str(data['device_hardware_id'])[:128] if data.get('device_hardware_id') else None,
+        input_name=str(data['driver_name'])[:128] if data.get('driver_name') else None,
+        tyre_compound=_int('tyre_compound_id') or 0,
+        tyre_wear=_float('tyre_wear_state'),
+        surface_degradation_enabled=_bool('surface_degradation_enabled'),
+        surface_degradation_level=_float('surface_degradation_level'),
+        weather_preset_id=_int('weather_preset_id') or 0,
+        vr_enabled=_bool('vr_enabled'),
+        cam_bonnet_m=_float('metres_cam_bonnet'),
+        cam_bumper_m=_float('metres_cam_bumper'),
+        cam_chase_close_m=_float('metres_cam_chase_close'),
+        cam_chase_far_m=_float('metres_cam_chase_far'),
+        cam_dash_m=_float('metres_cam_dash'),
+        cam_head_m=_float('metres_cam_head'),
+        g_days_played=_int('g_separate_days_played_count') or 0,
+        g_seconds_played=_int('g_total_seconds_played') or 0,
+        g_session_count=_int('g_session_count') or 0,
+    ))
+    db.session.commit()
 
     return jsonify({'ok': True})
 

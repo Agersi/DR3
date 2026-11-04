@@ -35,6 +35,17 @@ class User(db.Model):
     # pre-existing databases (see _ensure_user_stat_columns in app/__init__.py).
     total_distance_m: int = db.Column(db.BigInteger, default=0)
     stages_driven: int = db.Column(db.Integer, default=0)
+    # Profile extras (set by the user on the account page; values themselves are
+    # aggregated from stage_runs at render time). Migrated additively (see
+    # _ensure_user_profile_columns in app/__init__.py).
+    favorite_car_id: int | None = db.Column(db.Integer)
+    favorite_location_id: int | None = db.Column(db.Integer)
+    # Which of the device/play-time stats from the latest stage run are shown on
+    # the public profile (all visible by default).
+    show_device_name: bool = db.Column(db.Boolean, default=True)
+    show_days_played: bool = db.Column(db.Boolean, default=True)
+    show_seconds_played: bool = db.Column(db.Boolean, default=True)
+    show_sessions: bool = db.Column(db.Boolean, default=True)
 
     tokens = db.relationship('GameToken', back_populates='user', cascade='all, delete-orphan')
     notifications = db.relationship('Notification', back_populates='user', cascade='all, delete-orphan')
@@ -230,6 +241,63 @@ class StageStat(db.Model):
     updated_at: datetime = db.Column(db.DateTime, default=utcnow)
 
     __table_args__ = (db.UniqueConstraint('username', 'vehicle_id', 'track_id'),)
+
+
+class StageRun(db.Model):
+    """One row per driven stage — the merged per-stage run detail posted by the
+    client (StageEnded telemetry snapshot + the StageComplete RPC, paired in
+    dr2server/stage_detail.py).
+
+    Append-only history: every run lands as its own row (no upsert), so profile
+    stats are plain aggregations over the driver's rows. Fields are nullable —
+    a half-merged record (only one of the two sources ever arrived, e.g. some
+    DNF close-outs) stores whatever it has.
+    """
+
+    __tablename__ = 'stage_runs'
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    username: str = db.Column(db.String(64), nullable=False, index=True)
+    received_at: datetime = db.Column(db.DateTime, default=utcnow, index=True)
+    # club / official / timetrial (from the StageEnded challenge_type)
+    source_type: str = db.Column(db.String(16), default='unknown')
+    event_id: str | None = db.Column(db.String(64))   # web event id (club runs only)
+    challenge_id: int | None = db.Column(db.Integer)
+    event_index: int = db.Column(db.Integer, default=0)
+    stage_index: int = db.Column(db.Integer, default=0)
+    track_id: int | None = db.Column(db.Integer)
+    track_model_id: int | None = db.Column(db.Integer)
+    location_id: int | None = db.Column(db.Integer)
+    vehicle_id: int | None = db.Column(db.Integer)        # catalog car id
+    vehicle_class_id: int | None = db.Column(db.Integer)  # class id (e.g. 97)
+    time_ms: int = db.Column(db.BigInteger, default=0)
+    player_finished: bool = db.Column(db.Boolean, default=False)
+    player_end_status: int = db.Column(db.Integer, default=0)
+    race_position: int = db.Column(db.Integer, default=0)
+    distance_m: int = db.Column(db.BigInteger, default=0)
+    using_wheel: bool = db.Column(db.Boolean, default=False)
+    using_assists: bool = db.Column(db.Boolean, default=False)
+    hardcore_damage: bool = db.Column(db.Boolean, default=False)
+    assists_enabled: bool = db.Column(db.Boolean, default=False)
+    input_library: str | None = db.Column(db.String(64))     # lib_keyboard / lib_direct_input / ...
+    input_device: str | None = db.Column(db.String(128))     # device hardware id (GUID)
+    input_name: str | None = db.Column(db.String(128))       # wheel name (e.g. "Simucube 2 Pro")
+    tyre_compound: int = db.Column(db.Integer, default=0)
+    tyre_wear: float = db.Column(db.Float, default=0.0)
+    surface_degradation_enabled: bool = db.Column(db.Boolean, default=False)
+    surface_degradation_level: float = db.Column(db.Float, default=0.0)
+    weather_preset_id: int = db.Column(db.Integer, default=0)
+    vr_enabled: bool = db.Column(db.Boolean, default=False)
+    cam_bonnet_m: float = db.Column(db.Float, default=0.0)
+    cam_bumper_m: float = db.Column(db.Float, default=0.0)
+    cam_chase_close_m: float = db.Column(db.Float, default=0.0)
+    cam_chase_far_m: float = db.Column(db.Float, default=0.0)
+    cam_dash_m: float = db.Column(db.Float, default=0.0)
+    cam_head_m: float = db.Column(db.Float, default=0.0)
+    # Driver's global play counters (lifetime values from the game itself).
+    g_days_played: int = db.Column(db.BigInteger, default=0)
+    g_seconds_played: int = db.Column(db.BigInteger, default=0)
+    g_session_count: int = db.Column(db.Integer, default=0)
 
 
 class Notification(db.Model):

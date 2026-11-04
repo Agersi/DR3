@@ -6,4 +6,24 @@
   <p class="meta">@{{ target.username }}{% if target.country %} · {{ flag_img(flag_url(target.country)) }}{{ target.country }}{% endif %}</p>
   {% if target.bio %}<p>{{ target.bio }}</p>{% endif %}
 </div>
+
+{% if stats %}
+<div class="panel">
+  <h2>Driving</h2>
+  <table>
+    {% if stats.fav_car or stats.fav_location %}
+    <tr><th>Favorites</th><td>{% if stats.fav_car %}{{ stats.fav_car }}{% endif %}{% if stats.fav_car and stats.fav_location %} · {% endif %}{% if stats.fav_location %}{{ stats.fav_location }}{% endif %}</td></tr>
+    {% endif %}
+    <tr><th>Stages driven</th><td class="num">{{ stats.runs }}</td></tr>
+    <tr><th>Stages completed</th><td class="num">{{ stats.pct_completed }}%</td></tr>
+    <tr><th>Distance via DR3</th><td class="num">{{ '%.1f'|format(stats.distance_km) }} km</td></tr>
+    {% if stats.top_car %}<tr><th>Most driven car</th><td>{{ stats.top_car }} ({{ '%.1f'|format(stats.top_car_km) }} km)</td></tr>{% endif %}
+    {% if stats.top_location %}<tr><th>Most driven location</th><td>{{ stats.top_location }} ({{ '%.1f'|format(stats.top_location_km) }} km)</td></tr>{% endif %}
+    {% if target.show_device_name and stats.device %}<tr><th>Input device</th><td>{{ stats.device }}</td></tr>{% endif %}
+    {% if target.show_days_played and stats.days_played %}<tr><th>Days played</th><td class="num">{{ stats.days_played }}</td></tr>{% endif %}
+    {% if target.show_seconds_played and stats.seconds_played %}<tr><th>Time played</th><td class="num">{{ stats.seconds_played }}</td></tr>{% endif %}
+    {% if target.show_sessions and stats.sessions %}<tr><th>Sessions</th><td class="num">{{ stats.sessions }}</td></tr>{% endif %}
+  </table>
+</div>
+{% endif %}
 {% endblock %}

@@ -46,6 +46,7 @@ from ..models import (
     GameToken,
     Notification,
     Result,
+    StageRun,
     TimeTrialEntry,
     User,
     utcnow,
@@ -329,6 +330,20 @@ def account():
             user.display_name = (request.form.get('display_name') or '').strip() or user.username
             user.country = (request.form.get('country') or '').strip()
             user.bio = (request.form.get('bio') or '').strip()
+
+            def _opt_id(key: str):
+                raw = (request.form.get(key) or '').strip()
+                try:
+                    return int(raw) if raw else None
+                except ValueError:
+                    return None
+
+            user.favorite_car_id = _opt_id('favorite_car_id')
+            user.favorite_location_id = _opt_id('favorite_location_id')
+            user.show_device_name = request.form.get('show_device_name') == 'on'
+            user.show_days_played = request.form.get('show_days_played') == 'on'
+            user.show_seconds_played = request.form.get('show_seconds_played') == 'on'
+            user.show_sessions = request.form.get('show_sessions') == 'on'
             db.session.commit()
             flash('Profile updated.', 'success')
         elif action == 'password':
@@ -361,11 +376,18 @@ def account():
 
     active_token = next((t for t in user_tokens(g.user) if t.revoked_at is None), None)
     unread = Notification.query.filter_by(user_id=g.user.id, read=False).count()
+    # Favorite pickers: every confirmed car + every known location.
+    from ..scoring import VEHICLES  # game_data catalog (sys.path set there)
+    from dr2server.game_data import Location
+    vehicles = sorted(VEHICLES.items(), key=lambda kv: kv[1]['name'].lower())
+    locations = sorted(Location, key=lambda loc: loc.display_name.lower())
     return render_template(
         'account.html',
         verified=g.user.email_verified,
         token=active_token.token if active_token else '',
         unread=unread,
+        vehicles=vehicles,
+        locations=locations,
     )
 
 
@@ -495,12 +517,109 @@ def drivers():
     return render_template('drivers.html', rows=rows)
 
 
+def _device_label(run: StageRun) -> str:
+    """Human input-device name for a stage run (wheel name, else fallback)."""
+    if run.input_name:
+        return run.input_name
+    if run.input_library == 'lib_keyboard':
+        return 'Keyboard'
+    if run.input_library == 'lib_direct_input':
+        return 'Wheel'
+    return run.input_device or 'Unknown'
+
+
+def _format_play_seconds(total_s: int) -> str:
+    h, rem = divmod(int(total_s or 0), 3600)
+    m = rem // 60
+    return f'{h}h {m}m' if h else f'{m}m'
+
+
+def _profile_stats(user: User) -> dict:
+    """Per-stage run stats aggregated from stage_runs.
+
+    Empty dict when the driver has no recorded runs yet (the profile page then
+    shows nothing). Values are computed, not stored — favorites aside, the
+    profile always reflects the driver's full driving history on DR3."""
+    from sqlalchemy import func, or_
+
+    from ..scoring import vehicle_meta
+    from dr2server.game_data import Location
+
+    q = StageRun.query.filter_by(username=user.username)
+    total = q.count()
+    if not total:
+        return {}
+
+    finished = q.filter(StageRun.player_finished.is_(True)).count()
+    distance_m = int(db.session.query(func.sum(StageRun.distance_m))
+                     .filter_by(username=user.username).scalar() or 0)
+
+    def _top(column):
+        rows = (db.session.query(column, func.sum(StageRun.distance_m),
+                                 func.count(StageRun.id))
+                .filter(StageRun.username == user.username, column.isnot(None))
+                .group_by(column).all())
+        if not rows:
+            return None, 0
+        vid, dist, _n = max(rows, key=lambda r: (int(r[1] or 0), int(r[2])))
+        return vid, int(dist or 0)
+
+    car_id, car_km_m = _top(StageRun.vehicle_id)
+    loc_id, loc_km_m = _top(StageRun.location_id)
+
+    # Device + play counters come from the newest run that actually reported
+    # them (half-merged rows carry none and must not blank the panel).
+    latest_input = (q.filter(StageRun.input_library.isnot(None))
+                    .order_by(StageRun.received_at.desc(), StageRun.id.desc()).first())
+    latest_play = (q.filter(or_(StageRun.g_days_played > 0,
+                                StageRun.g_seconds_played > 0,
+                                StageRun.g_session_count > 0))
+                   .order_by(StageRun.received_at.desc(), StageRun.id.desc()).first())
+
+    car_label = ''
+    if car_id is not None:
+        title, class_label = vehicle_meta(car_id)
+        car_label = f'{title} ({class_label})' if class_label else title
+    loc_label = ''
+    if loc_id is not None:
+        try:
+            loc_label = Location(int(loc_id)).display_name
+        except ValueError:
+            loc_label = f'Location {loc_id}'
+
+    fav_car, fav_loc = '', ''
+    if user.favorite_car_id:
+        title, class_label = vehicle_meta(user.favorite_car_id)
+        fav_car = f'{title} ({class_label})' if class_label else title
+    if user.favorite_location_id:
+        try:
+            fav_loc = Location(int(user.favorite_location_id)).display_name
+        except ValueError:
+            fav_loc = f'Location {user.favorite_location_id}'
+
+    return {
+        'runs': total,
+        'pct_completed': round(finished / total * 100),
+        'distance_km': distance_m / 1000.0,
+        'top_car': car_label, 'top_car_km': car_km_m / 1000.0,
+        'top_location': loc_label, 'top_location_km': loc_km_m / 1000.0,
+        'fav_car': fav_car, 'fav_location': fav_loc,
+        # Device + play counters from the newest run that reported them.
+        'device': _device_label(latest_input) if latest_input else '',
+        'days_played': int(latest_play.g_days_played or 0) if latest_play else 0,
+        'seconds_played': (_format_play_seconds(latest_play.g_seconds_played or 0)
+                           if latest_play else ''),
+        'sessions': int(latest_play.g_session_count or 0) if latest_play else 0,
+    }
+
+
 @pages_bp.route('/profile/<username>')
 def profile(username: str):
     user = User.query.filter_by(username=username).first()
     if user is None:
         return render_template('not_found.html'), 404
-    return render_template('profile.html', target=user)
+    return render_template(
+        'profile.html', target=user, stats=_profile_stats(user))
 
 
 @pages_bp.route('/cars/<int:vehicle_id>')

@@ -268,6 +268,90 @@ def main() -> int:
           _dist_delta == 5305 and _stages_delta == 1,
           f'dist_delta={_dist_delta} stages_delta={_stages_delta}')
 
+    # ── stage-detail: merged StageEnded + StageComplete (append-only) ───
+    r = client.post('/api/game/stage-detail', json={})
+    check('stage-detail rejects missing token', r.status_code == 401,
+          f'status={r.status_code}')
+
+    r = client.post('/api/game/stage-detail', headers=headers, json={
+        'challenge_id': 900001, 'event_index': 0, 'stage_index': 0,
+        'challenge_type': 2, 'track_id': 636, 'location_id': 4,
+        'vehicle_class_id': 97, 'vehicle_id': 565, 'event_id': 'evt-smoke',
+        'player_finished': True, 'race_position': 1,
+        'stage_time_seconds': 155.99, 'stage_time_ms': 155990,
+        'distance_driven': 48210, 'using_wheel': True, 'using_assists': False,
+        'is_hardcore_damage_enabled': True,
+        'library_id': 'lib_direct_input', 'driver_name': 'Simucube 2 Pro',
+        'g_separate_days_played_count': 12, 'g_total_seconds_played': 43200,
+        'g_session_count': 7,
+    })
+    check('stage-detail merged record ok',
+          (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+
+    # Half-merged record (only the StageEnded snapshot arrived — DNF shape).
+    r = client.post('/api/game/stage-detail', headers=headers, json={
+        'challenge_id': 900002, 'event_index': 0, 'stage_index': 1,
+        'challenge_type': -1, 'track_id': 630, 'vehicle_id': 565,
+        'player_finished': False, 'race_status': 5, 'stage_time_seconds': 0.0,
+    })
+    check('stage-detail half-merged record ok',
+          (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+
+    with app.app_context():
+        from app.models import StageRun
+        _sr = (db.session.query(StageRun)
+               .filter_by(username='smokedriver')
+               .order_by(StageRun.id).all())
+        _sr0 = _sr[0] if len(_sr) > 0 else None
+        _sr1 = _sr[1] if len(_sr) > 1 else None
+    check('stage-detail: two append-only rows (no upsert)', len(_sr) == 2,
+          f'n={len(_sr)}')
+    check('stage-detail: merged row keeps both halves',
+          _sr0 is not None and _sr0.time_ms == 155990
+          and _sr0.source_type == 'club' and _sr0.event_id == 'evt-smoke'
+          and _sr0.input_name == 'Simucube 2 Pro' and _sr0.distance_m == 48210
+          and _sr0.using_wheel is True and _sr0.hardcore_damage is True
+          and _sr0.g_days_played == 12,
+          f'row={_sr0}')
+    check('stage-detail: half row stores what it has (TT source, no device)',
+          _sr1 is not None and _sr1.source_type == 'timetrial'
+          and _sr1.player_finished is False and _sr1.time_ms == 0
+          and _sr1.input_name is None and _sr1.distance_m == 0,
+          f'row={_sr1}')
+
+    # Account page: favorite pickers + profile stat visibility checkboxes.
+    r = client.get('/account')
+    acc_html = r.get_data(as_text=True)
+    check('account page has favorite car/location selects',
+          '<select id="favorite_car_id"' in acc_html
+          and '<select id="favorite_location_id"' in acc_html,
+          f'status={r.status_code}')
+    check('account page has the four stat visibility checkboxes',
+          all(f'name="{n}"' in acc_html for n in (
+              'show_device_name', 'show_days_played',
+              'show_seconds_played', 'show_sessions')))
+
+    r = client.post('/account', data={
+        'action': 'profile', 'display_name': 'Smoke Driver',
+        'country': 'Sweden', 'bio': '',
+        'favorite_car_id': '565', 'favorite_location_id': '4',
+        'show_device_name': 'on',   # others omitted -> hidden
+    }, follow_redirects=False)
+    check('account profile save with favorites redirects',
+          r.status_code == 302, f'status={r.status_code}')
+
+    r = client.get('/profile/smokedriver')
+    prof_html = r.get_data(as_text=True)
+    check('profile shows driving stats panel',
+          'Driving' in prof_html and 'Stages driven' in prof_html
+          and '50%' in prof_html and 'Porsche 911 RGT Rally Spec' in prof_html
+          and 'Monte Carlo' in prof_html,
+          f'status={r.status_code}')
+    check('profile shows device (visible) but hides play stats (unchecked)',
+          'Simucube 2 Pro' in prof_html and 'Days played' not in prof_html
+          and 'Sessions' not in prof_html,
+          f'status={r.status_code}')
+
     # home recent-times rows carry the driver's flag url (backlog #40)
     r = client.get('/api/home/recent-times?offset=0&limit=25')
     j = r.get_json() or {}
