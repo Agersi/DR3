@@ -326,6 +326,15 @@ def main() -> int:
           '<select id="favorite_car_id"' in acc_html
           and '<select id="favorite_location_id"' in acc_html,
           f'status={r.status_code}')
+    check('favorite car select is grouped by class (optgroup)',
+          '<optgroup label="H1 FWD">' in acc_html
+          and '<optgroup label="Rally GT">' in acc_html
+          and '<optgroup label="RX Supercars">' in acc_html,
+          f'status={r.status_code}')
+    check('favorite location select is grouped Rally / RX (optgroup)',
+          '<optgroup label="Rally">' in acc_html
+          and '<optgroup label="RX">' in acc_html,
+          f'status={r.status_code}')
     check('account page has the four stat visibility checkboxes',
           all(f'name="{n}"' in acc_html for n in (
               'show_device_name', 'show_days_played',

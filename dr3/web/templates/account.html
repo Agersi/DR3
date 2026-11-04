@@ -28,21 +28,29 @@
     <label for="favorite_car_id">Favorite car</label>
     <select id="favorite_car_id" name="favorite_car_id">
       <option value="">—</option>
-      {% if g.user.favorite_car_id and g.user.favorite_car_id not in vehicles|map(attribute=0)|list %}
+      {% if g.user.favorite_car_id and g.user.favorite_car_id not in vehicle_ids %}
       <option value="{{ g.user.favorite_car_id }}" selected>Vehicle {{ g.user.favorite_car_id }}</option>
       {% endif %}
-      {% for vid, meta in vehicles %}
-      <option value="{{ vid }}"{% if g.user.favorite_car_id == vid %} selected{% endif %}>{{ meta['name'] }}</option>
+      {% for label, cars in car_groups %}
+      <optgroup label="{{ label }}">
+        {% for vid, name in cars %}
+        <option value="{{ vid }}"{% if g.user.favorite_car_id == vid %} selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </optgroup>
       {% endfor %}
     </select>
     <label for="favorite_location_id">Favorite location</label>
     <select id="favorite_location_id" name="favorite_location_id">
       <option value="">—</option>
-      {% if g.user.favorite_location_id and g.user.favorite_location_id not in locations|map(attribute='value')|list %}
+      {% if g.user.favorite_location_id and g.user.favorite_location_id not in location_ids %}
       <option value="{{ g.user.favorite_location_id }}" selected>Location {{ g.user.favorite_location_id }}</option>
       {% endif %}
-      {% for loc in locations %}
-      <option value="{{ loc.value }}"{% if g.user.favorite_location_id == loc.value %} selected{% endif %}>{{ loc.display_name }}</option>
+      {% for label, locs in location_groups %}
+      <optgroup label="{{ label }}">
+        {% for loc in locs %}
+        <option value="{{ loc.value }}"{% if g.user.favorite_location_id == loc.value %} selected{% endif %}>{{ loc.display_name }}</option>
+        {% endfor %}
+      </optgroup>
       {% endfor %}
     </select>
     <p class="meta">Stats shown on your public profile (device and play time come from your latest stage run):</p>

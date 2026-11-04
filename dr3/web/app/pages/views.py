@@ -376,18 +376,43 @@ def account():
 
     active_token = next((t for t in user_tokens(g.user) if t.revoked_at is None), None)
     unread = Notification.query.filter_by(user_id=g.user.id, read=False).count()
-    # Favorite pickers: every confirmed car + every known location.
+    # Favorite pickers: every confirmed car + every known location, grouped for
+    # easier selection — cars by class (builder order), locations by discipline.
     from ..scoring import VEHICLES  # game_data catalog (sys.path set there)
-    from dr2server.game_data import Location
+    from ..tables import ALL_CAR_CLASSES
+    from dr2server.game_data import Location, VEHICLE_CLASSES, vehicle_class_id_for_label
     vehicles = sorted(VEHICLES.items(), key=lambda kv: kv[1]['name'].lower())
+    vehicle_ids = {vid for vid, _ in vehicles}
+    by_class: dict[str, list] = {}
+    for vid, meta in vehicles:
+        label = VEHICLE_CLASSES.get(int(meta['class']), f"Class {meta['class']}")
+        by_class.setdefault(label, []).append((vid, meta['name']))
+    # Builder class order (rally then RX), mapped to canonical enum labels.
+    ordered_labels: list[str] = []
+    for key in ALL_CAR_CLASSES:
+        cid = vehicle_class_id_for_label(key)
+        if cid is not None:
+            label = VEHICLE_CLASSES[cid]
+            if label not in ordered_labels:
+                ordered_labels.append(label)
+    car_groups = [(label, by_class[label]) for label in ordered_labels if label in by_class]
+    car_groups += [(label, by_class[label]) for label in sorted(by_class)
+                   if label not in ordered_labels]
     locations = sorted(Location, key=lambda loc: loc.display_name.lower())
+    location_ids = {int(loc) for loc in locations}
+    location_groups = [
+        ('Rally', [loc for loc in locations if loc.discipline != 'rallycross']),
+        ('RX', [loc for loc in locations if loc.discipline == 'rallycross']),
+    ]
     return render_template(
         'account.html',
         verified=g.user.email_verified,
         token=active_token.token if active_token else '',
         unread=unread,
-        vehicles=vehicles,
-        locations=locations,
+        vehicle_ids=vehicle_ids,
+        car_groups=car_groups,
+        location_ids=location_ids,
+        location_groups=location_groups,
     )
 
 
