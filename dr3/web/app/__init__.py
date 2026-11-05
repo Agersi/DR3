@@ -174,6 +174,7 @@ def _create_schema(db) -> None:
     _ensure_user_profile_columns(db)
     _ensure_tt_splits_column(db)
     _ensure_tt_vehicle_key(db)
+    _ensure_stage_run_columns(db)
 
 
 def _ensure_user_stat_columns(db) -> None:
@@ -325,6 +326,60 @@ def _ensure_tt_vehicle_key(db) -> None:
                         'ALTER TABLE time_trials MODIFY COLUMN vehicle_id INTEGER NOT NULL'))
             except OperationalError:
                 pass  # lost the boot race; another worker applied it
+
+
+def _ensure_stage_run_columns(db) -> None:
+    """Additive migration for databases created before StageRun.splits_json /
+    flat_stage_index / input_method / camera_position + the stats indexes.
+
+    create_all only creates missing tables, so pre-existing stage_runs tables
+    need the columns/indexes added explicitly (works on SQLite and MySQL)."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+
+    insp = db.inspect(db.engine)
+    cols = {c['name'] for c in insp.get_columns('stage_runs')}
+    wanted = {
+        'splits_json': 'TEXT NULL',
+        'flat_stage_index': 'INTEGER NULL',
+        'input_method': 'VARCHAR(16) NULL',
+        'camera_position': 'VARCHAR(16) NULL',
+    }
+    for name, ddl in wanted.items():
+        if name in cols:
+            continue
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text(f'ALTER TABLE stage_runs ADD COLUMN {name} {ddl}'))
+        except OperationalError as e:
+            # Lost the boot race to another worker adding the same column.
+            if '1060' not in str(e) and 'duplicate column' not in str(e):
+                raise
+
+    dialect = db.engine.dialect.name
+    wanted_indexes = {
+        'ix_stage_runs_track_vehicle': ('track_model_id', 'vehicle_id'),
+        'ix_stage_runs_vehicle': ('vehicle_id',),
+        'ix_stage_runs_event_slot': ('event_id', 'username', 'flat_stage_index'),
+    }
+    have = {ix['name']: tuple(ix['column_names']) for ix in insp.get_indexes('stage_runs')}
+    for name, columns in wanted_indexes.items():
+        if have.get(name) == columns:
+            continue
+        try:
+            with db.engine.begin() as conn:
+                if dialect == 'mysql':
+                    conn.execute(text(
+                        f'ALTER TABLE stage_runs ADD INDEX `{name}` '
+                        f'({", ".join(columns)})'))
+                else:  # sqlite (only reachable on a stale dev DB)
+                    conn.execute(text(
+                        f'CREATE INDEX IF NOT EXISTS {name} ON stage_runs '
+                        f'({", ".join(columns)})'))
+        except OperationalError as e:
+            # Lost the boot race to another worker adding the same index.
+            if '1061' not in str(e) and 'already exists' not in str(e):
+                raise
 
 
 def _load_dotenv_local() -> None:

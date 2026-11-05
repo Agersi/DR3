@@ -175,17 +175,15 @@ def main() -> int:
     check('leaderboard: entry-level nationality_id from stage-begin',
           e0.get('nationality_id') == 1, str(e0.get('nationality_id')))
 
-    # personal-best stat tracked per car+stage; the faster re-submit replaces it
+    # StageStat writes retired (#56): the live stage-complete path no longer
+    # touches the table (stats now come from stage_runs); the dormant function
+    # itself is unit-checked directly below.
     from app.models import StageStat
     with app.app_context():
         stat = db.session.query(StageStat).filter_by(
             username='smokedriver', vehicle_id=1, track_id=10).first()
-        _stat1_ms = stat.best_time_ms if stat else None
-        _stat1_src = stat.source_type if stat else None
-        _stat1_splits = stat.splits_json if stat else 'ABSENT'
-    check('stage stat: best time per car+stage updated to 419000 (club)',
-          _stat1_ms == 419000 and _stat1_src == 'club' and _stat1_splits is None,
-          f'ms={_stat1_ms} src={_stat1_src} splits={_stat1_splits}')
+    check('stage stat: live stage-complete no longer writes the table (#56)',
+          stat is None, f'row={stat}')
 
     # splits ride into the stat + a slower time never replaces the stored best
     # (unit-level: a live submit would add rows to the global recent-times feed)
@@ -249,9 +247,9 @@ def main() -> int:
     check('stage stat: slower run never absorbs splits into the best',
           _stat6_splits is None, f'splits={_stat6_splits}')
 
-    # lifetime driving stats: proxied timetrial/official events record through a
-    # dedicated endpoint (the game keeps talking to EGO); snapshot the baseline
-    # first so the deltas are deterministic regardless of earlier submissions.
+    # stats-record retired (#56): the endpoint is a no-op (proxied runs now land
+    # in stage_runs via /api/game/stage-detail); snapshot the baseline first so
+    # the deltas are deterministic regardless of earlier submissions.
     from app.models import User as _User
     with app.app_context():
         _u0 = db.session.query(_User).filter_by(username='smokedriver').first()
@@ -279,15 +277,13 @@ def main() -> int:
     with app.app_context():
         _tt = db.session.query(StageStat).filter_by(
             username='smokedriver', vehicle_id=5, track_id=90).first()
-        _tt_ms = _tt.best_time_ms if _tt else None
-        _tt_src = _tt.source_type if _tt else None
         _u1 = db.session.query(_User).filter_by(username='smokedriver').first()
         _dist_delta = (_u1.total_distance_m or 0) - _base_dist
         _stages_delta = (_u1.stages_driven or 0) - _base_stages
-    check('stats-record: timetrial per-track best stored (no count bump)',
-          _tt_ms == 61234 and _tt_src == 'timetrial', f'ms={_tt_ms} src={_tt_src}')
-    check('stats-record: official adds distance(5305)+count(1); DNF adds nothing',
-          _dist_delta == 5305 and _stages_delta == 1,
+    check('stats-record retired: no StageStat row written (#56)',
+          _tt is None, f'row={_tt}')
+    check('stats-record retired: lifetime counters untouched (#56)',
+          _dist_delta == 0 and _stages_delta == 0,
           f'dist_delta={_dist_delta} stages_delta={_stages_delta}')
 
     # ── stage-detail: merged StageEnded + StageComplete (append-only) ───
@@ -306,6 +302,9 @@ def main() -> int:
         'library_id': 'lib_direct_input', 'driver_name': 'Simucube 2 Pro',
         'g_separate_days_played_count': 12, 'g_total_seconds_played': 43200,
         'g_session_count': 7,
+        'splits': [41.871, 41.021, 39.225, 33.877],
+        'flat_stage_index': 2,
+        'metres_cam_head': 48210.0,
     })
     check('stage-detail merged record ok',
           (r.get_json() or {}).get('ok') is True, str(r.get_json()))
@@ -335,10 +334,22 @@ def main() -> int:
           and _sr0.using_wheel is True and _sr0.hardcore_damage is True
           and _sr0.g_days_played == 12,
           f'row={_sr0}')
+    check('stage-detail: splits/flat index + normalized method/camera stored',
+          _sr0 is not None
+          and json.loads(_sr0.splits_json) == [41.871, 41.021, 39.225, 33.877]
+          and _sr0.flat_stage_index == 2
+          and _sr0.input_method == 'wheel'
+          and _sr0.camera_position == 'head',
+          f'splits={_sr0.splits_json if _sr0 else None} '
+          f'flat={_sr0.flat_stage_index if _sr0 else None} '
+          f'method={_sr0.input_method if _sr0 else None} '
+          f'cam={_sr0.camera_position if _sr0 else None}')
     check('stage-detail: half row stores what it has (TT source, no device)',
           _sr1 is not None and _sr1.source_type == 'timetrial'
           and _sr1.player_finished is False and _sr1.time_ms == 0
-          and _sr1.input_name is None and _sr1.distance_m == 0,
+          and _sr1.input_name is None and _sr1.distance_m is None
+          and _sr1.splits_json is None and _sr1.flat_stage_index is None
+          and _sr1.input_method is None and _sr1.camera_position is None,
           f'row={_sr1}')
 
     # Retransmitted RPC for an already-merged stage slot collapses into the
@@ -396,6 +407,25 @@ def main() -> int:
           _d is not None and _d.distance_m is None and _d.source_type == 'club'
           and _d.player_end_status == 5, f'row={_d}')
 
+    # RPC-only DNF half (no snapshot arrived): the RPC's own race flags must
+    # still drop the stale cumulative distance + camera.
+    r = client.post('/api/game/stage-detail', headers=headers, json={
+        'challenge_id': 900005, 'event_index': 1, 'stage_index': 4,
+        'vehicle_id': 565, 'event_id': 'evt-smoke', 'race_status': 5,
+        'stage_time_ms': 900000, 'distance_driven': 32120,
+        'metres_cam_bonnet': 48210.5,
+    })
+    check('stage-detail rpc-only DNF ok', (r.get_json() or {}).get('ok') is True)
+    with app.app_context():
+        from app.models import StageRun
+        _d2 = (db.session.query(StageRun)
+               .filter_by(username='smokedriver', challenge_id=900005,
+                          stage_index=4).first())
+    check('stage-detail: rpc-only DNF drops distance + camera via race flags',
+          _d2 is not None and _d2.distance_m is None
+          and _d2.camera_position is None and _d2.player_finished is False,
+          f'row={_d2}')
+
     # Account page: favorite pickers + profile stat visibility checkboxes.
     r = client.get('/account')
     acc_html = r.get_data(as_text=True)
@@ -434,7 +464,7 @@ def main() -> int:
     prof_html = r.get_data(as_text=True)
     check('profile shows driving stats panel',
           'Driving' in prof_html and 'Stages driven' in prof_html
-          and '50%' in prof_html and 'Porsche 911 RGT Rally Spec' in prof_html
+          and '40%' in prof_html and 'Porsche 911 RGT Rally Spec' in prof_html
           and 'Monte Carlo' in prof_html,
           f'status={r.status_code}')
     check('profile shows device (visible) but hides play stats (unchecked)',

@@ -115,9 +115,18 @@ def main() -> int:
           and client.get('/static/css/style.css').get_data(as_text=True)
           .find('a.stat-card:hover {') != -1, '')
     r = client.get('/drivers')
+    drv_html = r.get_data(as_text=True)
     check('drivers page renders with the smoke driver',
-          r.status_code == 200 and 'Smoke Driver' in r.get_data(as_text=True),
+          r.status_code == 200 and 'Smoke Driver' in drv_html,
           f'status={r.status_code}')
+    # #56: /drivers stats are computed from stage_runs (the stored users
+    # counters are retired) — the smoke driver's clean rows (48210 + 1200 m)
+    # are what shows up, not the old double-counted user columns.
+    check('drivers page: distance comes from stage_runs (#56)',
+          '49.4 km' in drv_html, '')
+    prof = client.get('/profile/smokedriver').get_data(as_text=True)
+    check('profile: per-device distance list (#57)',
+          'Input devices' in prof and 'Simucube 2 Pro (100%)' in prof, '')
 
     # home hero: three panels for anonymous visitors (Join Now / What's New / Discord)
     check('home anon: Join Now panel with Register + How it works',

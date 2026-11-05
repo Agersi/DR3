@@ -62,6 +62,9 @@ RPC_FIELDS: Tuple[str, ...] = (
     "using_wheel", "using_assists",
     # club path only: the web event id (official/TT runs carry none)
     "event_id",
+    # club clean finishes only: telemetry splits (seconds) + the flat stage
+    # ordinal within the championship (correlates with results.stages_json)
+    "splits", "flat_stage_index",
 )
 
 _KEY = Tuple[Optional[int], Optional[int], Optional[int]]

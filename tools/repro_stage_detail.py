@@ -205,6 +205,77 @@ def test_emit_failure_isolated():
     time.sleep(0.2)
 
 
+def test_club_path_flat_index():
+    """Club StageComplete feed (#58c): the RPC half fed by dispatcher.
+    _stage_complete carries event_id + flat_stage_index (championship-wide
+    ordinal via the leg offset) + telemetry splits, so the merged row
+    correlates with results.stages_json."""
+    from dr2server.account_store import AccountStore
+    from dr2server.api_client import _location_id_for
+    from dr2server.dispatcher import RpcDispatcher
+
+    def stage(idx):
+        return {"stage_index": idx, "time_ms": 0, "meters_driven": 0,
+                "vehicle_id": 565, "livery_id": 3813}
+
+    class FakeApi:
+        def get_my_progress(self):
+            return {"events": [{"event_id": "evtC", "completed_stages": [],
+                                "total_time_ms": 0, "attempts_used": 0}]}
+
+        def get_event(self, event_id):
+            return {"events": [{"stages": [stage(0), stage(1)]},
+                               {"stages": [stage(2), stage(3)]}]}
+
+        def resolve_location_id(self, name):
+            return _location_id_for(name)
+
+        def submit_stage_begin(self, **kw):
+            pass
+
+        def submit_stage(self, **kw):
+            return {"ok": True}
+
+    store = AccountStore(Path(r"D:\CODE\DR2\build\stage_detail_scratch") / "u")
+    d = RpcDispatcher(store, api_client=FakeApi())
+    col = Collector()
+    buf = StageDetailBuffer(col.send)
+    buf.FLUSH_TIMEOUT_S = 0.3
+    d.stage_detail = buf
+    d._challenge_event_map = {900010: "evtC"}
+    d._challenge_subevent_map = {900010: 1}   # leg 1 -> flat offset 2
+    d._compute_stage_splits = lambda *a, **k: [41.871, 41.021]
+
+    params = {"VehicleId": 565, "VehicleInstId": -4, "LiveryId": 3813,
+              "StageIndex": 0, "EventIndex": 0, "ChallengeId": 900010,
+              "NationalityId": 31, "StageTime": 155.99,
+              "MetersDriven": 48210, "DistanceDriven": 48210,
+              "RaceStatus": 0, "RecovToService": False}
+    d._stage_complete(params)
+    ok = col.wait(1, timeout=3.0)   # rpc-only half flushes on timeout
+    check("club: rpc half fed to the buffer", ok and len(col.records), True)
+    r = col.records[0] if ok else {}
+    check("club: event id carried", r.get("event_id"), "evtC")
+    check("club: flat index = leg offset + stage index",
+          r.get("flat_stage_index"), 2)
+    check("club: telemetry splits pass through",
+          r.get("splits"), [41.871, 41.021])
+
+    # DNF close-out: finished_cleanly is False -> no splits, no flat index.
+    col2 = Collector()
+    buf2 = StageDetailBuffer(col2.send)
+    buf2.FLUSH_TIMEOUT_S = 0.3
+    d.stage_detail = buf2
+    p2 = dict(params, RaceStatus=5)
+    d._stage_complete(p2)
+    ok2 = col2.wait(1, timeout=3.0)
+    check("club DNF: rpc half fed too", ok2 and len(col2.records), True)
+    r2 = col2.records[0] if ok2 else {}
+    check("club DNF: splits not computed", r2.get("splits"), None)
+    check("club DNF: flat index not computed",
+          r2.get("flat_stage_index"), None)
+
+
 def test_httpd_wiring_e2e():
     """Full wiring: a real App against a local capture server — the StageEnded
     vdic through RequestHandler._log_datamining_event + the StageComplete RPC
@@ -303,6 +374,7 @@ def main():
     test_no_cross_contamination()
     test_duplicate_half()
     test_emit_failure_isolated()
+    test_club_path_flat_index()
     test_httpd_wiring_e2e()
     print()
     if FAILS:

@@ -291,20 +291,6 @@ def api_game_stage_begin():
     return jsonify({'ok': True})
 
 
-def _stage_track_id(event: dict, event_index: int, stage_index: int):
-    """The track id of one leg's stage within a web event (None if unresolvable)."""
-    legs = event.get('events') or [{'stages': event.get('stages', [])}]
-    if not 0 <= event_index < len(legs):
-        return None
-    leg_stages = legs[event_index].get('stages') or []
-    if not 0 <= stage_index < len(leg_stages):
-        return None
-    try:
-        return int(leg_stages[stage_index].get('track_id'))
-    except (TypeError, ValueError):
-        return None
-
-
 def _upsert_stage_stat(username, vehicle_id, track_id, time_ms, splits,
                        source_type, source_event_id) -> None:
     """Record a driver's best-ever time on a car at a stage; the per-segment
@@ -488,19 +474,6 @@ def api_game_stage_complete():
         vid = vehicle_id if vehicle_id is not None else stage_entry.get('vehicle_id')
         stages[pos] = stage_entry
 
-        # Lifetime stats for any clean finish: total distance driven (the
-        # per-stage DistanceDriven the game reports) + completion count. The
-        # personal-best stat (per car+stage) needs a known car + track on top.
-        if stage_entry.get('race_status', 0) == 0:
-            user.total_distance_m = (user.total_distance_m or 0) + max(
-                0, int(stage_entry.get('distance_driven') or 0))
-            user.stages_driven = (user.stages_driven or 0) + 1
-            if vid:
-                _upsert_stage_stat(
-                    user.username, vid,
-                    _stage_track_id(event, event_index, stage_index),
-                    time_ms, stage_entry.get('splits'), 'club', event_id)
-
     # A DNF/retired finish burns an attempt; race_status==0 is a clean finish.
     # Markers don't count — see the mark_dnf branch above.
     if not mark_dnf and stage_entry['race_status'] != 0:
@@ -532,41 +505,11 @@ def api_game_stage_complete():
 @csrf.exempt  # type: ignore[untyped-decorator]
 @game_auth_required
 def api_game_stats_record():
-    """Record driving stats for events that are proxied to EGO (timetrials +
-    official dailies/weeklies/monthly). The game keeps talking to the real
-    upstream; the client reads those payloads on the way through and posts them
-    here so we can still build per-driver stats.
-
-    - A clean finish with a known car + track updates the personal-best stat
-      (timetrials carry TrackModelId; officials don't, so they skip this).
-    - Any clean stage completion adds its distance to the driver's lifetime total
-      and bumps the completion count.
-    """
-    data = request.get_json(silent=True) or {}
-    user = g.game_user
-    source_type = str(data.get('source_type') or 'official')[:16]
-    clean = bool(data.get('clean'))
-
-    vehicle_id = data.get('vehicle_id')
-    track_id = data.get('track_id')
-    try:
-        time_ms = int(data.get('time_ms') or 0)
-        distance_m = int(data.get('distance_m') or 0)
-    except (TypeError, ValueError):
-        time_ms, distance_m = 0, 0
-
-    if clean:
-        if vehicle_id and track_id and time_ms > 0:
-            _upsert_stage_stat(
-                user.username, int(vehicle_id), int(track_id), time_ms,
-                data.get('splits'), source_type, str(data.get('event_id') or ''))
-        # Time trials aren't rally stages (and carry no distance) — they only
-        # feed the per-track best. Clubs + official stages add distance + count.
-        if source_type != 'timetrial':
-            user.total_distance_m = (user.total_distance_m or 0) + max(0, distance_m)
-            user.stages_driven = (user.stages_driven or 0) + 1
-        db.session.commit()
-
+    """Retired (#56): lifetime counters and per-track bests are now computed
+    from the append-only stage_runs table, which the client feeds for EVERY run
+    (club + proxied official/TT) via /api/game/stage-detail. The route stays as
+    a no-op so older clients' fire-and-forget POSTs don't 404 during the update
+    window."""
     return jsonify({'ok': True})
 
 
@@ -636,8 +579,13 @@ def api_game_stage_detail():
     # Distance: the RPC's per-stage integer is exact (MetersDriven is cumulative
     # across stages, so it is never a source); fall back to the camera-metres
     # sum. DNF close-outs carry stale/cumulative values on both channels, so
-    # their partial distances are not trusted.
+    # their partial distances are not trusted. A DNF can arrive as an RPC-only
+    # half (no snapshot), in which case the RPC's own race flags carry it.
     end_status = _int('player_end_status') or 0
+    race_status = _int('race_status')
+    is_dnf = (end_status != 0
+              or (race_status is not None and race_status != 0)
+              or bool(data.get('recov_to_service')))
     distance_m = _int('distance_driven') or 0
     if not distance_m:
         distance_m = int(round(sum(
@@ -645,7 +593,7 @@ def api_game_stage_detail():
                 'metres_cam_bonnet', 'metres_cam_bumper', 'metres_cam_chase_close',
                 'metres_cam_chase_far', 'metres_cam_dash', 'metres_cam_head',
             ))))
-    if end_status != 0:
+    if is_dnf:
         distance_m = None
 
     # Source type from the snapshot's challenge_type (-1 TT / 1 official / 2 club).
@@ -694,7 +642,33 @@ def api_game_stage_detail():
         'g_days_played': _int('g_separate_days_played_count') or 0,
         'g_seconds_played': _int('g_total_seconds_played') or 0,
         'g_session_count': _int('g_session_count') or 0,
+        'splits_json': (json.dumps(data['splits'])
+                        if isinstance(data.get('splits'), list) and data['splits']
+                        else None),
+        'flat_stage_index': _int('flat_stage_index'),
     }
+
+    # Normalized once at ingest so leaderboard filters never re-derive them:
+    # input method from the raw library id, camera position from whichever
+    # camera accumulated metres this stage (the active one).
+    library = fields['input_library'] or ''
+    if library == 'lib_keyboard':
+        fields['input_method'] = 'keyboard'
+    elif library == 'lib_direct_input':
+        fields['input_method'] = 'wheel'
+    else:
+        fields['input_method'] = 'controller' if library else None
+    cam_metres = {
+        'bonnet': fields['cam_bonnet_m'], 'bumper': fields['cam_bumper_m'],
+        'chase_close': fields['cam_chase_close_m'],
+        'chase_far': fields['cam_chase_far_m'],
+        'dash': fields['cam_dash_m'], 'head': fields['cam_head_m'],
+    }
+    # DNF close-outs carry stale camera state (same as their distances), so the
+    # active camera is only trusted on clean finishes.
+    fields['camera_position'] = (max(cam_metres, key=cam_metres.get)
+                                  if not is_dnf and any(cam_metres.values())
+                                  else None)
 
     # The game can retransmit a StageComplete (observed at +15 s); when the
     # client buffer's timeout flushes a half row in between, one run arrives

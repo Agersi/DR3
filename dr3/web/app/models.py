@@ -298,6 +298,22 @@ class StageRun(db.Model):
     g_days_played: int = db.Column(db.BigInteger, default=0)
     g_seconds_played: int = db.Column(db.BigInteger, default=0)
     g_session_count: int = db.Column(db.Integer, default=0)
+    # Per-segment split times (seconds, sum ~= stage time) from client telemetry —
+    # present only on clean club finishes where a matching UDP run was captured.
+    splits_json: str | None = db.Column(db.Text)
+    # Flat stage ordinal within the championship (leg offset + local index) —
+    # correlates club rows with results.stages_json entries.
+    flat_stage_index: int | None = db.Column(db.Integer)
+    # Normalized once at ingest from input_library / camera-metres fields, so
+    # leaderboard filters never re-derive them.
+    input_method: str | None = db.Column(db.String(16))     # keyboard / wheel / controller
+    camera_position: str | None = db.Column(db.String(16))  # bonnet / bumper / chase_close / ...
+
+    __table_args__ = (
+        db.Index('ix_stage_runs_track_vehicle', 'track_model_id', 'vehicle_id'),
+        db.Index('ix_stage_runs_vehicle', 'vehicle_id'),
+        db.Index('ix_stage_runs_event_slot', 'event_id', 'username', 'flat_stage_index'),
+    )
 
 
 class Notification(db.Model):

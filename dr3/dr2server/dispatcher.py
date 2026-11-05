@@ -3253,6 +3253,34 @@ class RpcDispatcher:
         has_repaired = req.recov_to_service or _qr > 0
         time_ms = int(req.stage_time * 1000)
 
+        # Persist only clean finishes. Two non-finish shapes close a stage
+        # (backlog 32, step 2): race_status != 0 (club terminal-damage
+        # close-out, rs=4) and recov_to_service=True (daily-shape close-out —
+        # the game sends rs=0 with the stage's time limit as StageTime; the
+        # real upstream answers that shape with State=6 DNF, so it must not be
+        # recorded as a completion). For DNF shapes we send a marker instead:
+        # the game pre-persisted the time-limit value via its post-wreck
+        # leaderboard query, and the web side flags that entry (race_status)
+        # without changing its time. Either way we still build a Progress
+        # response below.
+        finished_cleanly = req.race_status == 0 and not req.recov_to_service
+
+        # Real per-segment splits from the UDP run just driven (None when
+        # telemetry is off/unavailable or the stage's split count is unknown).
+        # Computed once, BEFORE the detail merge feed, so both the merged row
+        # and the club submission carry them regardless of half arrival order;
+        # the flat ordinal correlates the row with results.stages_json.
+        splits = None
+        flat_index = None
+        if event_id and self.api_client is not None and finished_cleanly:
+            try:
+                splits = self._compute_stage_splits(
+                    event_id, sub_index, req.stage_index, time_ms)
+            except Exception as exc:
+                print(f"[STAGE] split computation raised: {exc}")
+            flat_index = (self._stage_offset(event_id, sub_index)
+                          + req.stage_index)
+
         # Per-stage run detail: feed the RPC half of the merge (the StageEnded
         # snapshot half arrives from httpd under the same key). Clean finishes
         # and DNF close-outs both feed — the web side stores the row either way.
@@ -3276,28 +3304,14 @@ class RpcDispatcher:
                         # Club runs carry the web event id; official/TT paths
                         # (httpd._record_proxy_stats) feed without one.
                         "event_id": event_id,
+                        "splits": splits,
+                        "flat_stage_index": flat_index,
                     })
             except Exception as exc:  # never let detail recording break the stage flow
                 print(f"[STAGE] stage-detail feed failed: {exc}")
 
-        # Persist only clean finishes. Two non-finish shapes close a stage
-        # (backlog 32, step 2): race_status != 0 (club terminal-damage
-        # close-out, rs=4) and recov_to_service=True (daily-shape close-out —
-        # the game sends rs=0 with the stage's time limit as StageTime; the
-        # real upstream answers that shape with State=6 DNF, so it must not be
-        # recorded as a completion). For DNF shapes we send a marker instead:
-        # the game pre-persisted the time-limit value via its post-wreck
-        # leaderboard query, and the web side flags that entry (race_status)
-        # without changing its time. Either way we still build a Progress
-        # response below.
-        finished_cleanly = req.race_status == 0 and not req.recov_to_service
         if event_id and self.api_client is not None and finished_cleanly:
             try:
-                # Real per-segment splits from the UDP run just driven (None when
-                # telemetry is off/unavailable or the stage's split count is
-                # unknown — the web side then stores no splits for this entry).
-                splits = self._compute_stage_splits(
-                    event_id, sub_index, req.stage_index, time_ms)
                 self.api_client.submit_stage(
                     event_id=event_id,
                     username="",  # server uses g.game_user from token

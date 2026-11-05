@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from pathlib import Path
 
 from flask import (
@@ -47,6 +48,7 @@ from ..models import (
     Notification,
     Result,
     StageRun,
+    StageStat,
     TimeTrialEntry,
     User,
     utcnow,
@@ -463,6 +465,10 @@ def _delete_account(user: User):
         db.session.delete(r)
     for t in TimeTrialEntry.query.filter_by(username=user.username).all():
         db.session.delete(t)
+    for s in StageRun.query.filter_by(username=user.username).all():
+        db.session.delete(s)
+    for s in StageStat.query.filter_by(username=user.username).all():
+        db.session.delete(s)
     for d in ChampionshipDraft.query.filter_by(owner=user.username).all():
         db.session.delete(d)
     for inv in ClubInvite.query.filter_by(created_by=user.id).all():
@@ -522,35 +528,50 @@ def notifications():
 
 @pages_bp.route('/drivers')
 def drivers():
-    """All registered drivers with their career stats, most active first."""
+    """All registered drivers with their career stats, most active first.
+
+    Stats are computed from the append-only stage_runs table (#56 — the stored
+    users counters are retired; pre-stage_runs history is backfilled into the
+    table by tools/repair_stage_runs_backfill.sh)."""
+    from sqlalchemy import func
+
     club_count: dict[str, int] = {}
     for c in Club.query.all():
         for m in c.members:
             uname = m.user.username if m.user else None
             if uname:
                 club_count[uname] = club_count.get(uname, 0) + 1
-    users = User.query.order_by(
-        User.stages_driven.desc(), User.display_name).all()
+    stats = (db.session.query(StageRun.username, func.count(StageRun.id),
+                              func.sum(StageRun.distance_m))
+             .group_by(StageRun.username).all())
+    by_user = {u: (int(n), int(d or 0)) for u, n, d in stats}
+    users = User.query.order_by(User.display_name).all()
     rows = [{
         'username': u.username,
         'display_name': u.display_name,
         'country': u.country or '',
         'clubs': club_count.get(u.username, 0),
-        'stages': u.stages_driven or 0,
-        'distance_km': (u.total_distance_m or 0) / 1000.0,
+        'stages': by_user.get(u.username, (0, 0))[0],
+        'distance_km': by_user.get(u.username, (0, 0))[1] / 1000.0,
     } for u in users]
+    rows.sort(key=lambda r: (-r['stages'], r['display_name']))
     return render_template('drivers.html', rows=rows)
+
+
+def _device_label_values(library, device, name) -> str:
+    """Human input-device name (wheel name, else library/device fallback)."""
+    if name:
+        return name
+    if library == 'lib_keyboard':
+        return 'Keyboard'
+    if library == 'lib_direct_input':
+        return 'Wheel'
+    return device or 'Unknown'
 
 
 def _device_label(run: StageRun) -> str:
     """Human input-device name for a stage run (wheel name, else fallback)."""
-    if run.input_name:
-        return run.input_name
-    if run.input_library == 'lib_keyboard':
-        return 'Keyboard'
-    if run.input_library == 'lib_direct_input':
-        return 'Wheel'
-    return run.input_device or 'Unknown'
+    return _device_label_values(run.input_library, run.input_device, run.input_name)
 
 
 def _format_play_seconds(total_s: int) -> str:
@@ -601,6 +622,32 @@ def _profile_stats(user: User) -> dict:
                                 StageRun.g_session_count > 0))
                    .order_by(StageRun.received_at.desc(), StageRun.id.desc()).first())
 
+    # Per-device distance share (#57): group by hardware (library + device id),
+    # label = the most common wheel name seen on that hardware. DNF/half rows
+    # carry no trusted distance and drop out naturally.
+    devices: dict[tuple, dict] = {}
+    for lib, dev, name, dist in (
+            db.session.query(StageRun.input_library, StageRun.input_device,
+                             StageRun.input_name, StageRun.distance_m)
+            .filter(StageRun.username == user.username,
+                    StageRun.input_library.isnot(None),
+                    StageRun.distance_m.isnot(None)).all()):
+        g = devices.setdefault((lib, dev or ''), {'names': Counter(), 'dist': 0})
+        if name:
+            g['names'][name] += 1
+        g['dist'] += int(dist)
+    device_list = []
+    total_dev_dist = sum(g['dist'] for g in devices.values())
+    if total_dev_dist > 0:
+        for (lib, dev), g in sorted(devices.items(), key=lambda kv: -kv[1]['dist']):
+            label = (g['names'].most_common(1)[0][0] if g['names']
+                     else _device_label_values(lib, dev or None, None))
+            device_list.append({
+                'label': label,
+                'pct': round(g['dist'] / total_dev_dist * 100),
+                'km': g['dist'] / 1000.0,
+            })
+
     car_label = ''
     if car_id is not None:
         title, class_label = vehicle_meta(car_id)
@@ -631,6 +678,7 @@ def _profile_stats(user: User) -> dict:
         'fav_car': fav_car, 'fav_location': fav_loc,
         # Device + play counters from the newest run that reported them.
         'device': _device_label(latest_input) if latest_input else '',
+        'devices': device_list,
         'days_played': int(latest_play.g_days_played or 0) if latest_play else 0,
         'seconds_played': (_format_play_seconds(latest_play.g_seconds_played or 0)
                            if latest_play else ''),
