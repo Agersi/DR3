@@ -335,6 +335,10 @@ def main() -> int:
           '<optgroup label="Rally">' in acc_html
           and '<optgroup label="RX">' in acc_html,
           f'status={r.status_code}')
+    check('account page links to the user\'s public profile',
+          'href="/profile/smokedriver"' in acc_html
+          and 'View my public profile' in acc_html,
+          f'status={r.status_code}')
     check('account page has the four stat visibility checkboxes',
           all(f'name="{n}"' in acc_html for n in (
               'show_device_name', 'show_days_played',
