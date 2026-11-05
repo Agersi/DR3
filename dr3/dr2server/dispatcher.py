@@ -33,6 +33,11 @@ Handler = Callable[[Dict[str, Any]], Union[Dict[str, Any], bytes]]
 # that should be sent directly without re-encoding.
 RAW_BINARY_MARKER = "__raw_binary__"
 
+# How long a proxied (official) stage stays "open" for PostTime attribution.
+# Max stage time limit is 30 min; double it so a slow finish still matches,
+# while a quit-mid-stage entry dies before it can swallow later real TTs.
+_OFFICIAL_STAGE_OPEN_TTL_S = 60 * 60
+
 # Fallback AccountId for local-only mode (no api_client, so no web username
 # to derive an ID from). Local-only has no cross-player leaderboards, so the
 # value just needs to be a stable, valid si64.
@@ -191,6 +196,15 @@ class RpcDispatcher:
         # time trial), so while one of these is open a PostTime on the same
         # track is the club stage's and must not be recorded locally (#49).
         self._open_club_stages: Dict[tuple, int] = {}
+        # Official (proxied) stages currently being driven:
+        # (challenge_id, event_index, stage_index) -> (vehicle_id, wall_ts).
+        # The game fires TimeTrial.PostTime after every completed OFFICIAL
+        # stage too (identical payload shape to a real time trial), and the
+        # proxied StageBegin/StageComplete carry no track id — so the match is
+        # by vehicle while one of these is open (#49-official). Entries expire
+        # after _OFFICIAL_STAGE_OPEN_TTL_S (a quit mid-stage leaves no
+        # StageComplete behind).
+        self._open_official_stages: Dict[tuple, tuple] = {}
         # Challenge ids served as ONE challenge carrying ALL legs of the
         # championship in Events[] (#39 experiment, gated by the event setting
         # ``single_challenge``).  For these ids the game addresses stages with
@@ -2265,6 +2279,15 @@ class RpcDispatcher:
                   f"{track} (time_ms={stage_time_ms})")
             return {"ok": True, "Accepted": True, "EntryId": secrets.token_hex(8)}
 
+        # Same game behavior for OFFICIAL stages (#49-official): the PostTime is
+        # the stage's time, not a real time trial. Official StageBegin/Complete
+        # are proxied (no track id in the payloads), so the match is by vehicle
+        # while the stage is open — see note_official_stage_begin/complete.
+        if self._official_stage_open_for(vehicle_id):
+            print(f"[TT] PostTime skipped: official stage in progress on "
+                  f"vehicle {vehicle_id} (track {track}, time_ms={stage_time_ms})")
+            return {"ok": True, "Accepted": True, "EntryId": secrets.token_hex(8)}
+
         # Ghost data is a raw bytes blob in the EgoNet params
         import base64
         ghost_raw = params.get("GhostData", b"")
@@ -2843,6 +2866,47 @@ class RpcDispatcher:
         if not track_id:
             return False
         return any(t == track_id for t in self._open_club_stages.values())
+
+    def note_official_stage_begin(self, payload: Dict[str, Any]) -> None:
+        """Register a proxied (official) stage as in-progress. The game fires
+        TimeTrial.PostTime at its finish with no challenge id — only car/track/
+        time — so attribution is by vehicle while the stage is open
+        (#49-official)."""
+        def _val(key: str) -> Any:
+            v = payload.get(key)
+            return getattr(v, "value", v)
+        try:
+            key = (int(_val("ChallengeId") or 0),
+                   int(_val("EventIndex") or 0),
+                   int(_val("StageIndex") or 0))
+            vehicle_id = int(_val("VehicleId") or 0)
+        except (TypeError, ValueError):
+            return
+        if not key[0]:
+            return
+        self._open_official_stages[key] = (vehicle_id, time.time())
+
+    def note_official_stage_complete(self, payload: Dict[str, Any]) -> None:
+        """Clear a proxied (official) stage's in-progress entry."""
+        def _val(key: str) -> Any:
+            v = payload.get(key)
+            return getattr(v, "value", v)
+        try:
+            key = (int(_val("ChallengeId") or 0),
+                   int(_val("EventIndex") or 0),
+                   int(_val("StageIndex") or 0))
+        except (TypeError, ValueError):
+            return
+        self._open_official_stages.pop(key, None)
+
+    def _official_stage_open_for(self, vehicle_id: int) -> bool:
+        """True when a proxied (official) stage begun in this car is still open —
+        its PostTime is a stage time, not a real time trial."""
+        if not vehicle_id:
+            return False
+        now = time.time()
+        return any(vid == vehicle_id and now - started < _OFFICIAL_STAGE_OPEN_TTL_S
+                   for vid, started in self._open_official_stages.values())
 
     def _subevent_range(self, event_id: str, event_index: int,
                         layout: Optional[List[int]] = None) -> tuple[int, Optional[int]]:

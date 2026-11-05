@@ -2,6 +2,8 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.56**- Fixed official stage times being recorded as Time Trial personal bests.
+
 **v0.1.55**- Your profile page now shows your driving stats — favorite car and location, most driven car and location, stages completed, distance, and input device — and you can pick on the account page which of those to show.
 
 ## 0.1.54

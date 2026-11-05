@@ -227,6 +227,28 @@ def main() -> int:
           _stat4_src == 'timetrial' and _stat4_ms == 300000,
           f'src={_stat4_src} ms={_stat4_ms}')
 
+    # pre-persist absorption: the post-finish leaderboard pre-persist creates the
+    # row time-only, then the StageComplete arrives with the IDENTICAL time plus
+    # telemetry splits — absorb those without changing the best; a SLOWER run's
+    # splits never describe the best.
+    with app.app_context():
+        _upsert_stage_stat('smokedriver', 6, 14, 450000, None, 'club', 'unit-evt')
+        _upsert_stage_stat('smokedriver', 6, 14, 450000, [111.1, 111.2], 'club', 'unit-evt')
+        stat5 = db.session.query(StageStat).filter_by(
+            username='smokedriver', vehicle_id=6, track_id=14).first()
+        _stat5_splits = json.loads(stat5.splits_json) if stat5 and stat5.splits_json else None
+        _stat5_best = stat5.best_time_ms if stat5 else None
+        _upsert_stage_stat('smokedriver', 7, 15, 460000, None, 'club', 'unit-evt')
+        _upsert_stage_stat('smokedriver', 7, 15, 520000, [98.0, 98.0], 'club', 'unit-evt')
+        stat6 = db.session.query(StageStat).filter_by(
+            username='smokedriver', vehicle_id=7, track_id=15).first()
+        _stat6_splits = stat6.splits_json if stat6 else 'ABSENT'
+    check('stage stat: same-run follow-up absorbs missing splits (pre-persist)',
+          _stat5_splits == [111.1, 111.2] and _stat5_best == 450000,
+          f'splits={_stat5_splits} best={_stat5_best}')
+    check('stage stat: slower run never absorbs splits into the best',
+          _stat6_splits is None, f'splits={_stat6_splits}')
+
     # lifetime driving stats: proxied timetrial/official events record through a
     # dedicated endpoint (the game keeps talking to EGO); snapshot the baseline
     # first so the deltas are deterministic regardless of earlier submissions.

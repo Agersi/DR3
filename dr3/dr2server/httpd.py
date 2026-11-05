@@ -375,6 +375,10 @@ class RequestHandler(BaseHTTPRequestHandler):
         if method != "RaceNetChallenges.StageComplete":
             return
 
+        # The stage is done — clear its PostTime-attribution entry (#49-official)
+        # regardless of whether the web API is reachable.
+        self.app.dispatcher.note_official_stage_complete(payload)
+
         client = self.app.dispatcher.api_client
         if client is None:
             return
@@ -456,6 +460,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             # Listen-in: EGO keeps its real global board; our site files the
             # driver's personal best (time_trials + per-track stat with splits).
             self.app.dispatcher.record_proxied_time_trial(payload)
+        elif is_proxied and method == "RaceNetChallenges.StageBegin":
+            # Official stages are proxied, so the dispatcher never sees their
+            # begins — register them here for PostTime attribution (#49-official).
+            self.app.dispatcher.note_official_stage_begin(payload)
         elif is_proxied and method == "RaceNetChallenges.StageComplete":
             self._record_proxy_stats(method, payload)
 

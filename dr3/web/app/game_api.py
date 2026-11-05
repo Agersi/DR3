@@ -317,7 +317,10 @@ def _upsert_stage_stat(username, vehicle_id, track_id, time_ms, splits,
     spurious 'timetrial' row on this key seconds before the club StageComplete
     arrives with the SAME time; that same-run club submission re-stamps the row
     as 'club' (with its event id) instead of being dropped by the equal-time
-    rule. A genuine faster TT best is never touched."""
+    rule. A genuine faster TT best is never touched. Same-run follow-ups also
+    fill in missing splits: the post-finish leaderboard pre-persist creates the
+    row time-only, and the StageComplete that follows carries the identical
+    time plus telemetry splits."""
     if not username or not vehicle_id or not track_id or not time_ms or time_ms <= 0:
         return
     stat = db.session.query(StageStat).filter_by(
@@ -334,16 +337,27 @@ def _upsert_stage_stat(username, vehicle_id, track_id, time_ms, splits,
         stat.source_type = source_type
         stat.source_event_id = source_event_id
         stat.updated_at = utcnow()
-    elif (source_type == 'club' and stat.source_type == 'timetrial'
-          and not stat.source_event_id
-          and int(time_ms) <= (stat.best_time_ms or 0)):
-        # Same-run club submission after a spurious timetrial row: re-stamp.
-        stat.best_time_ms = int(time_ms)
-        if splits_json is not None:
+    else:
+        # Equal-or-slower time never changes the best, but a SAME-RUN follow-up
+        # submission can still fill in missing pieces: the post-finish
+        # leaderboard pre-persist creates this row time-only seconds before the
+        # StageComplete arrives with the identical time plus telemetry splits —
+        # absorb those (an equal ms time is the same run; a slower one's splits
+        # don't describe the best).
+        if (int(time_ms) == (stat.best_time_ms or 0) and splits_json is not None
+                and stat.splits_json is None):
             stat.splits_json = splits_json
-        stat.source_type = 'club'
-        stat.source_event_id = source_event_id
-        stat.updated_at = utcnow()
+            stat.updated_at = utcnow()
+        if (source_type == 'club' and stat.source_type == 'timetrial'
+                and not stat.source_event_id
+                and int(time_ms) <= (stat.best_time_ms or 0)):
+            # Same-run club submission after a spurious timetrial row: re-stamp.
+            stat.best_time_ms = int(time_ms)
+            if splits_json is not None:
+                stat.splits_json = splits_json
+            stat.source_type = 'club'
+            stat.source_event_id = source_event_id
+            stat.updated_at = utcnow()
 
 
 @game_api_bp.route('/api/game/stage-complete', methods=['POST'])

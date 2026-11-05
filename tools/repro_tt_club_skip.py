@@ -13,6 +13,11 @@ in-progress (StageBegin -> _open_club_stages, cleared on any StageComplete);
 a PostTime on an open track is answered Accepted without the local web calls.
 The guard is track-scoped, so a TT on another track still records.
 
+#49-official extension: official stages are proxied (no track id in their
+StageBegin/Complete), so note_official_stage_begin/complete register the car
+instead; a PostTime for that car is skipped while the stage is open (entries
+expire after _OFFICIAL_STAGE_OPEN_TTL_S).
+
 Run: python tools/repro_tt_club_skip.py   (from D:\\CODE\\DR2)
 """
 import sys
@@ -153,6 +158,54 @@ def main():
 
     # (f) negative control: track 0 never matches.
     check("f: track 0 never open", d._club_stage_open_on(0), False)
+
+    # --- #49-official: the game fires PostTime after OFFICIAL stages too; the
+    # proxied StageBegin/Complete carry no track id, so attribution is by car.
+
+    def off_sb(stage=0, vehicle=513):
+        return {"ChallengeId": 947767, "EventIndex": 0, "StageIndex": stage,
+                "VehicleId": vehicle, "LiveryId": 4819}
+
+    def off_sc(stage=0):
+        return {"ChallengeId": 947767, "EventIndex": 0, "StageIndex": stage,
+                "VehicleId": 513, "LiveryId": 4819}
+
+    # (g) official stage open on vehicle 513 -> PostTime for that car skipped.
+    d = make_dispatcher()
+    d.note_official_stage_begin(off_sb(stage=0))
+    check("g: official stage registered",
+          (d._open_official_stages.get((947767, 0, 0)) or (None, None))[0], 513)
+    before = len(d.api_client.tt_submits)
+    out = d._post_time(tt_params(track=636))
+    check("g: accepted (EGO still happy)", out.get("Accepted"), True)
+    check("g: NOT recorded while official stage open",
+          len(d.api_client.tt_submits), before)
+    check("g: no stats row created", len(d.api_client.stats_records), 0)
+
+    # (h) guard is vehicle-scoped: a different car's TT still records.
+    out = d._post_time({**tt_params(track=450), "VehicleId": 565})
+    check("h: accepted", out.get("Accepted"), True)
+    check("h: other-car TT recorded", len(d.api_client.tt_submits), 1)
+
+    # (i) proxied StageComplete clears the mark -> same car records again.
+    d.note_official_stage_complete(off_sc(stage=0))
+    check("i: open map cleared after complete", dict(d._open_official_stages), {})
+    before = len(d.api_client.tt_submits)
+    d._post_time(tt_params(track=636))
+    check("i: 513 records again after close-out",
+          len(d.api_client.tt_submits), before + 1)
+
+    # (j) stale entry (quit mid-stage, no StageComplete) expires via the TTL.
+    import time as _time
+    d.note_official_stage_begin(off_sb(stage=0))
+    key = (947767, 0, 0)
+    vid, ts = d._open_official_stages[key]
+    d._open_official_stages[key] = (vid, ts - _time.time() - 1.0)
+    check("j: stale entry does not match",
+          d._official_stage_open_for(513), False)
+    before = len(d.api_client.tt_submits)
+    d._post_time(tt_params(track=636))
+    check("j: TT records past the TTL", len(d.api_client.tt_submits), before + 1)
 
     print(f"\n{'ALL PASS' if FAILS == 0 else str(FAILS) + ' FAILURE(S)'}")
     return 1 if FAILS else 0
