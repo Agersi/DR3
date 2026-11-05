@@ -319,6 +319,61 @@ def main() -> int:
           and _sr1.input_name is None and _sr1.distance_m == 0,
           f'row={_sr1}')
 
+    # Retransmitted RPC for an already-merged stage slot collapses into the
+    # existing row (the merged record is richer, so it wins).
+    r = client.post('/api/game/stage-detail', headers=headers, json={
+        'challenge_id': 900001, 'event_index': 0, 'stage_index': 0,
+        'vehicle_id': 565, 'stage_time_ms': 155990, 'distance_driven': 48210,
+    })
+    check('stage-detail retransmit ok', (r.get_json() or {}).get('ok') is True)
+
+    # Half row first, merged record second for the same slot: the richer
+    # record replaces it in place.
+    r = client.post('/api/game/stage-detail', headers=headers, json={
+        'challenge_id': 900003, 'event_index': 0, 'stage_index': 2,
+        'vehicle_id': 565, 'stage_time_ms': 99000, 'distance_driven': 1200,
+    })
+    check('stage-detail half-first ok', (r.get_json() or {}).get('ok') is True)
+    r = client.post('/api/game/stage-detail', headers=headers, json={
+        'challenge_id': 900003, 'event_index': 0, 'stage_index': 2,
+        'challenge_type': 2, 'track_id': 636, 'location_id': 4,
+        'vehicle_class_id': 97, 'vehicle_id': 565, 'event_id': 'evt-smoke',
+        'player_finished': True, 'stage_time_ms': 99000, 'distance_driven': 1200,
+        'library_id': 'lib_direct_input', 'driver_name': 'Simucube 2 Pro',
+    })
+    check('stage-detail merged-after-half ok', (r.get_json() or {}).get('ok') is True)
+
+    # DNF close-out: untrusted distance dropped; unknown source + event_id
+    # resolves to club.
+    r = client.post('/api/game/stage-detail', headers=headers, json={
+        'challenge_id': 900004, 'event_index': 0, 'stage_index': 3,
+        'vehicle_id': 565, 'event_id': 'evt-smoke', 'player_finished': False,
+        'player_end_status': 5, 'stage_time_ms': 323787, 'distance_driven': 228330,
+        'metres_cam_head': 9949.0,
+    })
+    check('stage-detail DNF close-out ok', (r.get_json() or {}).get('ok') is True)
+
+    with app.app_context():
+        from app.models import StageRun
+        _sr = (db.session.query(StageRun)
+               .filter_by(username='smokedriver')
+               .order_by(StageRun.id).all())
+        _by_slot = {(s.challenge_id, s.stage_index): s for s in _sr}
+    check('stage-detail: retransmit added no row (4 slots, 4 rows)', len(_sr) == 4,
+          f'n={len(_sr)}')
+    _m = _by_slot.get((900001, 0))
+    check('stage-detail: merged row intact after half retransmit',
+          _m is not None and _m.input_name == 'Simucube 2 Pro'
+          and _m.source_type == 'club' and _m.distance_m == 48210, f'row={_m}')
+    _h = _by_slot.get((900003, 2))
+    check('stage-detail: merged-after-half replaced the half row',
+          _h is not None and _h.track_id == 636 and _h.input_name == 'Simucube 2 Pro'
+          and _h.player_finished is True, f'row={_h}')
+    _d = _by_slot.get((900004, 3))
+    check('stage-detail: DNF row drops untrusted distance, club source',
+          _d is not None and _d.distance_m is None and _d.source_type == 'club'
+          and _d.player_end_status == 5, f'row={_d}')
+
     # Account page: favorite pickers + profile stat visibility checkboxes.
     r = client.get('/account')
     acc_html = r.get_data(as_text=True)

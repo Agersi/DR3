@@ -274,7 +274,7 @@ class StageRun(db.Model):
     player_finished: bool = db.Column(db.Boolean, default=False)
     player_end_status: int = db.Column(db.Integer, default=0)
     race_position: int = db.Column(db.Integer, default=0)
-    distance_m: int = db.Column(db.BigInteger, default=0)
+    distance_m: int | None = db.Column(db.BigInteger)   # NULL on DNF runs (untrusted)
     using_wheel: bool = db.Column(db.Boolean, default=False)
     using_assists: bool = db.Column(db.Boolean, default=False)
     hardcore_damage: bool = db.Column(db.Boolean, default=False)

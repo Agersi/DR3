@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from flask import Blueprint, current_app, g, jsonify, redirect, request, session, url_for
@@ -556,6 +556,29 @@ def api_game_stats_record():
     return jsonify({'ok': True})
 
 
+# Fields only the StageEnded snapshot half carries — used to score how complete
+# a stage-detail record is, so a merged row always beats a half-merged one when
+# the game's retransmitted RPC arrives out of order.
+_DETAIL_RICH_FIELDS = (
+    'track_id', 'track_model_id', 'location_id', 'vehicle_class_id',
+    'input_library', 'input_device', 'input_name',
+    'cam_bonnet_m', 'cam_bumper_m', 'cam_chase_close_m', 'cam_chase_far_m',
+    'cam_dash_m', 'cam_head_m',
+    'g_days_played', 'g_seconds_played', 'g_session_count',
+)
+
+
+def _detail_rich_score(record) -> int:
+    """Count of snapshot-only fields present (non-null, non-zero) on a record."""
+    n = 0
+    for key in _DETAIL_RICH_FIELDS:
+        value = record.get(key) if isinstance(record, dict) else getattr(record, key, None)
+        if value is None or (isinstance(value, (int, float)) and value == 0):
+            continue
+        n += 1
+    return n
+
+
 @game_api_bp.route('/api/game/stage-detail', methods=['POST'])
 @csrf.exempt  # type: ignore[untyped-decorator]
 @game_auth_required
@@ -567,6 +590,8 @@ def api_game_stage_detail():
     Append-only: every run lands as its own stage_runs row, so profile stats are
     plain aggregations. Half-merged records (only one of the two sources ever
     arrived) store whatever they carry — every column but username is optional.
+    A retransmitted StageComplete for a stage slot recorded within the last 2
+    minutes collapses into that row instead of adding a duplicate.
     """
     data = request.get_json(silent=True) or {}
     user = g.game_user
@@ -594,59 +619,89 @@ def api_game_stage_detail():
     if not time_ms:
         time_ms = int(round(_float('stage_time_seconds') * 1000))
 
-    # Distance: the RPC ints are exact; fall back to the camera-metres sum.
-    distance_m = _int('distance_driven') or _int('meters_driven') or 0
+    # Distance: the RPC's per-stage integer is exact (MetersDriven is cumulative
+    # across stages, so it is never a source); fall back to the camera-metres
+    # sum. DNF close-outs carry stale/cumulative values on both channels, so
+    # their partial distances are not trusted.
+    end_status = _int('player_end_status') or 0
+    distance_m = _int('distance_driven') or 0
     if not distance_m:
         distance_m = int(round(sum(
             _float(k) for k in (
                 'metres_cam_bonnet', 'metres_cam_bumper', 'metres_cam_chase_close',
                 'metres_cam_chase_far', 'metres_cam_dash', 'metres_cam_head',
             ))))
+    if end_status != 0:
+        distance_m = None
 
     # Source type from the snapshot's challenge_type (-1 TT / 1 official / 2 club).
+    # A half-merged record without the snapshot lacks it, but a present event_id
+    # is decisive — only club runs carry one.
     source_type = {-1: 'timetrial', 1: 'official', 2: 'club'}.get(
         _int('challenge_type'), 'unknown')
+    if source_type == 'unknown' and data.get('event_id'):
+        source_type = 'club'
 
-    db.session.add(StageRun(
-        username=user.username,
-        source_type=source_type,
-        event_id=str(data['event_id'])[:64] if data.get('event_id') else None,
-        challenge_id=_int('challenge_id'),
-        event_index=_int('event_index') or 0,
-        stage_index=_int('stage_index') or 0,
-        track_id=_int('track_id'),
-        track_model_id=_int('track_model_id'),
-        location_id=_int('location_id'),
-        vehicle_id=_int('vehicle_id'),
-        vehicle_class_id=_int('vehicle_class_id'),
-        time_ms=time_ms,
-        player_finished=_bool('player_finished'),
-        player_end_status=_int('player_end_status') or 0,
-        race_position=_int('race_position') or 0,
-        distance_m=distance_m,
-        using_wheel=_bool('using_wheel'),
-        using_assists=_bool('using_assists'),
-        hardcore_damage=_bool('is_hardcore_damage_enabled'),
-        assists_enabled=_bool('is_any_assists_enabled'),
-        input_library=str(data['library_id'])[:64] if data.get('library_id') else None,
-        input_device=str(data['device_hardware_id'])[:128] if data.get('device_hardware_id') else None,
-        input_name=str(data['driver_name'])[:128] if data.get('driver_name') else None,
-        tyre_compound=_int('tyre_compound_id') or 0,
-        tyre_wear=_float('tyre_wear_state'),
-        surface_degradation_enabled=_bool('surface_degradation_enabled'),
-        surface_degradation_level=_float('surface_degradation_level'),
-        weather_preset_id=_int('weather_preset_id') or 0,
-        vr_enabled=_bool('vr_enabled'),
-        cam_bonnet_m=_float('metres_cam_bonnet'),
-        cam_bumper_m=_float('metres_cam_bumper'),
-        cam_chase_close_m=_float('metres_cam_chase_close'),
-        cam_chase_far_m=_float('metres_cam_chase_far'),
-        cam_dash_m=_float('metres_cam_dash'),
-        cam_head_m=_float('metres_cam_head'),
-        g_days_played=_int('g_separate_days_played_count') or 0,
-        g_seconds_played=_int('g_total_seconds_played') or 0,
-        g_session_count=_int('g_session_count') or 0,
-    ))
+    fields = {
+        'source_type': source_type,
+        'event_id': str(data['event_id'])[:64] if data.get('event_id') else None,
+        'challenge_id': _int('challenge_id'),
+        'event_index': _int('event_index') or 0,
+        'stage_index': _int('stage_index') or 0,
+        'track_id': _int('track_id'),
+        'track_model_id': _int('track_model_id'),
+        'location_id': _int('location_id'),
+        'vehicle_id': _int('vehicle_id'),
+        'vehicle_class_id': _int('vehicle_class_id'),
+        'time_ms': time_ms,
+        'player_finished': _bool('player_finished'),
+        'player_end_status': end_status,
+        'race_position': _int('race_position') or 0,
+        'distance_m': distance_m,
+        'using_wheel': _bool('using_wheel'),
+        'using_assists': _bool('using_assists'),
+        'hardcore_damage': _bool('is_hardcore_damage_enabled'),
+        'assists_enabled': _bool('is_any_assists_enabled'),
+        'input_library': str(data['library_id'])[:64] if data.get('library_id') else None,
+        'input_device': str(data['device_hardware_id'])[:128] if data.get('device_hardware_id') else None,
+        'input_name': str(data['driver_name'])[:128] if data.get('driver_name') else None,
+        'tyre_compound': _int('tyre_compound_id') or 0,
+        'tyre_wear': _float('tyre_wear_state'),
+        'surface_degradation_enabled': _bool('surface_degradation_enabled'),
+        'surface_degradation_level': _float('surface_degradation_level'),
+        'weather_preset_id': _int('weather_preset_id') or 0,
+        'vr_enabled': _bool('vr_enabled'),
+        'cam_bonnet_m': _float('metres_cam_bonnet'),
+        'cam_bumper_m': _float('metres_cam_bumper'),
+        'cam_chase_close_m': _float('metres_cam_chase_close'),
+        'cam_chase_far_m': _float('metres_cam_chase_far'),
+        'cam_dash_m': _float('metres_cam_dash'),
+        'cam_head_m': _float('metres_cam_head'),
+        'g_days_played': _int('g_separate_days_played_count') or 0,
+        'g_seconds_played': _int('g_total_seconds_played') or 0,
+        'g_session_count': _int('g_session_count') or 0,
+    }
+
+    # The game can retransmit a StageComplete (observed at +15 s); when the
+    # client buffer's timeout flushes a half row in between, one run arrives
+    # twice. Collapse repeats of the same stage slot within the window into one
+    # row — the more complete record (a merged snapshot+RPC beats any half) wins.
+    existing = None
+    if fields['challenge_id'] is not None:
+        window_start = utcnow() - timedelta(seconds=120)
+        existing = db.session.query(StageRun).filter(
+            StageRun.username == user.username,
+            StageRun.challenge_id == fields['challenge_id'],
+            StageRun.event_index == fields['event_index'],
+            StageRun.stage_index == fields['stage_index'],
+            StageRun.received_at >= window_start,
+        ).first()
+    if existing is not None:
+        if _detail_rich_score(fields) > _detail_rich_score(existing):
+            for key, value in fields.items():
+                setattr(existing, key, value)
+    else:
+        db.session.add(StageRun(username=user.username, **fields))
     db.session.commit()
 
     return jsonify({'ok': True})
