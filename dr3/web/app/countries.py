@@ -35,7 +35,7 @@ COUNTRIES = [
     "Saint Vincent and the Grenadines", "Samoa", "San Marino",
     "Sao Tome and Principe", "Saudi Arabia", "Senegal", "Serbia", "Seychelles",
     "Sierra Leone", "Singapore", "Slovakia", "Slovenia", "Solomon Islands",
-    "Somalia", "South Africa", "South Korea", "South Sudan", "Spain", "Sri Lanka", "Sudan",
+    "Scotland", "Somalia", "South Africa", "South Korea", "South Sudan", "Spain", "Sri Lanka", "Sudan",
     "Suriname", "Sweden", "Switzerland", "Syria", "Taiwan", "Tajikistan",
     "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago",
     "Tunisia", "Turkey", "Turkmenistan", "Tuvalu", "Uganda", "Ukraine",
