@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.59**
+- Fixed a rare connection problem where clubs would not load on PCs with certain old certificates installed.
+
 **v0.1.58**
 - Your best stage times are now tracked across club events, official dailies and time trials.
 

@@ -30,6 +30,7 @@ from .game_data import (
     Location, Track, VERIFIED_TRACK_IDS,
     vehicle_class_id_for_label,
 )
+from .tls_doctor import robust_urlopen
 
 log = logging.getLogger(__name__)
 
@@ -151,7 +152,7 @@ class UpstreamClient:
         url = f"{self.base_url}{path}"
         try:
             req = urllib.request.Request(url, headers=self._auth_headers())
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with robust_urlopen(req, timeout=10) as resp:
                 raw = resp.read()
             return json.loads(raw)
         except urllib.error.HTTPError as exc:
@@ -174,7 +175,7 @@ class UpstreamClient:
                 method="POST",
                 headers=headers,
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with robust_urlopen(req, timeout=10) as resp:
                 raw = resp.read()
             return json.loads(raw)
         except urllib.error.HTTPError as exc:

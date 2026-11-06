@@ -178,6 +178,12 @@ def main() -> int:
           and '%*' in html
           and '"C:\\Users\\YOURNAME\\Desktop\\DR3.bat" %command%' in html
           and 'does not expand Windows environment variables' in html, '')
+    check('install: certificate/SSL troubleshooting panel',
+          'id="cert-troubleshooting"' in html
+          and 'CERTIFICATE_VERIFY_FAILED' in html
+          and 'built-in Let\'s Encrypt' in html
+          and 'Get-ChildItem Cert:\\CurrentUser\\CA,Cert:\\LocalMachine\\CA' in html
+          and 'check your Windows date and time' in html, '')
 
     r = client.post('/login', data={'username': 'smokedriver', 'password': 'password123'})
     check('login', r.status_code in (302, 200), f'status={r.status_code}')

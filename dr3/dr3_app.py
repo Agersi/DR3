@@ -765,8 +765,9 @@ def _download_update(url: str, version: str, progress_cb) -> Optional[Path]:
     final = UPDATES_DIR / f"DR3-windows-{safe}.zip"
     part = final.with_name(final.name + ".part")
     try:
+        from dr2server.tls_doctor import robust_urlopen
         req = urllib.request.Request(url, headers={"User-Agent": "DR3"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with robust_urlopen(req, timeout=15) as resp:
             total = int(resp.headers.get("Content-Length") or 0) or None
             done = 0
             with open(part, "wb") as out:
@@ -1170,9 +1171,10 @@ def run_gui():
         try:
             if not VERSION_CHECK_URL:
                 return
+            from dr2server.tls_doctor import robust_urlopen
             req = urllib.request.Request(
                 VERSION_CHECK_URL, headers={"User-Agent": "DR3"})
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with robust_urlopen(req, timeout=5) as resp:
                 data = json.loads(resp.read())
             remote_tag = str(data.get("version", "")).lstrip("v")
             dl_url = data.get("download_url", "")
@@ -1464,6 +1466,39 @@ def run_gui():
                 _LOG_FILE.flush()
             except Exception:
                 pass
+
+    def _cert_store_scan():
+        from dr2server.tls_doctor import (expired_let_encrypt_certs,
+                                          removal_commands,
+                                          scan_windows_cert_store)
+        try:
+            bad = expired_let_encrypt_certs(scan_windows_cert_store())
+        except Exception:
+            return
+        if not bad:
+            return
+        lines = [
+            "WARNING: your Windows certificate store contains EXPIRED Let's Encrypt",
+            f"certificates ({len(bad)} found) that break Python's TLS. DR3 falls back to its",
+            "built-in Let's Encrypt roots so clubs keep working, but clean up the store:",
+        ]
+        for e in bad:
+            lines.append(f"  {e['subject']} (expired {e['not_after']:%Y-%m-%d})"
+                         f" in {e['store']}")
+        lines.extend("  " + c for c in removal_commands(bad))
+        lines.append("Details: https://byagersi.com/rally/install#cert-troubleshooting")
+
+        def show():
+            for line in lines:
+                log(line)
+        try:
+            root.after(0, show)
+        except Exception:
+            pass  # window already gone (shutdown race) - debug.log still gets it
+        for line in lines:
+            print(f"[TLS] {line}")
+
+    threading.Thread(target=_cert_store_scan, daemon=True).start()
 
     # --- Buttons ---
     btn_frame = tk.Frame(main_tab, bg=BG)

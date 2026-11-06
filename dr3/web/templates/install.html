@@ -82,6 +82,28 @@
   </ul>
 </div>
 
+<div class="panel" id="cert-troubleshooting">
+  <h2>Certificate / SSL errors</h2>
+  <p>If DR3 can't load clubs and its log shows an error like
+     <code>[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: certificate has expired</code> —
+     even though this website opens fine in your browser — the problem is on your PC, not on the server.</p>
+  <p>Windows keeps a list of trusted certificates, and Python (the language DR3 is written in) uses it. If old
+      Let's Encrypt intermediate certificates were ever added to that list manually (a common "fix my TLS"
+      workaround), they expire after a while — and Python then refuses perfectly valid connections to
+      byagersi.com, while your browser keeps working as usual.</p>
+  <p>DR3 detects this automatically: it warns you when the app opens, falls back to its own built-in Let's Encrypt
+      root certificates so clubs keep working, and prints the exact removal commands in its log.</p>
+  <p>To clean up your certificate store permanently, run these lines in PowerShell (run it as administrator if you
+      get permission errors):</p>
+  <pre><code># see what's there
+Get-ChildItem Cert:\CurrentUser\CA,Cert:\LocalMachine\CA | Where-Object { $_.Subject -match "Let|ISRG" } | Format-Table Subject,NotAfter
+
+# remove the expired ones (anything still valid is kept)
+Get-ChildItem Cert:\CurrentUser\CA,Cert:\LocalMachine\CA | Where-Object { $_.Subject -match "Let|ISRG" -and $_.NotAfter -lt (Get-Date) } | Remove-Item</code></pre>
+  <p class="meta">If the problem persists after that, check your Windows date and time — a wrong clock makes every
+      certificate look expired.</p>
+</div>
+
 <div class="panel" id="manual">
   <h2>Manual setup (Easy Setup off)</h2>
   <p>If you switch off Easy Setup Mode in the app, do these steps yourself instead.
