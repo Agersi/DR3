@@ -2,13 +2,17 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
-**v0.1.58**- Your best stage times are now tracked across club events, official dailies and time trials.
+**v0.1.58**
+- Your best stage times are now tracked across club events, official dailies and time trials.
 
-**v0.1.57**- Club stage runs now record per-segment split times, so your best runs can be broken down section by section.
+**v0.1.57**
+- Club stage runs now record per-segment split times, so your best runs can be broken down section by section.
 
-**v0.1.56**- Fixed official stage times being recorded as Time Trial personal bests.
+**v0.1.56**
+- Fixed official stage times being recorded as Time Trial personal bests.
 
-**v0.1.55**- Your profile page now shows your driving stats — favorite car and location, most driven car and location, stages completed, distance, and input device — and you can pick on the account page which of those to show.
+**v0.1.55**
+- Your profile page now shows your driving stats — favorite car and location, most driven car and location, stages completed, distance, and input device — and you can pick on the account page which of those to show.
 
 ## 0.1.54
 The window is a little taller so the update notice never forces scrolling, Uninstall DR3 moved to the bottom of the Logs tab, and closing while the server is running now offers Stop and Close.
