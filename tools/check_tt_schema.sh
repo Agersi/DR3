@@ -1,8 +1,8 @@
 #!/bin/bash
-# Verifies the time_trials table schema on the VPS (columns, unique key, row count),
+# Verifies the best_times table schema on the VPS (columns, unique key, row count),
 # in particular that the additive migrations ran at boot:
 #   - splits_json column present
-#   - unique key is (vehicle_id, track, conditions, category, username)
+#   - unique key is (vehicle_id, track, conditions, username) — uq_best_times_key
 #   - vehicle_id NOT NULL
 set -e
 cd /opt/dr3/web
@@ -14,12 +14,12 @@ from app.db import db
 app = create_app()
 with app.app_context():
     insp = db.inspect(db.engine)
-    cols = {c['name']: c for c in insp.get_columns('time_trials')}
+    cols = {c['name']: c for c in insp.get_columns('best_times')}
     print('--- columns:')
     for name, c in cols.items():
         print(f"  {name}: {c['type']} nullable={c['nullable']}")
     print('--- indexes:')
-    for ix in insp.get_indexes('time_trials'):
+    for ix in insp.get_indexes('best_times'):
         print(f"  {ix['name']}: {list(ix['column_names'])} unique={bool(ix['unique'])}")
-    print('--- rows:', db.session.execute(db.text('SELECT COUNT(*) FROM time_trials')).scalar())
+    print('--- rows:', db.session.execute(db.text('SELECT COUNT(*) FROM best_times')).scalar())
 EOF

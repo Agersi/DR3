@@ -87,6 +87,18 @@ with app.app_context():
         print('    time_ms=%s finished=%s end_status=%s position=%s distance_m=%s%s'
               % (r.time_ms, r.player_finished, r.player_end_status,
                  r.race_position, r.distance_m, dist_note))
+        splits = r.splits_json
+        if splits:
+            try:
+                import json as _json
+                sv = _json.loads(splits)
+                splits = ('[%s]' % ', '.join('%.3f' % s for s in sv[:12])) \
+                    + ('...' if len(sv) > 12 else '')
+            except Exception:
+                pass
+        print('    flat_idx=%s input_method=%s camera=%s splits=%s'
+              % (r.flat_stage_index, r.input_method or '-', r.camera_position or '-',
+                 splits or '-'))
         print('    wheel=%s assists=%s hardcore=%s assists_enabled=%s | input: %s / %s / %s'
               % (r.using_wheel, r.using_assists, r.hardcore_damage,
                  r.assists_enabled, r.input_library or '-',

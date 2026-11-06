@@ -55,7 +55,7 @@ user, pw, host, port, dbname = (p.group(1), p.group(2), p.group(3),
                                 int(p.group(4) or 3306), p.group(5).split("?")[0])
 conn = pymysql.connect(host=host, port=port, user=user, password=pw, database=dbname)
 cur = conn.cursor()
-cur.execute("SELECT event_id, username, stages_json FROM results WHERE id=%s", (rid,))
+cur.execute("SELECT event_id, username, stages_json FROM club_results WHERE id=%s", (rid,))
 row = cur.fetchone()
 if not row:
     raise SystemExit(f"result {rid} not found")
@@ -75,7 +75,7 @@ for i, s in enumerate(stages):
     changed += 1
 
 cur.execute(
-    "UPDATE results SET stages_json=%s, vehicle_id=%s, car=%s WHERE id=%s",
+    "UPDATE club_results SET stages_json=%s, vehicle_id=%s, car=%s WHERE id=%s",
     (json.dumps(stages), vid, car_label_for(vid), rid),
 )
 conn.commit()

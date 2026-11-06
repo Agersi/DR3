@@ -48,7 +48,6 @@ from ..models import (
     Notification,
     Result,
     StageRun,
-    StageStat,
     TimeTrialEntry,
     User,
     utcnow,
@@ -466,8 +465,6 @@ def _delete_account(user: User):
     for t in TimeTrialEntry.query.filter_by(username=user.username).all():
         db.session.delete(t)
     for s in StageRun.query.filter_by(username=user.username).all():
-        db.session.delete(s)
-    for s in StageStat.query.filter_by(username=user.username).all():
         db.session.delete(s)
     for d in ChampionshipDraft.query.filter_by(owner=user.username).all():
         db.session.delete(d)

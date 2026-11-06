@@ -29,7 +29,7 @@ def leg_bounds(leg_counts):
         g += c
     return out
 
-cur.execute("SELECT id, event_id, username, car, vehicle_id, attempts_used, total_time_ms, stages_json FROM results")
+cur.execute("SELECT id, event_id, username, car, vehicle_id, attempts_used, total_time_ms, stages_json FROM club_results")
 rows = cur.fetchall()
 found = 0
 for rid, event_id, username, car, vehicle_id, attempts, total_ms, stages_json in rows:

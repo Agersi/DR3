@@ -1,5 +1,5 @@
 #!/bin/bash
-# One-time backfill of stage_runs from results.stages_json (#56). Pre-v0.1.55
+# One-time backfill of stage_runs from club_results.stages_json (#56). Pre-v0.1.55
 # runs never fed the per-stage detail endpoint, so lifetime stats (which now
 # read stage_runs only) would lose that history. For every club Result slot
 # that has no stage_runs row yet for the same (event_id, username,
@@ -9,7 +9,7 @@
 #   - DNF-flagged slot (race_status!=0): player_finished=False, no time
 #     (the stored limit value is not a real run), NULL distance
 # Never touches existing stage_runs rows; re-running is a no-op once applied.
-# Read/write: only stage_runs (reads results + events).
+# Read/write: only stage_runs (reads club_results + events).
 set -e
 cd /opt/dr3/web
 set -a; . /opt/dr3/web/.env; set +a

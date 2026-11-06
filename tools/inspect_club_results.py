@@ -51,7 +51,7 @@ print()
 print("== results ==")
 sql = ("SELECT r.id, e.name, r.username, r.vehicle_id, r.car, r.total_time_ms,"
        " r.attempts_used, r.in_progress_json, r.stages_json"
-       " FROM results r JOIN events e ON e.id=r.event_id"
+        " FROM club_results r JOIN events e ON e.id=r.event_id"
        " WHERE e.club_id=%s")
 args = [club_id]
 if username:

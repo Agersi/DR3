@@ -39,7 +39,7 @@ sql = (
     "SELECT r.id, e.name, c.name, r.event_id, r.username, r.vehicle_id, r.car,"
     "       r.total_time_ms, r.attempts_used, r.in_progress_json, r.stages_json,"
     "       e.start_time, e.end_time"
-    " FROM results r"
+    " FROM club_results r"
     " LEFT JOIN events e ON e.id = r.event_id"
     " LEFT JOIN clubs c ON c.id = e.club_id"
 )

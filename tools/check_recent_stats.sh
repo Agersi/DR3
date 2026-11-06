@@ -1,5 +1,5 @@
 #!/bin/bash
-# Dump the most recent stage_stats + time_trials rows (read-only).
+# Dump the most recent stage_stats + best_times rows (read-only).
 # Usage: check_recent_stats.sh [LIMIT]   (default 40)
 set -e
 LIMIT="${1:-40}"
@@ -13,8 +13,8 @@ SELECT id, username, vehicle_id, track_id, best_time_ms,
        IF(splits_json IS NULL, 'NULL', CONCAT('len=', CHAR_LENGTH(splits_json))) AS splits,
        source_type, IFNULL(source_event_id, '-') AS src_evt, updated_at
 FROM stage_stats ORDER BY updated_at DESC LIMIT $LIMIT;
-SELECT '== time_trials ==' AS '';
+SELECT '== best_times ==' AS '';
 SELECT id, username, vehicle_id, track, conditions, category, vclass, stage_time_ms,
        IF(splits_json IS NULL, 'NULL', CONCAT('len=', CHAR_LENGTH(splits_json))) AS splits,
        submitted_at
-FROM time_trials ORDER BY submitted_at DESC LIMIT $LIMIT;"
+FROM best_times ORDER BY submitted_at DESC LIMIT $LIMIT;"

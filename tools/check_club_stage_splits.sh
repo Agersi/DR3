@@ -12,7 +12,7 @@ export MYSQL_PWD="$PW"
 if [ -n "$U" ]; then
   mysql -h 127.0.0.1 -u dr3 dr3 -e "
 SELECT e.id AS event, r.username, r.vehicle_id, r.total_time_ms, r.stages_json
-FROM results r
+FROM club_results r
 JOIN events e ON e.id = r.event_id
 JOIN clubs c ON c.id = e.club_id
 WHERE c.name LIKE '%$C%' AND r.username='$U'
@@ -20,7 +20,7 @@ ORDER BY e.start_time, r.id;"
 else
   mysql -h 127.0.0.1 -u dr3 dr3 -e "
 SELECT e.id AS event, r.username, r.vehicle_id, r.total_time_ms, r.stages_json
-FROM results r
+FROM club_results r
 JOIN events e ON e.id = r.event_id
 JOIN clubs c ON c.id = e.club_id
 WHERE c.name LIKE '%$C%'

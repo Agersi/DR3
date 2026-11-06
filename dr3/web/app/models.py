@@ -175,7 +175,8 @@ class Event(db.Model):
 
 
 class Result(db.Model):
-    __tablename__ = 'results'
+    """A driver's result in a CLUB championship event — the club-event truth."""
+    __tablename__ = 'club_results'
 
     id: int = db.Column(db.Integer, primary_key=True)
     event_id: str = db.Column(db.String(64), db.ForeignKey('events.id'), nullable=False, index=True)
@@ -191,10 +192,14 @@ class Result(db.Model):
 
 
 class TimeTrialEntry(db.Model):
-    """Personal time-trial best, keyed per CAR (vehicle_id) — one row per
-    user + car + track + conditions + category. vclass is stored alongside
-    the key (not part of it) for future class-based UI."""
-    __tablename__ = 'time_trials'
+    """A driver's personal best on a given car at a given track + conditions —
+    one row per user + car + track + conditions, updated by ANY run type (club
+    stages, official dailies/weeklies/monthlies and time trials all post a
+    PostTime carrying the run's ghost). category is stored alongside the key
+    (not part of it) as the game's leaderboard-type flag of the best run;
+    vclass likewise for future class-based UI. The ghost belongs to the
+    current best run — every new best replaces it with its own."""
+    __tablename__ = 'best_times'
 
     id: int = db.Column(db.Integer, primary_key=True)
     vclass: str = db.Column(db.String(8), nullable=False)
@@ -213,34 +218,10 @@ class TimeTrialEntry(db.Model):
     submitted_at: datetime | None = db.Column(db.DateTime, default=utcnow)
 
     __table_args__ = (
-        db.UniqueConstraint('vehicle_id', 'track', 'conditions', 'category', 'username'),
-        db.Index('ix_time_trials_username', 'username'),
+        db.UniqueConstraint('vehicle_id', 'track', 'conditions', 'username',
+                            name='uq_best_times_key'),
+        db.Index('ix_best_times_username', 'username'),
     )
-
-
-class StageStat(db.Model):
-    """A driver's best-ever time on a given car at a given stage, with the
-    per-segment splits from that run.
-
-    Keyed by (username, vehicle_id, track_id) so it tracks the best for each
-    car+stage combination regardless of which club or time trial produced it.
-    Updated across clubs and time trials now (and official dailies/weeklies/
-    monthlies later); a new record only lands when it beats the stored best.
-    """
-
-    __tablename__ = 'stage_stats'
-
-    id: int = db.Column(db.Integer, primary_key=True)
-    username: str = db.Column(db.String(64), nullable=False, index=True)
-    vehicle_id: int = db.Column(db.Integer, nullable=False)
-    track_id: int = db.Column(db.Integer, nullable=False)
-    best_time_ms: int = db.Column(db.BigInteger, nullable=False)
-    splits_json: str | None = db.Column(db.Text)   # [segment seconds] or null when unknown
-    source_type: str = db.Column(db.String(16), default='club')  # club/timetrial/daily/weekly/monthly
-    source_event_id: str | None = db.Column(db.String(64))
-    updated_at: datetime = db.Column(db.DateTime, default=utcnow)
-
-    __table_args__ = (db.UniqueConstraint('username', 'vehicle_id', 'track_id'),)
 
 
 class StageRun(db.Model):
@@ -287,6 +268,9 @@ class StageRun(db.Model):
     surface_degradation_enabled: bool = db.Column(db.Boolean, default=False)
     surface_degradation_level: float = db.Column(db.Float, default=0.0)
     weather_preset_id: int = db.Column(db.Integer, default=0)
+    # Full stage condition id from the StageEnded snapshot — same space as the
+    # PostTime ConditionsId (weather preset + surface + degradation combined).
+    conditions_id: int | None = db.Column(db.Integer)
     vr_enabled: bool = db.Column(db.Boolean, default=False)
     cam_bonnet_m: float = db.Column(db.Float, default=0.0)
     cam_bumper_m: float = db.Column(db.Float, default=0.0)

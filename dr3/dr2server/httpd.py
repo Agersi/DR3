@@ -375,10 +375,6 @@ class RequestHandler(BaseHTTPRequestHandler):
         if method != "RaceNetChallenges.StageComplete":
             return
 
-        # The stage is done — clear its PostTime-attribution entry (#49-official)
-        # regardless of whether the web API is reachable.
-        self.app.dispatcher.note_official_stage_complete(payload)
-
         client = self.app.dispatcher.api_client
         if client is None:
             return
@@ -399,27 +395,34 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         # Per-stage run detail: feed the RPC half of the merge. The StageEnded
         # snapshot half arrives via _log_datamining_event under the same key;
-        # DNF close-outs feed too (they may carry zero time/distance).
+        # DNF close-outs feed too (they may carry zero time/distance). Splits
+        # ride along from the PostTime that preceded this StageComplete — for
+        # official/TT runs it claimed the UDP run, since nothing here carries
+        # telemetry.
         if self.app.stage_detail is not None:
             try:
+                rpc_fields = {
+                    "challenge_id": _val("ChallengeId"),
+                    "event_index": _val("EventIndex"),
+                    "stage_index": _val("StageIndex"),
+                    "vehicle_id": vehicle_id,
+                    "livery_id": int(_val("LiveryId") or 0),
+                    "stage_time_ms": time_ms if time_ms > 0 else None,
+                    "race_status": race_status,
+                    "recov_to_service": recov,
+                    "meters_driven": int(_val("MetersDriven") or 0),
+                    "distance_driven": distance_m if distance_m > 0 else None,
+                    "using_wheel": bool(_val("UsingWheel")),
+                    "using_assists": bool(_val("UsingAssists")),
+                }
+                splits = self.app.dispatcher.take_posttime_splits(vehicle_id)
+                if splits is not None:
+                    rpc_fields["splits"] = splits
                 self.app.stage_detail.merge_rpc(
                     (int(_val("ChallengeId") or 0),
                      int(_val("EventIndex") or 0),
                      int(_val("StageIndex") or 0)),
-                    {
-                        "challenge_id": _val("ChallengeId"),
-                        "event_index": _val("EventIndex"),
-                        "stage_index": _val("StageIndex"),
-                        "vehicle_id": vehicle_id,
-                        "livery_id": int(_val("LiveryId") or 0),
-                        "stage_time_ms": time_ms if time_ms > 0 else None,
-                        "race_status": race_status,
-                        "recov_to_service": recov,
-                        "meters_driven": int(_val("MetersDriven") or 0),
-                        "distance_driven": distance_m if distance_m > 0 else None,
-                        "using_wheel": bool(_val("UsingWheel")),
-                        "using_assists": bool(_val("UsingAssists")),
-                    })
+                    rpc_fields)
             except (TypeError, ValueError):
                 pass
 
@@ -462,7 +465,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.app.dispatcher.record_proxied_time_trial(payload)
         elif is_proxied and method == "RaceNetChallenges.StageBegin":
             # Official stages are proxied, so the dispatcher never sees their
-            # begins — register them here for PostTime attribution (#49-official).
+            # begins — arm the telemetry run clock here so the PostTime that
+            # follows claims the UDP run just driven.
             self.app.dispatcher.note_official_stage_begin(payload)
         elif is_proxied and method == "RaceNetChallenges.StageComplete":
             self._record_proxy_stats(method, payload)

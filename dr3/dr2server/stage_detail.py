@@ -36,8 +36,9 @@ STAGE_ENDED_FIELDS: Tuple[str, ...] = (
     # outcome
     "player_finished", "player_end_status", "race_position",
     "stage_time_seconds",
-    # conditions / setup
-    "weather_preset_id",
+    # conditions / setup (stage_conditions_id is the FULL condition id — same
+    # space as TimeTrial.PostTime's ConditionsId, so it keys personal bests)
+    "weather_preset_id", "stage_conditions_id",
     "surface_degradation_enabled", "surface_degradation_level",
     "is_hardcore_damage_enabled", "is_any_assists_enabled",
     "tyre_compound_id", "tyre_wear_state",

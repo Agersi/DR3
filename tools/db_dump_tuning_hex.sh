@@ -39,7 +39,7 @@ for eid in eids:
     cur.execute("SELECT name FROM events WHERE id=%s", (eid,))
     row = cur.fetchone()
     label = row[0] if row else eid
-    cur.execute("SELECT stages_json FROM results WHERE event_id=%s LIMIT 1", (eid,))
+    cur.execute("SELECT stages_json FROM club_results WHERE event_id=%s LIMIT 1", (eid,))
     row = cur.fetchone()
     if not row:
         print(f'{label}: no result'); continue

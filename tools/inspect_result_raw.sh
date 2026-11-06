@@ -17,7 +17,7 @@ import pymysql
 conn = pymysql.connect(host=host, port=port, user=user, password=pw, database=dbname)
 cur = conn.cursor()
 for rid in sys.argv[1:]:
-    cur.execute("SELECT id, event_id, username, stages_json, in_progress_json FROM results WHERE id=%s", (str(rid),))
+    cur.execute("SELECT id, event_id, username, stages_json, in_progress_json FROM club_results WHERE id=%s", (str(rid),))
     row = cur.fetchone()
     if not row:
         print(f'result {rid}: not found')

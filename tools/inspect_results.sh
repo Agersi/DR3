@@ -52,8 +52,8 @@ for cid in club_ids:
     for eid in eids:
         print(f"\n--- results event={eid} ---")
         cur.execute("""SELECT id, username, car, vehicle_id, total_time_ms, attempts_used,
-                              stages_json, in_progress_json FROM results
-                       WHERE event_id=%s ORDER BY id""", (eid,))
+                               stages_json, in_progress_json FROM club_results
+                        WHERE event_id=%s ORDER BY id""", (eid,))
         cols = [d[0] for d in cur.description]
         for row in cur.fetchall():
             r = dict(zip(cols, row))

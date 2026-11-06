@@ -1,5 +1,5 @@
 #!/bin/bash
-# Dump time_trials rows for one user + track (all dates, read-only).
+# Dump best_times rows for one user + track (all dates, read-only).
 # Usage: check_tt_row.sh USERNAME TRACK_ID
 set -e
 U="${1:?username}"
@@ -13,6 +13,6 @@ SELECT id, username, vehicle_id, track, conditions, category, vclass,
        stage_time_ms,
        IF(splits_json IS NULL, 'NULL', CONCAT('len=', CHAR_LENGTH(splits_json))) AS splits,
        submitted_at
-FROM time_trials
+FROM best_times
 WHERE username='$U' AND track='$T'
 ORDER BY submitted_at;"

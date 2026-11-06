@@ -19,9 +19,9 @@ cur = conn.cursor()
 ids = sys.argv[1:] or None
 if ids:
     id_list = ",".join("'" + i.replace("'", "") + "'" for i in ids)
-    cur.execute(f"SELECT id, event_id, username, car, vehicle_id, attempts_used, total_time_ms, stages_json FROM results WHERE event_id IN ({id_list})")
+    cur.execute(f"SELECT id, event_id, username, car, vehicle_id, attempts_used, total_time_ms, stages_json FROM club_results WHERE event_id IN ({id_list})")
 else:
-    cur.execute("SELECT id, event_id, username, car, vehicle_id, attempts_used, total_time_ms, stages_json FROM results")
+    cur.execute("SELECT id, event_id, username, car, vehicle_id, attempts_used, total_time_ms, stages_json FROM club_results")
 for rid, event_id, username, car, vehicle_id, attempts, total_ms, stages_json in cur.fetchall():
     stages = json.loads(stages_json or '[]')
     print(f'--- result {rid} user={username} event={event_id} car={car} vid={vehicle_id} '

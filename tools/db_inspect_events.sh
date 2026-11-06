@@ -39,7 +39,7 @@ for eid, name, club_id, etype, sv, settings, legs in cur.fetchall():
 
 print()
 print('== results per event ==')
-cur.execute("SELECT id, username, vehicle_id, stages_json, in_progress_json FROM results ORDER BY id DESC LIMIT 60")
+cur.execute("SELECT id, username, vehicle_id, stages_json, in_progress_json FROM club_results ORDER BY id DESC LIMIT 60")
 for rid, user, veh, stages, inprog in cur.fetchall():
     try:
         st = json.loads(stages) if isinstance(stages, str) else (stages or [])

@@ -1,33 +1,34 @@
 #!/usr/bin/env python3
-"""Verify the #49 club-stage PostTime skip in RpcDispatcher.
+"""Verify the PostTime recording rules in RpcDispatcher.
 
-The game fires TimeTrial.PostTime after every completed CLUB stage with the
-identical payload shape of a real time trial (captures 2026-10-30: club stages
-are StageBegin -> PostTime -> StageComplete, no GetLeaderboardId; real TTs are
-always GetLeaderboardId -> ... -> PostTime). Recording those locally filed
-club times into time_trials and created spurious 'timetrial' stage_stats rows
-seconds before the club StageComplete arrived.
+The game fires TimeTrial.PostTime after EVERY completed stage — club, official
+and time trials (identical payload shape, always carrying the run's ghost;
+captures 2026-11-04/05: all 24 PostTimes carry GhostData + TrackModelId +
+ConditionsId). Every one of them is now recorded locally as the driver's
+personal best for car + track + conditions (best_times); the request is still
+proxied to EGO untouched.
 
-Fix under test: a club stage begun but not yet completed marks its track as
-in-progress (StageBegin -> _open_club_stages, cleared on any StageComplete);
-a PostTime on an open track is answered Accepted without the local web calls.
-The guard is track-scoped, so a TT on another track still records.
-
-#49-official extension: official stages are proxied (no track id in their
-StageBegin/Complete), so note_official_stage_begin/complete register the car
-instead; a PostTime for that car is skipped while the stage is open (entries
-expire after _OFFICIAL_STAGE_OPEN_TTL_S).
+Rules under test:
+- Splits are claimed from the UDP run HERE (official/TT StageCompletes carry no
+  telemetry) and stashed per vehicle for the StageComplete that follows
+  (httpd._record_proxy_stats hands them to the stage_runs merge feed).
+- While a club stage on a track is open, its PostTime still records best +
+  ghost but must NOT claim the UDP run — the club StageComplete path owns it
+  (#49) and feeds its splits into the same best row seconds later.
+- Official StageBegin arms the telemetry run clock (the dispatcher never sees
+  proxied begins). Stashes expire after _POSTTIME_SPLITS_TTL_S.
 
 Run: python tools/repro_tt_club_skip.py   (from D:\\CODE\\DR2)
 """
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, r"D:\CODE\DR2\dr3")
 
 from dr2server.account_store import AccountStore
 from dr2server.api_client import _location_id_for
-from dr2server.dispatcher import RpcDispatcher
+from dr2server.dispatcher import RpcDispatcher, VEHICLES
 
 FAILS = 0
 
@@ -51,7 +52,6 @@ class FakeApi:
         self.events = {EVENT_ID: EVENT}
         self.progress = {"events": []}
         self.tt_submits = []
-        self.stats_records = []
 
     def get_my_progress(self):
         return self.progress
@@ -70,30 +70,58 @@ class FakeApi:
 
     def submit_time_trial(self, **kw):
         self.tt_submits.append(kw)
+        return True
 
     def record_stats(self, **kw):
-        self.stats_records.append(kw)
+        pass
 
 
-def make_dispatcher():
+class FakeRun:
+    def __init__(self, segs):
+        self._segs = segs
+
+    def segment_times(self, n):
+        return list(self._segs[:n]) if n else []
+
+    def has_wrap(self):
+        return False
+
+    def max_distance(self):
+        return 0.0
+
+
+class FakeTelemetry:
+    """Counts take_run_since claims; returns the fixed run (or None)."""
+
+    def __init__(self, run=None):
+        self.run = run
+        self.claims = 0
+
+    def take_run_since(self, wall):
+        self.claims += 1
+        return self.run
+
+
+def make_dispatcher(telemetry=None, last_tt=(107, 636, 5, 2)):
     store = AccountStore(Path(r"D:\CODE\DR2\build\tt_club_skip_accounts") / "u")
     d = RpcDispatcher(store, api_client=FakeApi())
     d._challenge_event_map[CHAL] = EVENT_ID
     d._challenge_subevent_map[CHAL] = 0
-    d._last_tt_request = (107, 636, 5, 2)
+    d._last_tt_request = last_tt
+    d.telemetry = telemetry
     return d
 
 
-def tt_params(track=636, time_s=95.0):
+def tt_params(track=636, time_s=95.0, vehicle=513):
     return {
         "TrackModelId": track,
         "VehicleClassId": 107,
         "ConditionsId": 5,
         "Category": 2,
         "StageTime": time_s,
-        "VehicleId": 513,
+        "VehicleId": vehicle,
         "LiveryId": 4819,
-        "GhostData": b"",
+        "GhostData": b"\x01\x02ghost",
     }
 
 
@@ -115,39 +143,54 @@ def sc_params(stage=0, race_status=0):
     }
 
 
+def off_sb(stage=0, vehicle=513):
+    return {"ChallengeId": 947767, "EventIndex": 0, "StageIndex": stage,
+            "VehicleId": vehicle, "LiveryId": 4819}
+
+
 def main():
-    # (a) real TT with no club stage open -> recorded.
-    d = make_dispatcher()
+    # (a) real TT with telemetry -> recorded WITH splits, stashed for the
+    # StageComplete that follows.
+    d = make_dispatcher(FakeTelemetry(FakeRun([25.0] * 4)))
     out = d._post_time(tt_params(track=636))
     check("a: accepted", out.get("Accepted"), True)
-    check("a: time_trial submitted", len(d.api_client.tt_submits), 1)
-    check("a: stats recorded as timetrial",
-          [r.get("source_type") for r in d.api_client.stats_records], ["timetrial"])
+    check("a: best submitted", len(d.api_client.tt_submits), 1)
+    splits = d.api_client.tt_submits[0].get("splits")
+    check("a: splits claimed (4 segments)", None if splits is None else len(splits), 4)
+    check("a: splits scaled to stage time",
+          None if splits is None else round(sum(splits), 3), 95.0)
+    check("a: ghost carried", d.api_client.tt_submits[0].get("ghost_data_b64") != "", True)
+    stashed = d._pending_posttime_splits.get(513)
+    check("a: splits stashed for vehicle", None if stashed is None else len(stashed[1] or []), 4)
 
-    # (b) club stage on 636 open -> PostTime on 636 is skipped.
-    d = make_dispatcher()
+    # (b) club stage on 636 open -> PostTime on 636 STILL records best + ghost,
+    # but must NOT claim the UDP run (the club StageComplete owns it).
+    d = make_dispatcher(FakeTelemetry())
     d._stage_begin(sb_params(stage=0))
     check("b: stage 0 marked open on 636",
           d._open_club_stages.get((CHAL, 0, 0)), 636)
-    before = len(d.api_client.tt_submits)
+    claims_before = d.telemetry.claims
     out = d._post_time(tt_params(track=636))
     check("b: accepted (EGO still happy)", out.get("Accepted"), True)
-    check("b: NOT recorded while club stage open",
-          len(d.api_client.tt_submits), before)
-    check("b: no stats row created", len(d.api_client.stats_records), 0)
+    check("b: best + ghost recorded", len(d.api_client.tt_submits), 1)
+    check("b: no splits claimed for club run",
+          d.api_client.tt_submits[0].get("splits"), None)
+    check("b: UDP run NOT claimed", d.telemetry.claims, claims_before)
+    check("b: nothing stashed for club run", dict(d._pending_posttime_splits), {})
 
-    # (c) guard is track-scoped: TT on another track still records.
+    # (c) guard is track-scoped: TT on another track still claims + records.
+    d.telemetry.run = FakeRun([20.0] * 4)
     out = d._post_time(tt_params(track=450))
     check("c: accepted", out.get("Accepted"), True)
-    check("c: other-track TT recorded", len(d.api_client.tt_submits), 1)
+    check("c: other-track TT recorded", len(d.api_client.tt_submits), 2)
+    check("c: UDP run claimed", d.telemetry.claims, claims_before + 1)
 
-    # (d) clean StageComplete clears the mark -> 636 records again.
+    # (d) clean StageComplete clears the mark -> 636 claims again.
     d._stage_complete(sc_params(stage=0, race_status=0))
     check("d: open map cleared after complete", dict(d._open_club_stages), {})
-    before = len(d.api_client.tt_submits)
+    claims_before = d.telemetry.claims
     d._post_time(tt_params(track=636))
-    check("d: 636 records again after close-out",
-          len(d.api_client.tt_submits), before + 1)
+    check("d: 636 claims again after close-out", d.telemetry.claims, claims_before + 1)
 
     # (e) DNF close-out also clears the mark.
     d._stage_begin(sb_params(stage=1))
@@ -159,53 +202,41 @@ def main():
     # (f) negative control: track 0 never matches.
     check("f: track 0 never open", d._club_stage_open_on(0), False)
 
-    # --- #49-official: the game fires PostTime after OFFICIAL stages too; the
-    # proxied StageBegin/Complete carry no track id, so attribution is by car.
+    # --- Official stages: PostTimes are recorded locally too (dual mode — EGO
+    # keeps its global board); the proxied StageBegin only arms the run clock.
 
-    def off_sb(stage=0, vehicle=513):
-        return {"ChallengeId": 947767, "EventIndex": 0, "StageIndex": stage,
-                "VehicleId": vehicle, "LiveryId": 4819}
-
-    def off_sc(stage=0):
-        return {"ChallengeId": 947767, "EventIndex": 0, "StageIndex": stage,
-                "VehicleId": 513, "LiveryId": 4819}
-
-    # (g) official stage open on vehicle 513 -> PostTime for that car skipped.
-    d = make_dispatcher()
+    # (g) official StageBegin arms the telemetry wall; the PostTime that
+    # follows is recorded + claims the run + stashes splits.
+    d = make_dispatcher(FakeTelemetry(FakeRun([30.0] * 4)))
+    d._telemetry_arm_wall = 0.0
     d.note_official_stage_begin(off_sb(stage=0))
-    check("g: official stage registered",
-          (d._open_official_stages.get((947767, 0, 0)) or (None, None))[0], 513)
-    before = len(d.api_client.tt_submits)
+    check("g: official begin arms the run clock", d._telemetry_arm_wall > 0, True)
+    claims_before = d.telemetry.claims
     out = d._post_time(tt_params(track=636))
     check("g: accepted (EGO still happy)", out.get("Accepted"), True)
-    check("g: NOT recorded while official stage open",
-          len(d.api_client.tt_submits), before)
-    check("g: no stats row created", len(d.api_client.stats_records), 0)
+    check("g: official PostTime recorded locally", len(d.api_client.tt_submits), 1)
+    check("g: UDP run claimed", d.telemetry.claims, claims_before + 1)
+    stashed = d._pending_posttime_splits.get(513)
+    check("g: splits stashed for the following StageComplete",
+          None if stashed is None else len(stashed[1] or []), 4)
 
-    # (h) guard is vehicle-scoped: a different car's TT still records.
-    out = d._post_time({**tt_params(track=450), "VehicleId": 565})
-    check("h: accepted", out.get("Accepted"), True)
-    check("h: other-car TT recorded", len(d.api_client.tt_submits), 1)
+    # (h) take_posttime_splits pops the stash; a second take finds nothing.
+    first = d.take_posttime_splits(513)
+    check("h: stash popped with splits", None if first is None else len(first), 4)
+    check("h: second take is empty", d.take_posttime_splits(513), None)
 
-    # (i) proxied StageComplete clears the mark -> same car records again.
-    d.note_official_stage_complete(off_sc(stage=0))
-    check("i: open map cleared after complete", dict(d._open_official_stages), {})
-    before = len(d.api_client.tt_submits)
+    # (i) stale stash entry (quit between PostTime and StageComplete) expires.
+    d._stash_posttime_splits(513, [1.0, 2.0])
+    d._pending_posttime_splits[513] = (time.time() - 121.0, [1.0, 2.0])
+    check("i: stale entry does not hand over", d.take_posttime_splits(513), None)
+
+    # (j) vclass comes from the per-car catalog when no GetLeaderboardId cache
+    # exists (fresh session, official stage).
+    d = make_dispatcher(last_tt=None)
     d._post_time(tt_params(track=636))
-    check("i: 513 records again after close-out",
-          len(d.api_client.tt_submits), before + 1)
-
-    # (j) stale entry (quit mid-stage, no StageComplete) expires via the TTL.
-    import time as _time
-    d.note_official_stage_begin(off_sb(stage=0))
-    key = (947767, 0, 0)
-    vid, ts = d._open_official_stages[key]
-    d._open_official_stages[key] = (vid, ts - _time.time() - 1.0)
-    check("j: stale entry does not match",
-          d._official_stage_open_for(513), False)
-    before = len(d.api_client.tt_submits)
-    d._post_time(tt_params(track=636))
-    check("j: TT records past the TTL", len(d.api_client.tt_submits), before + 1)
+    check("j: vclass from vehicle catalog",
+          d.api_client.tt_submits[0].get("vehicle_class_id"),
+          VEHICLES[513]["class"])
 
     print(f"\n{'ALL PASS' if FAILS == 0 else str(FAILS) + ' FAILURE(S)'}")
     return 1 if FAILS else 0

@@ -161,6 +161,9 @@ def _create_schema(db) -> None:
 
     from sqlalchemy.exc import OperationalError
 
+    # Renames must precede create_all — otherwise create_all builds empty
+    # new-name tables next to the old data.
+    _rename_legacy_tables(db)
     for attempt in range(5):
         try:
             db.create_all()
@@ -174,7 +177,36 @@ def _create_schema(db) -> None:
     _ensure_user_profile_columns(db)
     _ensure_tt_splits_column(db)
     _ensure_tt_vehicle_key(db)
+    _ensure_best_times_key(db)
     _ensure_stage_run_columns(db)
+
+
+def _rename_legacy_tables(db) -> None:
+    """One-shot v0.1.58 table renames: results -> club_results (the club-event
+    truth), time_trials -> best_times (personal bests from EVERY run type).
+
+    Runs before create_all so the new-name tables are never created empty next
+    to the old data. No-ops on fresh databases (neither old name exists) and on
+    already-migrated ones (new name present). The RENAME takes a brief exclusive
+    metadata lock, so it runs fail-fast like every other boot DDL here."""
+    from sqlalchemy import text
+
+    insp = db.inspect(db.engine)
+    have = set(insp.get_table_names())
+    dialect = db.engine.dialect.name
+    for old, new in (('results', 'club_results'), ('time_trials', 'best_times')):
+        if old not in have or new in have:
+            continue
+        try:
+            with db.engine.begin() as conn:
+                if dialect == 'mysql':
+                    conn.execute(text('SET SESSION lock_wait_timeout = 30'))
+                    conn.execute(text(f'ALTER TABLE `{old}` RENAME TO `{new}`'))
+                else:  # sqlite (only reachable on a stale dev DB)
+                    conn.execute(text(f'ALTER TABLE {old} RENAME TO {new}'))
+        except Exception as e:
+            if '1025' not in str(e) and 'cannot' not in str(e).lower():
+                raise
 
 
 def _ensure_user_stat_columns(db) -> None:
@@ -253,18 +285,19 @@ def _ensure_draft_permanent_column(db) -> None:
 def _ensure_tt_splits_column(db) -> None:
     """Additive migration for databases created before TimeTrialEntry.splits_json.
 
-    create_all only creates missing tables, so pre-existing time_trials
-    tables need the column added explicitly (works on SQLite and MySQL)."""
+    create_all only creates missing tables, so pre-existing best_times
+    (renamed from time_trials at boot) need the column added explicitly
+    (works on SQLite and MySQL)."""
     from sqlalchemy import text
     from sqlalchemy.exc import OperationalError
 
-    cols = {c['name'] for c in db.inspect(db.engine).get_columns('time_trials')}
+    cols = {c['name'] for c in db.inspect(db.engine).get_columns('best_times')}
     if 'splits_json' in cols:
         return
     try:
         with db.engine.begin() as conn:
             conn.execute(text(
-                'ALTER TABLE time_trials ADD COLUMN splits_json TEXT NULL'))
+                'ALTER TABLE best_times ADD COLUMN splits_json TEXT NULL'))
     except OperationalError as e:
         # Lost the boot race to another worker adding the same column.
         if '1060' not in str(e) and 'duplicate column' not in str(e):
@@ -272,17 +305,18 @@ def _ensure_tt_splits_column(db) -> None:
 
 
 def _ensure_tt_vehicle_key(db) -> None:
-    """Re-key migration for databases created before TimeTrialEntry was keyed per car.
+    """Historical re-key migration (v0.1.53): databases created before
+    TimeTrialEntry was keyed per car.
 
-    Old schema: unique (vclass, track, conditions, category, username), vehicle_id nullable.
-    New schema: unique (vehicle_id, track, conditions, category, username), vehicle_id
-    NOT NULL — vclass is kept as a stored column for future class-based UI.
-    No-ops on fresh databases (create_all already builds the new key)."""
+    Old schema: unique (vclass, track, conditions, category, username), vehicle_id
+    nullable. New schema: unique (vehicle_id, track, conditions, category,
+    username), vehicle_id NOT NULL — vclass is kept as a stored column for future
+    class-based UI. No-ops on fresh and already-migrated databases."""
     from sqlalchemy import text
     from sqlalchemy.exc import OperationalError
 
     insp = db.inspect(db.engine)
-    indexes = insp.get_indexes('time_trials')
+    indexes = insp.get_indexes('best_times')
     old_key = ('vclass', 'track', 'conditions', 'category', 'username')
     if not any(tuple(ix['column_names']) == old_key for ix in indexes):
         return
@@ -292,14 +326,14 @@ def _ensure_tt_vehicle_key(db) -> None:
         with db.engine.begin() as conn:
             if dialect == 'mysql':
                 conn.execute(text(
-                    f'ALTER TABLE time_trials DROP INDEX `{name}`'))
+                    f'ALTER TABLE best_times DROP INDEX `{name}`'))
                 conn.execute(text(
-                    'ALTER TABLE time_trials ADD CONSTRAINT uq_time_trials_vehicle '
+                    'ALTER TABLE best_times ADD CONSTRAINT uq_time_trials_vehicle '
                     'UNIQUE (vehicle_id, track, conditions, category, username)'))
             else:  # sqlite (only reachable on a stale dev DB)
                 conn.execute(text(f'DROP INDEX IF EXISTS {name}'))
                 conn.execute(text(
-                    'CREATE UNIQUE INDEX uq_time_trials_vehicle ON time_trials '
+                    'CREATE UNIQUE INDEX uq_time_trials_vehicle ON best_times '
                     '(vehicle_id, track, conditions, category, username)'))
     except OperationalError as e:
         # Lost the boot race to another worker doing the same re-key.
@@ -313,19 +347,97 @@ def _ensure_tt_vehicle_key(db) -> None:
     # own short-lived connection so no transaction is left open while the DDL
     # waits for an exclusive metadata lock (an open session transaction would
     # deadlock the ALTER against itself).
-    cols = {c['name']: c for c in db.inspect(db.engine).get_columns('time_trials')}
+    cols = {c['name']: c for c in db.inspect(db.engine).get_columns('best_times')}
     if dialect == 'mysql' and cols.get('vehicle_id', {}).get('nullable'):
         with db.engine.connect() as conn:
             nulls = conn.execute(
-                text('SELECT COUNT(*) FROM time_trials WHERE vehicle_id IS NULL')).scalar()
+                text('SELECT COUNT(*) FROM best_times WHERE vehicle_id IS NULL')).scalar()
         if nulls == 0:
             try:
                 with db.engine.begin() as conn:
                     conn.execute(text('SET SESSION lock_wait_timeout = 30'))
                     conn.execute(text(
-                        'ALTER TABLE time_trials MODIFY COLUMN vehicle_id INTEGER NOT NULL'))
+                        'ALTER TABLE best_times MODIFY COLUMN vehicle_id INTEGER NOT NULL'))
             except OperationalError:
                 pass  # lost the boot race; another worker applied it
+
+
+def _ensure_best_times_key(db) -> None:
+    """v0.1.58 re-key of best_times (renamed from time_trials): the unique key
+    drops `category` — personal bests are per user + car + track + conditions
+    regardless of run type, and category is kept only as a stored informational
+    column (the game's leaderboard-type flag of the best run).
+
+    Steps: drop the old 5-column key, dedupe rows that collide on the new 4-
+    column key (keep the fastest; ties prefer the row carrying a ghost), add
+    uq_best_times_key, and rename the stale username index. No-ops once the new
+    key is in place."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+
+    from .models import TimeTrialEntry
+
+    insp = db.inspect(db.engine)
+    dialect = db.engine.dialect.name
+    indexes = insp.get_indexes('best_times')
+    old_key_cols = {'vehicle_id', 'track', 'conditions', 'category', 'username'}
+    # A fresh database already has uq_best_times_key from create_all and no old
+    # key, so the whole function is a no-op there.
+    old_ix = next((ix for ix in indexes
+                   if set(ix['column_names']) == old_key_cols), None)
+
+    if old_ix is not None:
+        # Dedupe BEFORE the new key lands — on a short-lived session so no
+        # transaction outlives the DDL below.
+        rows = db.session.query(TimeTrialEntry).all()
+        groups = {}
+        for r in rows:
+            groups.setdefault((r.vehicle_id, r.track, r.conditions, r.username),
+                              []).append(r)
+        for group in groups.values():
+            if len(group) < 2:
+                continue
+            best_ms = min(r.stage_time_ms or 0 for r in group)
+            tied = [r for r in group if (r.stage_time_ms or 0) == best_ms]
+            keep = next((r for r in tied if r.ghost_data_b64), tied[0])
+            for r in group:
+                if r is not keep:
+                    db.session.delete(r)
+        db.session.commit()
+
+        try:
+            with db.engine.begin() as conn:
+                if dialect == 'mysql':
+                    conn.execute(text('SET SESSION lock_wait_timeout = 30'))
+                    conn.execute(
+                        text(f'ALTER TABLE best_times DROP INDEX `{old_ix["name"]}`'))
+                    conn.execute(text(
+                        'ALTER TABLE best_times ADD CONSTRAINT uq_best_times_key '
+                        'UNIQUE (vehicle_id, track, conditions, username)'))
+                else:  # sqlite (only reachable on a stale dev DB)
+                    conn.execute(text(f'DROP INDEX IF EXISTS {old_ix["name"]}'))
+                    conn.execute(text(
+                        'CREATE UNIQUE INDEX uq_best_times_key ON best_times '
+                        '(vehicle_id, track, conditions, username)'))
+        except OperationalError as e:
+            # Lost the boot race to another worker doing the same re-key.
+            if not ('1091' in str(e) or '1061' in str(e)
+                    or 'no such index' in str(e).lower()
+                    or 'already exists' in str(e).lower()):
+                raise
+
+    # Stale username index from the time_trials era — rename on MySQL (SQLite
+    # dev DBs are scratch; a fresh one gets the right name from create_all).
+    if dialect == 'mysql':
+        have_ix = {ix['name'] for ix in db.inspect(db.engine).get_indexes('best_times')}
+        if 'ix_time_trials_username' in have_ix and 'ix_best_times_username' not in have_ix:
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text(
+                        'ALTER TABLE best_times RENAME INDEX ix_time_trials_username '
+                        'TO ix_best_times_username'))
+            except OperationalError:
+                pass  # lost the boot race; another worker renamed it
 
 
 def _ensure_stage_run_columns(db) -> None:
@@ -344,6 +456,7 @@ def _ensure_stage_run_columns(db) -> None:
         'flat_stage_index': 'INTEGER NULL',
         'input_method': 'VARCHAR(16) NULL',
         'camera_position': 'VARCHAR(16) NULL',
+        'conditions_id': 'INTEGER NULL',
     }
     for name, ddl in wanted.items():
         if name in cols:

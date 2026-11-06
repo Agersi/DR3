@@ -1,7 +1,7 @@
 #!/bin/bash
 # Audit TT record pairing for one user: every timetrial stage_stats row vs the
-# matching time_trials row (vehicle+track). Orphans = stats row without a
-# time_trials entry (pre-v0.1.45 clients recorded stats only, no submit call).
+# matching best_times row (vehicle+track). Orphans = stats row without a
+# best_times entry (pre-v0.1.45 clients recorded stats only, no submit call).
 # Read-only. Usage: check_tt_pairing.sh USERNAME
 set -e
 U="${1:?username}"
@@ -16,7 +16,7 @@ SELECT s.id AS stats_id, s.vehicle_id, s.track_id, s.best_time_ms,
        t.id AS tt_id, t.stage_time_ms AS tt_ms, t.submitted_at AS tt_at,
        CASE WHEN t.id IS NULL THEN 'ORPHAN' ELSE 'paired' END AS status
 FROM stage_stats s
-LEFT JOIN time_trials t
-  ON t.username = s.username AND t.vehicle_id = s.vehicle_id AND t.track = s.track_id
+LEFT JOIN best_times t
+   ON t.username = s.username AND t.vehicle_id = s.vehicle_id AND t.track = s.track_id
 WHERE s.username='$U' AND s.source_type='timetrial'
 ORDER BY s.updated_at;"

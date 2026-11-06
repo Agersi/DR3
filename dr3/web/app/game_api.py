@@ -32,7 +32,7 @@ from .events import (
     upsert_result,
     validate_id,
 )
-from .models import Club, ClubMember, GameToken, StageRun, StageStat, TimeTrialEntry, User, utcnow
+from .models import Club, ClubMember, GameToken, StageRun, TimeTrialEntry, User, utcnow
 from .scoring import car_label, championship_points, overall_rank_key
 from .tables import normalize_championship
 
@@ -291,59 +291,68 @@ def api_game_stage_begin():
     return jsonify({'ok': True})
 
 
-def _upsert_stage_stat(username, vehicle_id, track_id, time_ms, splits,
-                       source_type, source_event_id) -> None:
-    """Record a driver's best-ever time on a car at a stage; the per-segment
-    splits from that run ride along (None when unknown). Only a strictly faster
-    clean finish replaces the stored best — a slower or equal time is ignored so
-    partial data never corrupts the record. Missing pieces (no car/track/time)
-    are skipped entirely.
+def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
+                 category=None, vclass=None, livery_id=None,
+                 nationality_id=None, using_wheel=None, using_assists=None,
+                 ghost_b64=None, splits=None) -> None:
+    """Update the driver's personal best (best_times) for car + track +
+    conditions. Every run type posts here — club/official/TT PostTimes (with the
+    run's ghost) and clean stage-detail finishes (splits, no ghost).
 
-    Source-awareness (#49): the game's PostTime for a club stage can create a
-    spurious 'timetrial' row on this key seconds before the club StageComplete
-    arrives with the SAME time; that same-run club submission re-stamps the row
-    as 'club' (with its event id) instead of being dropped by the equal-time
-    rule. A genuine faster TT best is never touched. Same-run follow-ups also
-    fill in missing splits: the post-finish leaderboard pre-persist creates the
-    row time-only, and the StageComplete that follows carries the identical
-    time plus telemetry splits."""
-    if not username or not vehicle_id or not track_id or not time_ms or time_ms <= 0:
+    Rules: a missing row is created; a strictly faster time replaces it (the
+    ghost belongs to the best run, so it is replaced too when carried); an
+    EQUAL-ms submission is the same run arriving over the second channel — it
+    only fills in pieces the first one lacked (ghost / splits / category); a
+    slower time never touches the record. Missing key pieces skip entirely."""
+    if not username or not vehicle_id or not track or not time_ms or time_ms <= 0:
         return
-    stat = db.session.query(StageStat).filter_by(
-        username=username, vehicle_id=vehicle_id, track_id=track_id).first()
+    entry = db.session.query(TimeTrialEntry).filter_by(
+        vehicle_id=vehicle_id, track=str(track)[:8],
+        conditions=str(conditions)[:8], username=username).first()
     splits_json = json.dumps(splits) if isinstance(splits, list) and splits else None
-    if stat is None:
-        db.session.add(StageStat(
-            username=username, vehicle_id=vehicle_id, track_id=track_id,
-            best_time_ms=int(time_ms), splits_json=splits_json,
-            source_type=source_type, source_event_id=source_event_id))
-    elif int(time_ms) < (stat.best_time_ms or 0):
-        stat.best_time_ms = int(time_ms)
-        stat.splits_json = splits_json
-        stat.source_type = source_type
-        stat.source_event_id = source_event_id
-        stat.updated_at = utcnow()
-    else:
-        # Equal-or-slower time never changes the best, but a SAME-RUN follow-up
-        # submission can still fill in missing pieces: the post-finish
-        # leaderboard pre-persist creates this row time-only seconds before the
-        # StageComplete arrives with the identical time plus telemetry splits —
-        # absorb those (an equal ms time is the same run; a slower one's splits
-        # don't describe the best).
-        if (int(time_ms) == (stat.best_time_ms or 0) and splits_json is not None
-                and stat.splits_json is None):
-            stat.splits_json = splits_json
-            stat.updated_at = utcnow()
-        if (source_type == 'club' and stat.source_type == 'timetrial'
-                and not stat.source_event_id
-                and int(time_ms) <= (stat.best_time_ms or 0)):
-            # Same-run club submission after a spurious timetrial row: re-stamp.
-            stat.best_time_ms = int(time_ms)
-            if splits_json is not None:
-                stat.splits_json = splits_json
-            stat.source_type = 'club'
-            stat.source_event_id = source_event_id
-            stat.updated_at = utcnow()
+    if entry is None:
+        db.session.add(TimeTrialEntry(
+            vclass=str(vclass or '0')[:8], track=str(track)[:8],
+            conditions=str(conditions)[:8], category=int(category or 0),
+            username=username, stage_time_ms=int(time_ms), vehicle_id=vehicle_id,
+            livery_id=livery_id, nationality_id=nationality_id,
+            using_wheel=using_wheel, using_assists=using_assists,
+            ghost_data_b64=ghost_b64 or None, splits_json=splits_json))
+        return
+    if int(time_ms) < (entry.stage_time_ms or 0):
+        entry.stage_time_ms = int(time_ms)
+        if vclass:
+            entry.vclass = str(vclass)[:8]
+        if category:
+            entry.category = int(category)
+        if livery_id is not None:
+            entry.livery_id = livery_id
+        if nationality_id is not None:
+            entry.nationality_id = nationality_id
+        if using_wheel is not None:
+            entry.using_wheel = using_wheel
+        if using_assists is not None:
+            entry.using_assists = using_assists
+        # The ghost + splits describe the best run itself — take what THIS run
+        # carried (NULL when it had none; the equal-ms follow-up from the other
+        # channel can still fill them in).
+        entry.ghost_data_b64 = ghost_b64 or None
+        entry.splits_json = splits_json
+        entry.submitted_at = utcnow()
+    elif int(time_ms) == (entry.stage_time_ms or 0):
+        # Same run, second channel: absorb only what the stored row lacks.
+        changed = False
+        if ghost_b64 and not entry.ghost_data_b64:
+            entry.ghost_data_b64 = ghost_b64
+            changed = True
+        if splits_json is not None and entry.splits_json is None:
+            entry.splits_json = splits_json
+            changed = True
+        if category and not entry.category:
+            entry.category = int(category)
+            changed = True
+        if changed:
+            entry.submitted_at = utcnow()
 
 
 @game_api_bp.route('/api/game/stage-complete', methods=['POST'])
@@ -632,6 +641,7 @@ def api_game_stage_detail():
         'surface_degradation_enabled': _bool('surface_degradation_enabled'),
         'surface_degradation_level': _float('surface_degradation_level'),
         'weather_preset_id': _int('weather_preset_id') or 0,
+        'conditions_id': _int('stage_conditions_id'),
         'vr_enabled': _bool('vr_enabled'),
         'cam_bonnet_m': _float('metres_cam_bonnet'),
         'cam_bumper_m': _float('metres_cam_bumper'),
@@ -690,6 +700,21 @@ def api_game_stage_detail():
                 setattr(existing, key, value)
     else:
         db.session.add(StageRun(username=user.username, **fields))
+
+    # Personal best: a clean finish updates the driver's best for car + track
+    # + conditions. The PostTime that preceded this StageComplete usually got
+    # there first (with the ghost) at the SAME ms — then this call only absorbs
+    # the splits; when the PostTime POST failed, it lands the best outright.
+    if (not is_dnf and time_ms > 0 and fields['vehicle_id']
+            and fields['track_model_id']):
+        _upsert_best(
+            user.username, fields['vehicle_id'], fields['track_model_id'],
+            fields['conditions_id'] or '0', time_ms,
+            vclass=fields['vehicle_class_id'],
+            livery_id=data.get('livery_id') or None,
+            using_wheel=data.get('using_wheel'),
+            using_assists=data.get('using_assists'),
+            splits=json.loads(fields['splits_json']) if fields['splits_json'] else None)
     db.session.commit()
 
     return jsonify({'ok': True})
@@ -699,18 +724,18 @@ def api_game_stage_detail():
 @csrf.exempt  # type: ignore[untyped-decorator]
 @game_auth_required
 def api_game_time_trial_submit():
-    """Record a completed time trial from the client's listen-in on
+    """Record a completed stage from the client's listen-in on
     TimeTrial.PostTime (the request is still proxied to EGO untouched, so the
-    real global board keeps working; this only files the driver's personal best
-    for the (car, track, conditions, category) 4-tuple on this site — every
-    distinct car keeps its own row, with the vehicle class stored alongside). A
-    new entry lands only when it beats the stored best — a slower or equal time
-    is ignored so partial data never corrupts the record. Per-segment splits
-    ride along when the client's telemetry captured them."""
+    real global board keeps working; this files the driver's personal best for
+    car + track + conditions on this site — every distinct car keeps its own
+    row, with the vehicle class stored alongside). The game fires a PostTime
+    after EVERY completed stage (club, official and time trials alike), so this
+    is the primary best-recording path; the run's ghost rides along. Rules in
+    _upsert_best: strictly faster replaces (ghost included), equal-ms absorbs
+    missing pieces, slower is ignored."""
     data = request.get_json(silent=True) or {}
     user = g.game_user
     try:
-        vclass = str(data.get('vehicle_class_id') or '0')[:8]
         track = str(data.get('track_model_id') or '0')[:8]
         conditions = str(data.get('conditions_id') or '0')[:8]
         category = int(data.get('category') or 0)
@@ -723,35 +748,14 @@ def api_game_time_trial_submit():
     if not vehicle_id:
         return _api_error('missing car id')
 
-    splits = data.get('splits')
-    splits_json = json.dumps(splits) if isinstance(splits, list) and splits else None
-    entry = db.session.query(TimeTrialEntry).filter_by(
-        vehicle_id=vehicle_id, track=track, conditions=conditions,
-        category=category, username=user.username).first()
-    if entry is None:
-        db.session.add(TimeTrialEntry(
-            vclass=vclass, track=track, conditions=conditions,
-            category=category, username=user.username, stage_time_ms=time_ms,
-            vehicle_id=vehicle_id,
-            livery_id=int(data.get('livery_id') or 0),
-            nationality_id=int(data.get('nationality_id') or 0),
-            using_wheel=bool(data.get('using_wheel')),
-            using_assists=bool(data.get('using_assists')),
-            ghost_data_b64=data.get('ghost_data_b64'),
-            splits_json=splits_json))
-    elif time_ms < (entry.stage_time_ms or 0):
-        entry.stage_time_ms = time_ms
-        entry.vclass = vclass
-        entry.vehicle_id = vehicle_id
-        entry.livery_id = int(data.get('livery_id') or 0)
-        entry.nationality_id = int(data.get('nationality_id') or 0)
-        entry.using_wheel = bool(data.get('using_wheel'))
-        entry.using_assists = bool(data.get('using_assists'))
-        if data.get('ghost_data_b64'):
-            entry.ghost_data_b64 = data.get('ghost_data_b64')
-        if splits_json is not None:
-            entry.splits_json = splits_json
-        entry.submitted_at = utcnow()
+    _upsert_best(
+        user.username, vehicle_id, track, conditions, time_ms,
+        category=category, vclass=data.get('vehicle_class_id'),
+        livery_id=int(data.get('livery_id') or 0),
+        nationality_id=int(data.get('nationality_id') or 0),
+        using_wheel=bool(data.get('using_wheel')),
+        using_assists=bool(data.get('using_assists')),
+        ghost_b64=data.get('ghost_data_b64'), splits=data.get('splits'))
     db.session.commit()
     return jsonify({'ok': True})
 

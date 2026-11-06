@@ -33,10 +33,11 @@ Handler = Callable[[Dict[str, Any]], Union[Dict[str, Any], bytes]]
 # that should be sent directly without re-encoding.
 RAW_BINARY_MARKER = "__raw_binary__"
 
-# How long a proxied (official) stage stays "open" for PostTime attribution.
-# Max stage time limit is 30 min; double it so a slow finish still matches,
-# while a quit-mid-stage entry dies before it can swallow later real TTs.
-_OFFICIAL_STAGE_OPEN_TTL_S = 60 * 60
+# How long PostTime splits wait for the StageComplete that hands them to the
+# stage_runs merge feed. Max stage time limit is 30 min, but a quit between
+# PostTime and StageComplete leaves nothing to hand over — 120 s covers any
+# real finish while bounding the stash.
+_POSTTIME_SPLITS_TTL_S = 120.0
 
 # Fallback AccountId for local-only mode (no api_client, so no web username
 # to derive an ID from). Local-only has no cross-player leaderboards, so the
@@ -193,18 +194,16 @@ class RpcDispatcher:
         # Club stages currently being driven: (challenge_id, sub_index,
         # stage_index) -> track_id. The game fires TimeTrial.PostTime after
         # every completed CLUB stage too (identical payload shape to a real
-        # time trial), so while one of these is open a PostTime on the same
-        # track is the club stage's and must not be recorded locally (#49).
+        # time trial); while one of these is open a PostTime on the same track
+        # is that stage's — it still records the best + ghost, but must not
+        # claim the UDP run: the club StageComplete path owns it and feeds its
+        # splits into the same best row seconds later (#49).
         self._open_club_stages: Dict[tuple, int] = {}
-        # Official (proxied) stages currently being driven:
-        # (challenge_id, event_index, stage_index) -> (vehicle_id, wall_ts).
-        # The game fires TimeTrial.PostTime after every completed OFFICIAL
-        # stage too (identical payload shape to a real time trial), and the
-        # proxied StageBegin/StageComplete carry no track id — so the match is
-        # by vehicle while one of these is open (#49-official). Entries expire
-        # after _OFFICIAL_STAGE_OPEN_TTL_S (a quit mid-stage leaves no
-        # StageComplete behind).
-        self._open_official_stages: Dict[tuple, tuple] = {}
+        # Splits claimed by TimeTrial.PostTime, waiting for the StageComplete
+        # that follows (official/TT runs are proxied — httpd's merge feed is
+        # their only on-ramp to stage_runs). vehicle_id -> (wall_ts, splits);
+        # entries expire after _POSTTIME_SPLITS_TTL_S.
+        self._pending_posttime_splits: Dict[int, tuple] = {}
         # Challenge ids served as ONE challenge carrying ALL legs of the
         # championship in Events[] (#39 experiment, gated by the event setting
         # ``single_challenge``).  For these ids the game addresses stages with
@@ -2250,8 +2249,19 @@ class RpcDispatcher:
     def _post_time(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Handle TimeTrial.PostTime.
 
-        Extracts stage time and related fields from the EgoNet params, then
-        submits them to the web API via api_client.  Always returns Accepted.
+        The game fires this after EVERY completed stage — club, official and
+        time trials (identical payload shape, always carrying the run's ghost).
+        Every one of them is recorded locally as the driver's personal best for
+        car + track + conditions; in default mode the request is also proxied
+        to EGO's global board untouched.
+
+        Splits come from the UDP run just driven, claimed HERE because for
+        official/TT runs the StageComplete that follows carries no telemetry:
+        they are stashed per vehicle and handed to the merge feed when that
+        StageComplete arrives (httpd._record_proxy_stats). While a club stage
+        on this track is open the claim is skipped — the club StageComplete
+        path owns that run (#49) and feeds its splits into the same best row
+        via equal-time absorption seconds later.
         """
         def _extract(key: str, default: Any = 0) -> Any:
             v = params.get(key, default)
@@ -2268,25 +2278,10 @@ class RpcDispatcher:
         stage_time_f  = float(_extract("StageTime", 0.0) or 0.0)
         stage_time_ms = int(stage_time_f * 1000)
 
-        # The game fires this same RPC after every completed CLUB stage (the
-        # StageComplete for it arrives seconds later). While a club stage on
-        # this track is in progress, the PostTime is that stage's — recording
-        # it would file club times into time_trials and create spurious
-        # 'timetrial' stats rows (#49). The proxied request still reaches EGO;
-        # we just skip the local web calls.
-        if self._club_stage_open_on(track):
-            print(f"[TT] PostTime skipped: club stage in progress on track "
-                  f"{track} (time_ms={stage_time_ms})")
-            return {"ok": True, "Accepted": True, "EntryId": secrets.token_hex(8)}
-
-        # Same game behavior for OFFICIAL stages (#49-official): the PostTime is
-        # the stage's time, not a real time trial. Official StageBegin/Complete
-        # are proxied (no track id in the payloads), so the match is by vehicle
-        # while the stage is open — see note_official_stage_begin/complete.
-        if self._official_stage_open_for(vehicle_id):
-            print(f"[TT] PostTime skipped: official stage in progress on "
-                  f"vehicle {vehicle_id} (track {track}, time_ms={stage_time_ms})")
-            return {"ok": True, "Accepted": True, "EntryId": secrets.token_hex(8)}
+        # Club stage in progress on this track: its StageComplete (seconds
+        # later) owns the UDP run — record the best + ghost here without
+        # claiming it, so that path's splits still land (#49).
+        club_stage = self._club_stage_open_on(track)
 
         # Ghost data is a raw bytes blob in the EgoNet params
         import base64
@@ -2296,17 +2291,12 @@ class RpcDispatcher:
         else:
             ghost_b64 = str(ghost_raw)
 
-        # VehicleClassId is not sent in PostTime — recover from the cached
-        # GetLeaderboardId call for this session, or fall back to the class
-        # baked into VehicleId. The cache is empty on a fresh dispatcher
-        # session (host restart, alternate code path that skips
-        # GetLeaderboardId), so without the vehicle fallback the time gets
-        # filed under vclass=0 and shows up as "Class 0" on the web board.
-        vclass = 0
-        if self._last_tt_request is not None:
+        # VehicleClassId is not sent in PostTime — the per-car catalog is
+        # authoritative; fall back to the cached GetLeaderboardId call (real
+        # time trials) when the car is unknown, and to 0 if that is empty too.
+        vclass = VEHICLES[vehicle_id]["class"] if vehicle_id in VEHICLES else 0
+        if vclass == 0 and self._last_tt_request is not None:
             vclass = self._last_tt_request[0]
-        if vclass == 0 and vehicle_id in VEHICLES:
-            vclass = VEHICLES[vehicle_id]["class"]
 
         entry_id = secrets.token_hex(8)
 
@@ -2314,7 +2304,7 @@ class RpcDispatcher:
         # Rally tracks resolve a split count from their max-time limit; rallycross
         # circuits (no laps in PostTime) stay unmapped -> no splits, time only.
         tt_splits: Optional[List[float]] = None
-        if self.telemetry is not None and stage_time_ms > 0:
+        if not club_stage and self.telemetry is not None and stage_time_ms > 0:
             n_tt = split_count_for_limit(stage_limit_ms(track))
             if n_tt:
                 run = self.telemetry.take_run_since(self._telemetry_arm_wall)
@@ -2325,6 +2315,11 @@ class RpcDispatcher:
                             segs, stage_time_ms / 1000.0)
                 else:
                     self._warn_no_telemetry()
+
+        # Stash the splits for the StageComplete that follows (official/TT runs
+        # are proxied — their merge feed is the only on-ramp to stage_runs).
+        if not club_stage and vehicle_id:
+            self._stash_posttime_splits(vehicle_id, tt_splits)
 
         if self.api_client is not None and stage_time_ms > 0:
             try:
@@ -2344,36 +2339,50 @@ class RpcDispatcher:
                 )
                 if ok:
                     print(f"[TT] PostTime accepted: vclass={vclass} track={track} "
-                          f"time_ms={stage_time_ms} entry_id={entry_id}")
+                          f"time_ms={stage_time_ms} entry_id={entry_id}"
+                          + (" (club stage — splits via StageComplete)"
+                             if club_stage else ""))
                 else:
                     print(f"[TT] PostTime: submit_time_trial returned False "
                           f"(vclass={vclass} track={track} time_ms={stage_time_ms})")
             except Exception as exc:
                 print(f"[TT] submit_time_trial raised: {exc}")
-            # Per-track best for the driver's lifetime stats (timetrials carry
-            # no distance, so only the per-track best is recorded — with the
-            # telemetry splits when we have them).
-            try:
-                self.api_client.record_stats(
-                    source_type='timetrial',
-                    vehicle_id=vehicle_id or None,
-                    track_id=track or None,
-                    time_ms=stage_time_ms,
-                    clean=True,
-                    splits=tt_splits,
-                )
-            except Exception as exc:
-                print(f"[TT] record_stats raised: {exc}")
 
         return {"ok": True, "Accepted": True, "EntryId": entry_id}
+
+    def _stash_posttime_splits(self, vehicle_id: int,
+                               splits: Optional[List[float]]) -> None:
+        """Remember the PostTime's splits for the StageComplete that follows.
+
+        Official/TT runs are proxied, so their stage_runs merge feed (httpd)
+        is the only place those splits can land; entries expire after
+        _POSTTIME_SPLITS_TTL_S (a quit between PostTime and StageComplete
+        leaves nothing to hand over)."""
+        now = time.time()
+        stale = [vid for vid, (ts, _) in self._pending_posttime_splits.items()
+                 if now - ts > _POSTTIME_SPLITS_TTL_S]
+        for vid in stale:
+            del self._pending_posttime_splits[vid]
+        self._pending_posttime_splits[vehicle_id] = (now, splits)
+
+    def take_posttime_splits(self, vehicle_id: int) -> Optional[List[float]]:
+        """Pop the stashed PostTime splits for this car (None when absent or
+        expired — a DNF close-out never had a PostTime to stash)."""
+        entry = self._pending_posttime_splits.pop(vehicle_id, None)
+        if entry is None:
+            return None
+        ts, splits = entry
+        if time.time() - ts > _POSTTIME_SPLITS_TTL_S:
+            return None
+        return splits
 
     def record_proxied_time_trial(self, params: Dict[str, Any]) -> None:
         """Listen-in recording of a TimeTrial.PostTime that is ALSO proxied to
         EGO (default mode): the game keeps talking to the real upstream board,
-        while our site records the time locally via _post_time's web calls
-        (time_trials table + per-track best stat). Fire-and-forget in a daemon
-        thread so a slow or failed web call can never affect the proxied
-        request the game is waiting on."""
+        while our site records the driver's personal best locally via
+        _post_time's web call. Fire-and-forget in a daemon thread so a slow or
+        failed web call can never affect the proxied request the game is
+        waiting on."""
         def _run() -> None:
             try:
                 self._post_time(params)
@@ -2862,51 +2871,17 @@ class RpcDispatcher:
 
     def _club_stage_open_on(self, track_id: int) -> bool:
         """True when a club stage on this track has been begun but not yet
-        completed — its PostTime is a club-stage time, not a real time trial."""
+        completed — its PostTime's splits must not claim the UDP run (the club
+        StageComplete path owns it), though the best + ghost are still filed."""
         if not track_id:
             return False
         return any(t == track_id for t in self._open_club_stages.values())
 
     def note_official_stage_begin(self, payload: Dict[str, Any]) -> None:
-        """Register a proxied (official) stage as in-progress. The game fires
-        TimeTrial.PostTime at its finish with no challenge id — only car/track/
-        time — so attribution is by vehicle while the stage is open
-        (#49-official)."""
-        def _val(key: str) -> Any:
-            v = payload.get(key)
-            return getattr(v, "value", v)
-        try:
-            key = (int(_val("ChallengeId") or 0),
-                   int(_val("EventIndex") or 0),
-                   int(_val("StageIndex") or 0))
-            vehicle_id = int(_val("VehicleId") or 0)
-        except (TypeError, ValueError):
-            return
-        if not key[0]:
-            return
-        self._open_official_stages[key] = (vehicle_id, time.time())
-
-    def note_official_stage_complete(self, payload: Dict[str, Any]) -> None:
-        """Clear a proxied (official) stage's in-progress entry."""
-        def _val(key: str) -> Any:
-            v = payload.get(key)
-            return getattr(v, "value", v)
-        try:
-            key = (int(_val("ChallengeId") or 0),
-                   int(_val("EventIndex") or 0),
-                   int(_val("StageIndex") or 0))
-        except (TypeError, ValueError):
-            return
-        self._open_official_stages.pop(key, None)
-
-    def _official_stage_open_for(self, vehicle_id: int) -> bool:
-        """True when a proxied (official) stage begun in this car is still open —
-        its PostTime is a stage time, not a real time trial."""
-        if not vehicle_id:
-            return False
-        now = time.time()
-        return any(vid == vehicle_id and now - started < _OFFICIAL_STAGE_OPEN_TTL_S
-                   for vid, started in self._open_official_stages.values())
+        """Arm the telemetry run clock on a proxied (official) stage begin, so
+        the PostTime that follows claims the UDP run just driven — never an
+        older one (e.g. from a DNF'd earlier stage)."""
+        self._telemetry_arm_wall = time.time()
 
     def _subevent_range(self, event_id: str, event_index: int,
                         layout: Optional[List[int]] = None) -> tuple[int, Optional[int]]:

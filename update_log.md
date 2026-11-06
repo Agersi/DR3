@@ -2,6 +2,8 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.58**- Your best stage times are now tracked across club events, official dailies and time trials.
+
 **v0.1.57**- Club stage runs now record per-segment split times, so your best runs can be broken down section by section.
 
 **v0.1.56**- Fixed official stage times being recorded as Time Trial personal bests.

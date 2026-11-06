@@ -52,7 +52,7 @@ conn = pymysql.connect(
 cur = conn.cursor()
 cur.execute(
     "SELECT id, event_id, username, stages_json, in_progress_json "
-    "FROM results WHERE id=%s", (rid,))
+    "FROM club_results WHERE id=%s", (rid,))
 row = cur.fetchone()
 if not row:
     sys.exit(f"result {rid} not found")
@@ -71,7 +71,7 @@ if CLEAR:
         for s in stages if s.get("time_ms", 0) > 0
     )
     cur.execute(
-        "UPDATE results SET stages_json=%s, in_progress_json=%s, "
+        "UPDATE club_results SET stages_json=%s, in_progress_json=%s, "
         "total_time_ms=%s WHERE id=%s",
         (json.dumps(stages), json.dumps(in_progress), total, rid),
     )
@@ -100,7 +100,7 @@ if changed:
         for s in stages if s.get("time_ms", 0) > 0
     )
     cur.execute(
-        "UPDATE results SET stages_json=%s, total_time_ms=%s WHERE id=%s",
+        "UPDATE club_results SET stages_json=%s, total_time_ms=%s WHERE id=%s",
         (json.dumps(stages), total, rid),
     )
     conn.commit()

@@ -209,7 +209,7 @@ def test_club_path_flat_index():
     """Club StageComplete feed (#58c): the RPC half fed by dispatcher.
     _stage_complete carries event_id + flat_stage_index (championship-wide
     ordinal via the leg offset) + telemetry splits, so the merged row
-    correlates with results.stages_json."""
+    correlates with club_results.stages_json."""
     from dr2server.account_store import AccountStore
     from dr2server.api_client import _location_id_for
     from dr2server.dispatcher import RpcDispatcher
@@ -326,12 +326,14 @@ def test_httpd_wiring_e2e():
         "keys": ["challenge_id", "event_index", "stage_index", "challenge_type",
                  "track_id", "location_id", "vehicle_class_id", "vehicle_id",
                  "player_finished", "race_position", "stage_time_seconds",
+                 "weather_preset_id", "stage_conditions_id",
                  "library_id", "driver_name",
                  "g_separate_days_played_count", "g_total_seconds_played",
                  "g_session_count"],
         "values": [Int64(910001), UInt32(0), UInt32(2), Int64(1),
                    UInt32(636), UInt32(4), UInt32(97), UInt32(565),
                    True, UInt32(1), 155.99,
+                   UInt32(8), UInt32(26),
                    "lib_direct_input", "Simucube 2 Pro",
                    Int64(12), Int64(43200), Int64(7)],
     }}}
@@ -362,6 +364,115 @@ def test_httpd_wiring_e2e():
         check("wiring: key consistent across halves",
               (p.get("challenge_id"), p.get("event_index"),
                p.get("stage_index")), (910001, 0, 2))
+        check("wiring: full condition id passes through the snapshot half",
+              p.get("stage_conditions_id"), 26)
+    srv.shutdown()
+
+
+def test_posttime_splits_e2e():
+    """Official/TT path: the PostTime that precedes the StageComplete claims
+    the UDP run and stashes its splits per vehicle; _record_proxy_stats hands
+    them to the merge feed so the stage_runs row carries them."""
+    import json as _json
+    import types
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    from dr2server import httpd
+    from dr2server.egonet import Int64, UInt32
+
+    posts = []
+
+    class _Cap(BaseHTTPRequestHandler):
+        def do_POST(self):
+            n = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(n)
+            if self.path == '/api/game/stage-detail':
+                posts.append(_json.loads(body))
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+
+        def log_message(self, *a):
+            pass
+
+    srv = HTTPServer(('127.0.0.1', 0), _Cap)
+    port = srv.server_address[1]
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+    scratch = Path(r"D:\CODE\DR2\build\stage_detail_scratch")
+    app = httpd.App(
+        data_root=scratch, capture_root=scratch / "captures",
+        upstream_ip="159.153.126.42", proxy_default_except_clubs=True,
+        api_url=f"http://127.0.0.1:{port}", api_token="df_test")
+
+    class _Run:
+        def segment_times(self, n):
+            return [30.0] * (n or 0)
+
+        def has_wrap(self):
+            return False
+
+        def max_distance(self):
+            return 0.0
+
+    class _Tel:
+        def __init__(self):
+            self.run = _Run()
+
+        def take_run_since(self, wall):
+            return self.run
+
+    app.dispatcher.telemetry = _Tel()
+
+    handler = httpd.RequestHandler.__new__(httpd.RequestHandler)
+    handler.server = types.SimpleNamespace(app=app)
+
+    # StageEnded snapshot half first (like the wire).
+    dm_payload = {"Statistics": {"Data": {
+        "event": "StageEnded",
+        "keys": ["challenge_id", "event_index", "stage_index", "challenge_type",
+                 "track_id", "location_id", "vehicle_class_id", "vehicle_id",
+                 "player_finished", "race_position", "stage_time_seconds"],
+        "values": [Int64(920001), UInt32(0), UInt32(2), Int64(1),
+                   UInt32(636), UInt32(4), UInt32(97), UInt32(565),
+                   True, UInt32(1), 155.99],
+    }}}
+    handler._log_datamining_event(dm_payload)
+
+    # Official StageBegin arms the clock; PostTime claims + stashes the run.
+    app.dispatcher.note_official_stage_begin(
+        {"ChallengeId": Int64(920001), "EventIndex": UInt32(0),
+         "StageIndex": UInt32(2), "VehicleId": UInt32(565),
+         "LiveryId": UInt32(3813)})
+    app.dispatcher._post_time({
+        "TrackModelId": UInt32(636), "VehicleClassId": UInt32(97),
+        "ConditionsId": UInt32(26), "Category": UInt32(1),
+        "StageTime": 155.99, "VehicleId": UInt32(565), "LiveryId": UInt32(3813),
+        "GhostData": b"\x01\x02ghost"})
+
+    # StageComplete follows -> merge feed gets the stashed splits.
+    rpc_payload = {
+        "ChallengeId": Int64(920001), "EventIndex": UInt32(0),
+        "StageIndex": UInt32(2),
+        "VehicleId": UInt32(565), "LiveryId": UInt32(3813),
+        "StageTime": 155.99, "RaceStatus": UInt32(0), "RecovToService": False,
+        "MetersDriven": Int64(48210), "DistanceDriven": Int64(48210),
+        "UsingWheel": True, "UsingAssists": False,
+    }
+    handler._record_proxy_stats("RaceNetChallenges.StageComplete", rpc_payload)
+
+    deadline = time.time() + 5.0
+    while not posts and time.time() < deadline:
+        time.sleep(0.05)
+    check("posttime-splits: exactly one merged POST", len(posts), 1)
+    if posts:
+        p = posts[0]
+        splits = p.get("splits")
+        check("posttime-splits: splits handed to the merge feed",
+              None if splits is None else len(splits), 4)
+        check("posttime-splits: splits scaled to the stage time",
+              None if splits is None else round(sum(splits), 3), 155.99)
     srv.shutdown()
 
 
@@ -376,6 +487,7 @@ def main():
     test_emit_failure_isolated()
     test_club_path_flat_index()
     test_httpd_wiring_e2e()
+    test_posttime_splits_e2e()
     print()
     if FAILS:
         print(f"FAILED: {FAILS} check(s)")

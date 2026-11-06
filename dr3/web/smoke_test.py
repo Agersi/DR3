@@ -175,77 +175,71 @@ def main() -> int:
     check('leaderboard: entry-level nationality_id from stage-begin',
           e0.get('nationality_id') == 1, str(e0.get('nationality_id')))
 
-    # StageStat writes retired (#56): the live stage-complete path no longer
-    # touches the table (stats now come from stage_runs); the dormant function
-    # itself is unit-checked directly below.
-    from app.models import StageStat
+    # Personal bests (best_times): every clean finish updates the driver's best
+    # for car + track + conditions. Unit-checked directly below (a live submit
+    # would add rows to the global recent-times feed).
+    from app.models import TimeTrialEntry as _Best
+    from app.game_api import _upsert_best
     with app.app_context():
-        stat = db.session.query(StageStat).filter_by(
-            username='smokedriver', vehicle_id=1, track_id=10).first()
-    check('stage stat: live stage-complete no longer writes the table (#56)',
-          stat is None, f'row={stat}')
+        _upsert_best('smokedriver', 2, '11', '5', 430000, category=1, vclass=97,
+                     ghost_b64='Zmlyc3Q=', splits=[108.5, 107.2, 106.9, 107.4])
+        # slower time never replaces the stored best (nor its ghost/splits)
+        _upsert_best('smokedriver', 2, '11', '5', 500000, category=1, vclass=97,
+                     ghost_b64='c2xvd2Vy', splits=[99.0, 99.0])
+        b1 = db.session.query(_Best).filter_by(
+            username='smokedriver', vehicle_id=2, track='11', conditions='5').first()
+        _b1_ms = b1.stage_time_ms if b1 else None
+        _b1_gh = b1.ghost_data_b64 if b1 else None
+        _b1_splits = json.loads(b1.splits_json) if b1 and b1.splits_json else None
+        db.session.commit()
+    check('bests: slower time never replaces the stored best (unit)',
+          _b1_ms == 430000 and _b1_splits == [108.5, 107.2, 106.9, 107.4]
+          and _b1_gh == 'Zmlyc3Q=',
+          f'ms={_b1_ms} gh={_b1_gh}')
 
-    # splits ride into the stat + a slower time never replaces the stored best
-    # (unit-level: a live submit would add rows to the global recent-times feed)
-    from app.game_api import _upsert_stage_stat
+    # strictly faster replaces time + ghost (the ghost belongs to the best run)
     with app.app_context():
-        _upsert_stage_stat('smokedriver', 2, 11, 430000,
-                           [108.5, 107.2, 106.9, 107.4], 'club', 'unit-test')
-        _upsert_stage_stat('smokedriver', 2, 11, 500000,
-                           [99.0, 99.0, 99.0, 99.0], 'club', 'unit-test')
-        stat2 = db.session.query(StageStat).filter_by(
-            username='smokedriver', vehicle_id=2, track_id=11).first()
-        _stat2_splits = json.loads(stat2.splits_json) if stat2 and stat2.splits_json else None
-        _stat2_best = stat2.best_time_ms if stat2 else None
-    check('stage stat: splits stored + slower time ignored (unit)',
-          _stat2_splits == [108.5, 107.2, 106.9, 107.4] and _stat2_best == 430000,
-          f'splits={_stat2_splits} best={_stat2_best}')
+        _upsert_best('smokedriver', 2, '11', '5', 400000, category=2, vclass=97,
+                     ghost_b64='ZmFzdGVy', splits=[101.0, 100.5])
+        b2 = db.session.query(_Best).filter_by(
+            username='smokedriver', vehicle_id=2, track='11', conditions='5').first()
+        _b2_ms = b2.stage_time_ms if b2 else None
+        _b2_gh = b2.ghost_data_b64 if b2 else None
+        _b2_cat = b2.category if b2 else None
+        _b2_splits = json.loads(b2.splits_json) if b2 and b2.splits_json else None
+        db.session.commit()
+    check('bests: strictly faster replaces time + ghost (unit)',
+          _b2_ms == 400000 and _b2_gh == 'ZmFzdGVy'
+          and _b2_splits == [101.0, 100.5] and _b2_cat == 2,
+          f'ms={_b2_ms} gh={_b2_gh}')
 
-    # #49 source-awareness: a spurious 'timetrial' row (created by the game's
-    # club-stage PostTime) is re-stamped as 'club' when the same-run StageComplete
-    # arrives with the equal time; a genuine faster TT best is never clobbered.
+    # equal-ms same-run follow-up absorbs only the missing pieces (the PostTime
+    # usually lands first with the ghost; the stage-detail finish follows with
+    # the splits at the identical ms)
     with app.app_context():
-        _upsert_stage_stat('smokedriver', 3, 12, 400000, None, 'timetrial', '')
-        _upsert_stage_stat('smokedriver', 3, 12, 400000, [100.0, 100.0], 'club', 'unit-evt')
-        stat3 = db.session.query(StageStat).filter_by(
-            username='smokedriver', vehicle_id=3, track_id=12).first()
-        _stat3_src = stat3.source_type if stat3 else None
-        _stat3_evt = stat3.source_event_id if stat3 else None
-        _stat3_ms = stat3.best_time_ms if stat3 else None
-        _upsert_stage_stat('smokedriver', 4, 13, 300000, None, 'timetrial', '')
-        _upsert_stage_stat('smokedriver', 4, 13, 350000, None, 'club', 'unit-evt')
-        stat4 = db.session.query(StageStat).filter_by(
-            username='smokedriver', vehicle_id=4, track_id=13).first()
-        _stat4_src = stat4.source_type if stat4 else None
-        _stat4_ms = stat4.best_time_ms if stat4 else None
-    check('stage stat: equal-time club re-stamps spurious timetrial (#49)',
-          _stat3_src == 'club' and _stat3_evt == 'unit-evt' and _stat3_ms == 400000,
-          f'src={_stat3_src} evt={_stat3_evt} ms={_stat3_ms}')
-    check('stage stat: genuine faster TT best never clobbered by slower club',
-          _stat4_src == 'timetrial' and _stat4_ms == 300000,
-          f'src={_stat4_src} ms={_stat4_ms}')
+        _upsert_best('smokedriver', 8, '16', '5', 450000, category=1)
+        _upsert_best('smokedriver', 8, '16', '5', 450000, category=2,
+                     ghost_b64='c2FtZQ==', splits=[111.1, 111.2])
+        b3 = db.session.query(_Best).filter_by(
+            username='smokedriver', vehicle_id=8, track='16', conditions='5').first()
+        _b3_ms = b3.stage_time_ms if b3 else None
+        _b3_gh = b3.ghost_data_b64 if b3 else None
+        _b3_splits = json.loads(b3.splits_json) if b3 and b3.splits_json else None
+        db.session.commit()
+    check('bests: equal-ms same-run absorbs missing ghost + splits (unit)',
+          _b3_ms == 450000 and _b3_gh == 'c2FtZQ=='
+          and _b3_splits == [111.1, 111.2],
+          f'ms={_b3_ms} gh={_b3_gh}')
 
-    # pre-persist absorption: the post-finish leaderboard pre-persist creates the
-    # row time-only, then the StageComplete arrives with the IDENTICAL time plus
-    # telemetry splits — absorb those without changing the best; a SLOWER run's
-    # splits never describe the best.
+    # the key is per user + car + track + conditions — category no longer splits
+    # rows, and distinct cars/conditions keep their own bests
     with app.app_context():
-        _upsert_stage_stat('smokedriver', 6, 14, 450000, None, 'club', 'unit-evt')
-        _upsert_stage_stat('smokedriver', 6, 14, 450000, [111.1, 111.2], 'club', 'unit-evt')
-        stat5 = db.session.query(StageStat).filter_by(
-            username='smokedriver', vehicle_id=6, track_id=14).first()
-        _stat5_splits = json.loads(stat5.splits_json) if stat5 and stat5.splits_json else None
-        _stat5_best = stat5.best_time_ms if stat5 else None
-        _upsert_stage_stat('smokedriver', 7, 15, 460000, None, 'club', 'unit-evt')
-        _upsert_stage_stat('smokedriver', 7, 15, 520000, [98.0, 98.0], 'club', 'unit-evt')
-        stat6 = db.session.query(StageStat).filter_by(
-            username='smokedriver', vehicle_id=7, track_id=15).first()
-        _stat6_splits = stat6.splits_json if stat6 else 'ABSENT'
-    check('stage stat: same-run follow-up absorbs missing splits (pre-persist)',
-          _stat5_splits == [111.1, 111.2] and _stat5_best == 450000,
-          f'splits={_stat5_splits} best={_stat5_best}')
-    check('stage stat: slower run never absorbs splits into the best',
-          _stat6_splits is None, f'splits={_stat6_splits}')
+        _upsert_best('smokedriver', 2, '11', '7', 900000, category=1)
+        _upsert_best('smokedriver', 9, '11', '5', 900000, category=1)
+        n = db.session.query(_Best).filter_by(username='smokedriver').count()
+        db.session.commit()
+    check('bests: per car + track + conditions rows (unit)',
+          n == 4, f'n={n}')
 
     # stats-record retired (#56): the endpoint is a no-op (proxied runs now land
     # in stage_runs via /api/game/stage-detail); snapshot the baseline first so
@@ -275,13 +269,14 @@ def main() -> int:
           (r.get_json() or {}).get('ok') is True, str(r.get_json()))
 
     with app.app_context():
-        _tt = db.session.query(StageStat).filter_by(
-            username='smokedriver', vehicle_id=5, track_id=90).first()
+        from app.models import TimeTrialEntry as _Best2
+        _bt = db.session.query(_Best2).filter_by(
+            username='smokedriver', vehicle_id=5, track='90').first()
         _u1 = db.session.query(_User).filter_by(username='smokedriver').first()
         _dist_delta = (_u1.total_distance_m or 0) - _base_dist
         _stages_delta = (_u1.stages_driven or 0) - _base_stages
-    check('stats-record retired: no StageStat row written (#56)',
-          _tt is None, f'row={_tt}')
+    check('stats-record retired: no best_times row written (#56)',
+          _bt is None, f'row={_bt}')
     check('stats-record retired: lifetime counters untouched (#56)',
           _dist_delta == 0 and _stages_delta == 0,
           f'dist_delta={_dist_delta} stages_delta={_stages_delta}')
@@ -293,7 +288,8 @@ def main() -> int:
 
     r = client.post('/api/game/stage-detail', headers=headers, json={
         'challenge_id': 900001, 'event_index': 0, 'stage_index': 0,
-        'challenge_type': 2, 'track_id': 636, 'location_id': 4,
+        'challenge_type': 2, 'track_id': 636, 'track_model_id': 636,
+        'location_id': 4, 'stage_conditions_id': 26,
         'vehicle_class_id': 97, 'vehicle_id': 565, 'event_id': 'evt-smoke',
         'player_finished': True, 'race_position': 1,
         'stage_time_seconds': 155.99, 'stage_time_ms': 155990,
@@ -425,6 +421,22 @@ def main() -> int:
           _d2 is not None and _d2.distance_m is None
           and _d2.camera_position is None and _d2.player_finished is False,
           f'row={_d2}')
+
+    # A clean stage-detail finish files the driver's personal best for car +
+    # track + conditions (the PostTime usually lands first with the ghost at the
+    # same ms; here it arrives alone, so no ghost — the splits ride along).
+    with app.app_context():
+        from app.models import TimeTrialEntry as _Best3
+        _b = db.session.query(_Best3).filter_by(
+            username='smokedriver', vehicle_id=565, track='636',
+            conditions='26').first()
+        _b_ms = _b.stage_time_ms if _b else None
+        _b_splits = json.loads(_b.splits_json) if _b and _b.splits_json else None
+        _b_gh = _b.ghost_data_b64 if _b else 'ABSENT'
+    check('stage-detail: clean finish files a best_times row (no ghost, splits kept)',
+          _b_ms == 155990 and _b_splits == [41.871, 41.021, 39.225, 33.877]
+          and _b_gh is None,
+          f'ms={_b_ms} splits={_b_splits} gh={_b_gh}')
 
     # Account page: favorite pickers + profile stat visibility checkboxes.
     r = client.get('/account')
@@ -912,12 +924,13 @@ def main() -> int:
         db.session.query(Club).filter_by(id='smoke-link-club').delete()
         db.session.commit()
 
-    # 8. time-trial listen-in endpoint: the client files PostTime payloads that
-    #    are also proxied to EGO; personal best per (car, track, conditions,
-    #    category) 4-tuple — every distinct car keeps its own row (the vehicle
-    #    class is stored alongside for future UI). Only a strictly faster time
-    #    replaces the stored entry (its ghost + splits ride along). The
-    #    leaderboard endpoints stay removed (the in-game board is EGO's real one).
+    # 8. PostTime listen-in endpoint: the client files PostTime payloads that
+    #    are also proxied to EGO; personal best per car + track + conditions —
+    #    every distinct car keeps its own row (the vehicle class is stored
+    #    alongside for future UI). Only a strictly faster time replaces the
+    #    stored entry (its ghost + splits ride along); category is stored but no
+    #    longer part of the key. The leaderboard endpoints stay removed (the
+    #    in-game board is EGO's real one).
     from app.models import TimeTrialEntry as _TTE
     r = client.post('/api/game/time-trial-submit', json={
         'vehicle_class_id': 101, 'track_model_id': 580, 'stage_time_ms': 183312,
@@ -956,23 +969,39 @@ def main() -> int:
         'nationality_id': 31, 'using_wheel': False, 'using_assists': True,
     })
     check('tt submit other car ok', (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+    # v0.1.58: category is no longer part of the key — a club/official run
+    # (category=1) on the same car + track + conditions merges into the SAME row
+    r = client.post('/api/game/time-trial-submit', headers=headers, json={
+        'vehicle_class_id': 101, 'track_model_id': 580, 'conditions_id': 5,
+        'category': 1, 'vehicle_id': 532, 'livery_id': 7777, 'stage_time_ms': 160000,
+        'nationality_id': 31, 'using_wheel': True, 'using_assists': False,
+        'ghost_data_b64': 'Y2x1Yg==',
+    })
+    check('tt submit other-category same car ok',
+          (r.get_json() or {}).get('ok') is True, str(r.get_json()))
     with app.app_context():
         _tt = db.session.query(_TTE).filter_by(
-            vehicle_id=532, track='580', conditions='5', category=2,
-            username='smokedriver').first()
-        _tt_ms = _tt.stage_time_ms if _tt else None
-        _tt_gh = _tt.ghost_data_b64 if _tt else None
-        _tt_liv = _tt.livery_id if _tt else None
-        _tt_vc = _tt.vclass if _tt else None
-        _tt_splits = json.loads(_tt.splits_json) if _tt and _tt.splits_json else None
+            vehicle_id=532, track='580', conditions='5',
+            username='smokedriver').all()
+        _ttr = _tt[0] if _tt else None
+        _tt_ms = _ttr.stage_time_ms if _ttr else None
+        _tt_gh = _ttr.ghost_data_b64 if _ttr else None
+        _tt_liv = _ttr.livery_id if _ttr else None
+        _tt_vc = _ttr.vclass if _ttr else None
+        _tt_cat = _ttr.category if _ttr else None
+        _tt_splits = json.loads(_ttr.splits_json) if _ttr and _ttr.splits_json else None
         _tt2 = db.session.query(_TTE).filter_by(
-            vehicle_id=513, track='580', conditions='5', category=2,
+            vehicle_id=513, track='580', conditions='5',
             username='smokedriver').first()
         _tt2_ms = _tt2.stage_time_ms if _tt2 else None
-    check('tt entry: faster best stored (170000) with its ghost/splits/livery + vclass kept',
-          _tt_ms == 170000 and _tt_gh == 'Zm==' and _tt_liv == 9999
-          and _tt_vc == '101' and _tt_splits == [42.5, 42.5, 42.5, 42.5],
-          f'ms={_tt_ms} gh={_tt_gh} liv={_tt_liv} vc={_tt_vc} splits={_tt_splits}')
+    check('tt entry: one row per car+track+conditions (category merges, no dup)',
+          len(_tt) == 1, f'n={len(_tt)}')
+    check('tt entry: fastest best stored (160000) with its ghost/livery + vclass',
+          _tt_ms == 160000 and _tt_gh == 'Y2x1Yg==' and _tt_liv == 7777
+          and _tt_vc == '101' and _tt_cat == 1,
+          f'ms={_tt_ms} gh={_tt_gh} liv={_tt_liv} vc={_tt_vc} cat={_tt_cat}')
+    check('tt entry: faster run without telemetry splits NULLs the stored ones',
+          _tt_splits is None, f'splits={_tt_splits}')
     check('tt per-car: second car keeps its own row (195000), first untouched',
           _tt2_ms == 195000, f'car513 ms={_tt2_ms}')
     r = client.get('/api/game/time-trial-leaderboard?vclass=101&track=10&conditions=5', headers=headers)

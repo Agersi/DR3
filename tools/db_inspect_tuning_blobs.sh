@@ -32,11 +32,11 @@ def blobinfo(b64):
 if len(sys.argv) > 1:
     eids = sys.argv[1:]
 else:
-    cur.execute("SELECT DISTINCT event_id FROM results ORDER BY event_id")
+    cur.execute("SELECT DISTINCT event_id FROM club_results ORDER BY event_id")
     eids = [r[0] for r in cur.fetchall()]
 
 for eid in eids:
-    cur.execute("SELECT username, vehicle_id, stages_json, in_progress_json FROM results WHERE event_id=%s", (eid,))
+    cur.execute("SELECT username, vehicle_id, stages_json, in_progress_json FROM club_results WHERE event_id=%s", (eid,))
     rows = cur.fetchall()
     print(f'===== {eid} ({len(rows)} result rows) =====')
     for uname, veh, stages, inprog in rows:

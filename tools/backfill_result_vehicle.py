@@ -61,7 +61,7 @@ conn = pymysql.connect(
     database=p.path.lstrip("/") or None,
 )
 cur = conn.cursor()
-cur.execute("SELECT id, event_id, username, vehicle_id, stages_json FROM results")
+cur.execute("SELECT id, event_id, username, vehicle_id, stages_json FROM club_results")
 
 filled, flagged = 0, 0
 for rid, eid, user, vid, sj in cur.fetchall():
@@ -75,7 +75,7 @@ for rid, eid, user, vid, sj in cur.fetchall():
         )
         if entry_vid:
             cur.execute(
-                "UPDATE results SET vehicle_id=%s, car=%s WHERE id=%s",
+                "UPDATE club_results SET vehicle_id=%s, car=%s WHERE id=%s",
                 (entry_vid, car_label_for(entry_vid), rid),
             )
             filled += 1
@@ -90,7 +90,7 @@ for rid, eid, user, vid, sj in cur.fetchall():
                 row_flags += 1
         if row_flags:
             cur.execute(
-                "UPDATE results SET stages_json=%s WHERE id=%s",
+                "UPDATE club_results SET stages_json=%s WHERE id=%s",
                 (json.dumps(stages), rid),
             )
             flagged += row_flags
