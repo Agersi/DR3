@@ -137,10 +137,18 @@ hr {
   padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.5rem;
 }
 .club-card h3 { margin: 0; font-size: 1.25rem; }
-.club-card .title-link { color: var(--text); text-decoration: none; }
+.club-card .title-link {
+  display: block; width: 100%; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text); text-decoration: none;
+}
 .club-card .title-link:hover { color: var(--text); text-decoration: underline; }
 .club-card .desc { color: var(--muted); font-size: 0.95rem; flex: 1; }
-.club-card .owner-chip { align-self: flex-start; }
+.club-card .owner-chip {
+  align-self: flex-start;
+  width: 100%;
+  text-align: center;
+}
 
 .grid-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1.1rem; margin: 1.1rem 0; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.1rem; margin: 1.1rem 0; }
