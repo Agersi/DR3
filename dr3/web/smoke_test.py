@@ -1132,11 +1132,12 @@ def main() -> int:
           '<span class="top-name">Monte Carlo</span>' in prof3
           and '<span class="top-name">Spain</span>' in prof3
           and '<span class="top-name">Finland</span>' in prof3, '')
-    check('profile: top-list rows — name left / distance right (flex li), cars left col / locations right col',
+    check('profile: top-list rows — name left / distance right (flex li), no parens, cars left col / locations right col',
           '<li><span class="top-name">Audi S1 EKS RX Quattro (RX Supercars)</span>'
-          '<span class="top-km num">(30.0 km)</span></li>' in prof3
+          '<span class="top-km num">30.0 km</span></li>' in prof3
           and '<li><span class="top-name">Monte Carlo</span>'
-          '<span class="top-km num">(30.0 km)</span></li>' in prof3
+          '<span class="top-km num">30.0 km</span></li>' in prof3
+          and '(30.0 km)' not in prof3
           and prof3.index('Most driven cars</div>') < prof3.index('<li><span class="top-name">Audi S1')
           and prof3.index('Most driven locations</div>') < prof3.index('<li><span class="top-name">Monte Carlo'),
           '')

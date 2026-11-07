@@ -296,7 +296,8 @@ td:has(.driver-dot) { display: flex; justify-content: center; }
 .driving .stat-key { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.82rem; font-weight: 600; color: var(--muted); margin-right: 0.35rem; }
 .driving .top-title { display: block; margin-bottom: 0.4rem; }
 .driving .top-list { margin: 0; padding: 0; list-style: none; }
-.driving .top-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; padding: 0.12rem 0; font-size: 0.92rem; }
+.driving .top-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; padding: 0.12rem 0.35rem; font-size: 0.92rem; }
+.driving .top-list li:nth-child(even) { background: rgba(24, 28, 20, 0.25); }
 .driving .top-list .top-name { min-width: 0; }
 .driving .top-list .top-km { margin-left: auto; white-space: nowrap; }
 
