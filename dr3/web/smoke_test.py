@@ -454,9 +454,10 @@ def main() -> int:
           '<optgroup label="Rally">' in acc_html
           and '<optgroup label="RX">' in acc_html,
           f'status={r.status_code}')
-    check('account page links to the user\'s public profile',
-          'href="/profile/smokedriver"' in acc_html
-          and 'View my public profile' in acc_html,
+    check('account page has a View Profile button next to Save profile',
+          '<div class="actions-row">' in acc_html
+          and '>Save profile</button>' in acc_html
+          and 'name="view_profile" value="1">View Profile</button>' in acc_html,
           f'status={r.status_code}')
     check('account page has the four stat visibility checkboxes',
           all(f'name="{n}"' in acc_html for n in (
@@ -471,6 +472,17 @@ def main() -> int:
     }, follow_redirects=False)
     check('account profile save with favorites redirects',
           r.status_code == 302, f'status={r.status_code}')
+
+    r = client.post('/account', data={
+        'action': 'profile', 'display_name': 'Smoke Driver',
+        'country': 'Sweden', 'bio': '',
+        'favorite_car_id': '565', 'favorite_location_id': '4',
+        'show_device_name': 'on',
+        'view_profile': '1',
+    }, follow_redirects=False)
+    check('account View Profile saves and redirects to the profile page',
+          r.status_code == 302 and '/profile/smokedriver' in (r.headers.get('Location') or ''),
+          f'status={r.status_code} loc={r.headers.get("Location")}')
 
     r = client.get('/profile/smokedriver')
     prof_html = r.get_data(as_text=True)

@@ -367,6 +367,8 @@ def account():
             user.show_sessions = request.form.get('show_sessions') == 'on'
             db.session.commit()
             flash('Profile updated.', 'success')
+            if request.form.get('view_profile'):
+                return redirect(url_for('pages.profile', username=user.username))
         elif action == 'password':
             current = request.form.get('current') or ''
             new = request.form.get('new') or ''

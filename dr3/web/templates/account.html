@@ -58,9 +58,11 @@
     <label><input type="checkbox" name="show_days_played" value="on"{% if g.user.show_days_played %} checked{% endif %}> Days played</label>
     <label><input type="checkbox" name="show_seconds_played" value="on"{% if g.user.show_seconds_played %} checked{% endif %}> Time played</label>
     <label><input type="checkbox" name="show_sessions" value="on"{% if g.user.show_sessions %} checked{% endif %}> Sessions</label>
-    <button type="submit">Save profile</button>
+    <div class="actions-row">
+      <button type="submit">Save profile</button>
+      <button type="submit" name="view_profile" value="1">View Profile</button>
+    </div>
   </form>
-  <p><a class="btn" href="{{ url_for('pages.profile', username=g.user.username) }}">View my public profile</a></p>
 </div>
 
 <div class="panel">
