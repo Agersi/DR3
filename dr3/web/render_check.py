@@ -136,6 +136,9 @@ def main() -> int:
     # are what shows up, not the old double-counted user columns.
     check('drivers page: distance comes from stage_runs (#56)',
           '49.4 km' in drv_html, '')
+    # Stages completed is a % (2 of the smoke driver's 5 runs finished).
+    check('drivers page: stages completed shown as a percentage',
+          '<td>40%</td>' in drv_html, '')
     prof = client.get('/profile/smokedriver').get_data(as_text=True)
     check('profile: per-device distance list (#57)',
           'Input devices' in prof and 'Simucube 2 Pro (100%)' in prof, '')

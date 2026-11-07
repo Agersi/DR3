@@ -609,16 +609,21 @@ def drivers():
                 .group_by(StageRun.username).all())
     by_user_done = {u: int(n) for u, n in finished}
     users = User.query.all()
-    rows = [{
-        'username': u.username,
-        'display_name': u.display_name,
-        'country': u.country or '',
-        'stages': by_user.get(u.username, (0, 0))[0],
-        'completed': by_user_done.get(u.username, 0),
-        'distance_m': by_user.get(u.username, (0, 0))[1],
-        'distance_km': by_user.get(u.username, (0, 0))[1] / 1000.0,
-        'created_at': u.created_at or utcnow(),
-    } for u in users]
+    rows = []
+    for u in users:
+        n, dist_m = by_user.get(u.username, (0, 0))
+        done = by_user_done.get(u.username, 0)
+        rows.append({
+            'username': u.username,
+            'display_name': u.display_name,
+            'country': u.country or '',
+            'stages': n,
+            # Same definition as the profile page's pct_completed.
+            'completed': f'{round(done / n * 100)}%' if n else '—',
+            'distance_m': dist_m,
+            'distance_km': dist_m / 1000.0,
+            'created_at': u.created_at or utcnow(),
+        })
     rows.sort(key=lambda r: (-r['distance_m'], r['created_at']))
     return render_template('drivers.html', rows=rows)
 
