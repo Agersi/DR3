@@ -21,8 +21,8 @@
     </tr>
     {% if stats.top_cars or stats.top_locations %}
     <tr>
-      <td>{% if stats.top_cars %}<div class="stat-key top-title">Most driven cars</div><ul class="top-list">{% for c in stats.top_cars %}<li>{{ c.label }} ({{ '%.1f'|format(c.km) }} km)</li>{% endfor %}</ul>{% endif %}</td>
-      <td>{% if stats.top_locations %}<div class="stat-key top-title">Most driven locations</div><ul class="top-list">{% for l in stats.top_locations %}<li>{{ l.label }} ({{ '%.1f'|format(l.km) }} km)</li>{% endfor %}</ul>{% endif %}</td>
+      <td>{% if stats.top_cars %}<div class="stat-key top-title">Most driven cars</div><ul class="top-list">{% for c in stats.top_cars %}<li><span class="top-name">{{ c.label }}</span><span class="top-km num">({{ '%.1f'|format(c.km) }} km)</span></li>{% endfor %}</ul>{% endif %}</td>
+      <td>{% if stats.top_locations %}<div class="stat-key top-title">Most driven locations</div><ul class="top-list">{% for l in stats.top_locations %}<li><span class="top-name">{{ l.label }}</span><span class="top-km num">({{ '%.1f'|format(l.km) }} km)</span></li>{% endfor %}</ul>{% endif %}</td>
     </tr>
     {% endif %}
     {% if target.show_device_name and stats.devices %}<tr><td colspan="2"><span class="stat-key">Input devices:</span> {% for d in stats.devices %}{{ d.label }} ({{ d.pct }}%){% if not loop.last %} · {% endif %}{% endfor %}</td></tr>

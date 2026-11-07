@@ -1122,20 +1122,23 @@ def main() -> int:
               (r.get_json() or {}).get('ok') is True, str(r.get_json()))
     prof3 = client2.get('/profile/secondpilot').get_data(as_text=True)
     check('profile: most driven cars list by distance, class parens only for shared names',
-          'Audi S1 EKS RX Quattro (RX Supercars) (30.0 km)' in prof3
-          and 'Peugeot 208 WRX (RX Supercars 2019) (20.0 km)' in prof3
-          and 'Porsche 911 RGT Rally Spec (10.0 km)' in prof3
+          '<span class="top-name">Audi S1 EKS RX Quattro (RX Supercars)</span>' in prof3
+          and '<span class="top-name">Peugeot 208 WRX (RX Supercars 2019)</span>' in prof3
+          and '<span class="top-name">Porsche 911 RGT Rally Spec</span>' in prof3
           and prof3.index('Audi S1 EKS RX Quattro') < prof3.index('Peugeot 208 WRX')
           < prof3.index('Porsche 911 RGT Rally Spec'),
           f'status={r.status_code}')
     check('profile: most driven locations list by distance',
-          'Monte Carlo (30.0 km)' in prof3 and 'Spain (20.0 km)' in prof3
-          and 'Finland (10.0 km)' in prof3, '')
-    check('profile: top-list entries each on their own line, cars left / locations right',
-          '<li>Audi S1 EKS RX Quattro (RX Supercars) (30.0 km)</li>' in prof3
-          and '<li>Monte Carlo (30.0 km)</li>' in prof3
-          and prof3.index('Most driven cars</div>') < prof3.index('<li>Audi S1')
-          and prof3.index('Most driven locations</div>') < prof3.index('<li>Monte Carlo'),
+          '<span class="top-name">Monte Carlo</span>' in prof3
+          and '<span class="top-name">Spain</span>' in prof3
+          and '<span class="top-name">Finland</span>' in prof3, '')
+    check('profile: top-list rows — name left / distance right (flex li), cars left col / locations right col',
+          '<li><span class="top-name">Audi S1 EKS RX Quattro (RX Supercars)</span>'
+          '<span class="top-km num">(30.0 km)</span></li>' in prof3
+          and '<li><span class="top-name">Monte Carlo</span>'
+          '<span class="top-km num">(30.0 km)</span></li>' in prof3
+          and prof3.index('Most driven cars</div>') < prof3.index('<li><span class="top-name">Audi S1')
+          and prof3.index('Most driven locations</div>') < prof3.index('<li><span class="top-name">Monte Carlo'),
           '')
 
     r = client2.get(f'/clubs/{club_id}')

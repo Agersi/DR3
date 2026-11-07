@@ -151,6 +151,10 @@ def main() -> int:
     check('profile: driving table CSS (two columns, divider, top lists)',
           '.driving td + td { border-left: 1px solid var(--line); }' in drv_css
           and '.driving .top-list { margin: 0; padding: 0; list-style: none; }' in drv_css, '')
+    check('profile: top-list rows name left / distance right (flex markup + CSS)',
+          '<span class="top-name">' in prof and '<span class="top-km num">' in prof
+          and '.driving .top-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; padding: 0.12rem 0; font-size: 0.92rem; }' in drv_css
+          and '.driving .top-list .top-km { margin-left: auto; white-space: nowrap; }' in drv_css, '')
     check('profile: play counters as chip-warn chips row after the table',
           '<div class="chips-row play-chips">' in prof
           and '>Days played: 12</span>' in prof
