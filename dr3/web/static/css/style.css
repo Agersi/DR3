@@ -214,7 +214,7 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none !important
 
 label { display: block; margin: 0.7rem 0 0.25rem; font-weight: 600; font-size: 0.92rem; letter-spacing: 0.02em; }
 input, select, textarea {
-  width: 100%; max-width: 480px; padding: 0.5rem 0.6rem;
+  width: 100%; padding: 0.5rem 0.6rem;
   border: 2px solid var(--line); background: var(--bg);
   font-family: var(--body); font-size: 1rem; color: var(--text);
 }
@@ -334,7 +334,14 @@ details.create-club .plus {
   transition: transform 0.15s ease;
 }
 details.create-club[open] .plus { transform: rotate(45deg); }
-details.create-club form { padding: 0 1.25rem 1.1rem; margin-top: 0.6rem; }
+details.create-club form {
+  padding: 0 1.25rem 1.1rem;
+  margin-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: stretch;
+}
 
 .club-card.in { background-image: linear-gradient(rgba(175, 255, 149, 0.08), rgba(175, 255, 149, 0.08)); border-color: #7f9a72; }
 .club-card.out { background-image: linear-gradient(rgba(226, 122, 102, 0.1), rgba(226, 122, 102, 0.1)); border-color: #9c6a5e; }
