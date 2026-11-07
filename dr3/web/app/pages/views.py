@@ -526,15 +526,19 @@ def dashboard():
         # otherwise.  Drives both the countdown and the Drivers column.
         offset, count = current_event_scope(e, now)
         entries = entries_for_event(e['id'])
+        # "Done" = every stage in the window is closed: a genuine finish OR a
+        # terminal DNF (wrecked/skipped stages can never be driven again, so
+        # they don't keep the dot yellow once the rest of the event is over).
         drivers_done = sum(
             1 for en in entries
-            if count and scope_participation(en, offset, count)[0] == count)
+            if count and scope_participation(en, offset, count)[1] == count)
         my_entry = next((en for en in entries
                          if en.get('username') == g.user.username), None)
         if count:
-            my_done, my_touched = (scope_participation(my_entry, offset, count)
-                                   if my_entry else (0, False))
-            driver_status = ('green' if my_done == count
+            _my_finished, my_closed, my_touched = (
+                scope_participation(my_entry, offset, count)
+                if my_entry else (0, 0, False))
+            driver_status = ('green' if my_closed == count
                              else 'yellow' if my_touched else 'red')
         else:
             driver_status = 'red'

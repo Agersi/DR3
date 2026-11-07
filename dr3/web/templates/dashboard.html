@@ -29,7 +29,7 @@
         <td>{{ e.get('car_class') or '' }}</td>
         <td>
           <span class="driver-dot dot-{{ e.driver_status }}"
-                title="{{ e.drivers_done }} of {{ e.club_members }} drivers finished the current event">{{ e.drivers_done }}/{{ e.club_members }}</span>
+                title="{{ e.drivers_done }} of {{ e.club_members }} drivers are done with the current event">{{ e.drivers_done }}/{{ e.club_members }}</span>
         </td>
       </tr>
       {% endfor %}

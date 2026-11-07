@@ -156,15 +156,18 @@ def current_event_scope(event: dict, now: datetime) -> tuple[int, int]:
     return 0, sum(r['count'] for r in rallies)
 
 
-def scope_participation(entry: dict, offset: int, count: int) -> tuple[int, bool]:
-    """``(genuinely finished stages, touched at all)`` within a flat stage range.
+def scope_participation(entry: dict, offset: int, count: int) -> tuple[int, int, bool]:
+    """Per-stage state within a flat stage range for the dashboard Drivers column.
 
-    Mirrors ``rally_standings``' done-count: a stage counts as finished only
-    with a real time and no DNF race_status; it is 'touched' when it carries any
-    time or DNF marker (a pre-persisted limit value still proves the driver was
-    in that stage)."""
+    Returns ``(finished, closed, touched)``.  A stage is *finished* with a real
+    time and no DNF race_status; it is *closed* when finished OR terminally
+    DNF'd (any race_status — those stages can never be driven again, so they do
+    not block "done" the way the in-game resume logic treats them); it is
+    *touched* when it carries any time or DNF marker (a pre-persisted limit
+    value still proves the driver was in that stage)."""
     seg = (entry.get('stages') or [])[offset:offset + count]
-    done = 0
+    finished = 0
+    closed = 0
     touched = False
     for s in seg:
         if not s:
@@ -173,9 +176,12 @@ def scope_participation(entry: dict, offset: int, count: int) -> tuple[int, bool
         rs = int(s.get('race_status', 0) or 0)
         if t > 0 or rs != 0:
             touched = True
-        if t > 0 and rs == 0:
-            done += 1
-    return done, touched
+        if rs != 0:
+            closed += 1
+        elif t > 0:
+            finished += 1
+            closed += 1
+    return finished, closed, touched
 
 
 def event_profile(event: dict | None, now: datetime) -> dict | None:

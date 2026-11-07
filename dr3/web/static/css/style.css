@@ -270,13 +270,15 @@ table.table, .table-wrap table { width: 100%; border-collapse: collapse; backgro
   font-size: 0.82rem; font-weight: 600; background: var(--bg); color: var(--text);
   padding: 0.55rem 0.7rem; text-align: left; border: 0;
 }
-.table td, .table-wrap td { padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.table td { padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.table-wrap td { padding: 0.5rem 0.7rem; vertical-align: middle; }
 .table tr:nth-child(even) td, .table-wrap tr:nth-child(even) td { background: rgba(24, 28, 20, 0.25); }
 .table tr:last-child td, .table-wrap tr:last-child td { border-bottom: 0; }
 .live-events td:not(:first-child) { border-left: 1px solid var(--line); }
+td:has(.driver-dot) { display: flex; justify-content: center; }
 .driver-dot {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 3rem; height: 3rem; border-radius: 50%;
+  width: 2rem; height: 2rem; border-radius: 50%;
   font-family: var(--display); font-weight: 600; font-size: 0.82rem; color: var(--bg);
 }
 .dot-red { background: #e05252; box-shadow: 0 0 14px rgba(224, 82, 82, 0.75); }
