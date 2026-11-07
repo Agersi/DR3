@@ -10,16 +10,23 @@
 {% if stats %}
 <div class="panel">
   <h2>Driving</h2>
-  <table>
-    {% if stats.fav_car %}<tr><th>Favorite Car</th><td>{{ stats.fav_car }}</td></tr>{% endif %}
-    {% if stats.fav_location %}<tr><th>Favorite Location</th><td>{{ stats.fav_location }}</td></tr>{% endif %}
-    <tr><th>Stages driven</th><td class="num">{{ stats.runs }}</td></tr>
-    <tr><th>Stages completed</th><td class="num">{{ stats.pct_completed }}%</td></tr>
-    <tr><th>Distance via DR3</th><td class="num">{{ '%.1f'|format(stats.distance_km) }} km</td></tr>
-    {% if stats.top_cars %}<tr><th>Most driven cars</th><td>{% for c in stats.top_cars %}{{ c.label }} ({{ '%.1f'|format(c.km) }} km){% if not loop.last %} · {% endif %}{% endfor %}</td></tr>{% endif %}
-    {% if stats.top_locations %}<tr><th>Most driven locations</th><td>{% for l in stats.top_locations %}{{ l.label }} ({{ '%.1f'|format(l.km) }} km){% if not loop.last %} · {% endif %}{% endfor %}</td></tr>{% endif %}
-    {% if target.show_device_name and stats.devices %}<tr><th>Input devices</th><td>{% for d in stats.devices %}{{ d.label }} ({{ d.pct }}%){% if not loop.last %} · {% endif %}{% endfor %}</td></tr>
-    {% elif target.show_device_name and stats.device %}<tr><th>Input device</th><td>{{ stats.device }}</td></tr>{% endif %}
+  <table class="driving">
+    <tr>
+      <td>{% if stats.fav_car %}<span class="stat-key">Favorite Car:</span> {{ stats.fav_car }}{% endif %}</td>
+      <td>{% if stats.fav_location %}<span class="stat-key">Favorite Location:</span> {{ stats.fav_location }}{% endif %}</td>
+    </tr>
+    <tr>
+      <td><span class="stat-key">Stages driven:</span> <span class="num">{{ stats.runs }}</span> ({{ stats.pct_completed }}% completed)</td>
+      <td><span class="stat-key">Distance via DR3:</span> <span class="num">{{ '%.1f'|format(stats.distance_km) }}</span> km</td>
+    </tr>
+    {% if stats.top_cars or stats.top_locations %}
+    <tr>
+      <td>{% if stats.top_cars %}<div class="stat-key top-title">Most driven cars</div><ul class="top-list">{% for c in stats.top_cars %}<li>{{ c.label }} ({{ '%.1f'|format(c.km) }} km)</li>{% endfor %}</ul>{% endif %}</td>
+      <td>{% if stats.top_locations %}<div class="stat-key top-title">Most driven locations</div><ul class="top-list">{% for l in stats.top_locations %}<li>{{ l.label }} ({{ '%.1f'|format(l.km) }} km)</li>{% endfor %}</ul>{% endif %}</td>
+    </tr>
+    {% endif %}
+    {% if target.show_device_name and stats.devices %}<tr><td colspan="2"><span class="stat-key">Input devices:</span> {% for d in stats.devices %}{{ d.label }} ({{ d.pct }}%){% if not loop.last %} · {% endif %}{% endfor %}</td></tr>
+    {% elif target.show_device_name and stats.device %}<tr><td colspan="2"><span class="stat-key">Input device:</span> {{ stats.device }}</td></tr>{% endif %}
   </table>
   {% set ns = namespace(play_chips=[]) %}
   {% if target.show_days_played and stats.days_played %}{% set ns.play_chips = ns.play_chips + ['Days played: ' ~ stats.days_played] %}{% endif %}

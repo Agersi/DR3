@@ -687,18 +687,20 @@ def _profile_stats(user: User) -> dict:
         except ValueError:
             return f'Location {lid}'
 
-    def _top3(column):
+    def _top_driven(column, n=10):
+        """Top cars/locations by total distance, only entries with >0 km."""
         rows = (db.session.query(column, func.sum(StageRun.distance_m),
                                  func.count(StageRun.id))
                 .filter(StageRun.username == user.username, column.isnot(None))
                 .group_by(column).all())
-        return [(v, int(d or 0)) for v, d, _n in sorted(
-            rows, key=lambda r: (-int(r[1] or 0), -int(r[2])))[:3]]
+        scored = [(v, int(d or 0), int(c or 0)) for v, d, c in rows if int(d or 0) > 0]
+        scored.sort(key=lambda r: (-r[1], -r[2]))
+        return [(v, d) for v, d, _c in scored[:n]]
 
     top_cars = [{'label': _car_label(v), 'km': d / 1000.0}
-                for v, d in _top3(StageRun.vehicle_id)]
+                for v, d in _top_driven(StageRun.vehicle_id)]
     top_locations = [{'label': _loc_label(v), 'km': d / 1000.0}
-                     for v, d in _top3(StageRun.location_id)]
+                     for v, d in _top_driven(StageRun.location_id)]
 
     # Device + play counters come from the newest run that actually reported
     # them (half-merged rows carry none and must not blank the panel).

@@ -495,16 +495,21 @@ def main() -> int:
           'Simucube 2 Pro' in prof_html and 'Days played' not in prof_html
           and 'Sessions' not in prof_html,
           f'status={r.status_code}')
-    check('profile: favorites are separate Favorite Car / Favorite Location rows',
-          '<th>Favorite Car</th>' in prof_html
-          and '<th>Favorite Location</th>' in prof_html
-          and '<th>Favorites</th>' not in prof_html,
+    check('profile: two-column table — favorites are left/right cells of one row',
+          '<table class="driving">' in prof_html
+          and '<span class="stat-key">Favorite Car:</span>' in prof_html
+          and '<span class="stat-key">Favorite Location:</span>' in prof_html,
           f'status={r.status_code}')
-    check('profile: unique car name renders without class parens',
-          '>Porsche 911 RGT Rally Spec</td>' in prof_html, '')
-    check('profile: most driven cars/locations rows present',
-          '<th>Most driven cars</th>' in prof_html
-          and '<th>Most driven locations</th>' in prof_html,
+    check('profile: stages driven cell merges count + percent completed',
+          '<span class="stat-key">Stages driven:</span>' in prof_html
+          and '(40% completed)' in prof_html,
+          f'status={r.status_code}')
+    check('profile: unique favorite car name renders without class parens',
+          'Favorite Car:</span> Porsche 911 RGT Rally Spec</td>' in prof_html, '')
+    check('profile: most driven cars/locations top lists present (left/right columns)',
+          '<div class="stat-key top-title">Most driven cars</div>' in prof_html
+          and '<div class="stat-key top-title">Most driven locations</div>' in prof_html
+          and '<ul class="top-list">' in prof_html,
           f'status={r.status_code}')
 
     # Play counters render as chip-warn chips on one row after the table.
@@ -1116,16 +1121,22 @@ def main() -> int:
         check(f'stage-detail secondpilot vid {_vid} ok',
               (r.get_json() or {}).get('ok') is True, str(r.get_json()))
     prof3 = client2.get('/profile/secondpilot').get_data(as_text=True)
-    check('profile: most driven cars top-3 by distance, class parens only for shared names',
+    check('profile: most driven cars list by distance, class parens only for shared names',
           'Audi S1 EKS RX Quattro (RX Supercars) (30.0 km)' in prof3
           and 'Peugeot 208 WRX (RX Supercars 2019) (20.0 km)' in prof3
           and 'Porsche 911 RGT Rally Spec (10.0 km)' in prof3
           and prof3.index('Audi S1 EKS RX Quattro') < prof3.index('Peugeot 208 WRX')
           < prof3.index('Porsche 911 RGT Rally Spec'),
           f'status={r.status_code}')
-    check('profile: most driven locations top-3 by distance',
+    check('profile: most driven locations list by distance',
           'Monte Carlo (30.0 km)' in prof3 and 'Spain (20.0 km)' in prof3
           and 'Finland (10.0 km)' in prof3, '')
+    check('profile: top-list entries each on their own line, cars left / locations right',
+          '<li>Audi S1 EKS RX Quattro (RX Supercars) (30.0 km)</li>' in prof3
+          and '<li>Monte Carlo (30.0 km)</li>' in prof3
+          and prof3.index('Most driven cars</div>') < prof3.index('<li>Audi S1')
+          and prof3.index('Most driven locations</div>') < prof3.index('<li>Monte Carlo'),
+          '')
 
     r = client2.get(f'/clubs/{club_id}')
     check('club detail visible to non-member (public)', r.status_code == 200, f'status={r.status_code}')

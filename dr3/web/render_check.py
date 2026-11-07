@@ -142,6 +142,15 @@ def main() -> int:
     prof = client.get('/profile/smokedriver').get_data(as_text=True)
     check('profile: per-device distance list (#57)',
           'Input devices' in prof and 'Simucube 2 Pro (100%)' in prof, '')
+    check('profile: two-column driving table (favorites + stages/distance paired)',
+          '<table class="driving">' in prof
+          and '<span class="stat-key">Favorite Car:</span>' in prof
+          and '<span class="stat-key">Stages driven:</span>' in prof
+          and '(40% completed)' in prof, '')
+    drv_css = client.get('/static/css/style.css').get_data(as_text=True)
+    check('profile: driving table CSS (two columns, divider, top lists)',
+          '.driving td + td { border-left: 1px solid var(--line); }' in drv_css
+          and '.driving .top-list { margin: 0; padding: 0; list-style: none; }' in drv_css, '')
     check('profile: play counters as chip-warn chips row after the table',
           '<div class="chips-row play-chips">' in prof
           and '>Days played: 12</span>' in prof
