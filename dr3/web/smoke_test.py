@@ -2058,6 +2058,9 @@ def main() -> int:
           r.status_code == 200
           and all(f'href="/profile/{u.username}"' in dhtml for u in all_users),
           f'status={r.status_code}')
+    check('drivers page: Stages completed column, no Clubs column',
+          '<th>Stages driven</th><th>Stages completed</th><th>Distance</th>' in dhtml
+          and '<th>Clubs</th>' not in dhtml, '')
 
     # 24. club delete: confirm page, owner-only, destructive cascade
     r = client.post('/clubs', data={

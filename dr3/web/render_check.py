@@ -128,7 +128,8 @@ def main() -> int:
     r = client.get('/drivers')
     drv_html = r.get_data(as_text=True)
     check('drivers page renders with the smoke driver',
-          r.status_code == 200 and 'Smoke Driver' in drv_html,
+          r.status_code == 200 and 'Smoke Driver' in drv_html
+          and '<th>Stages driven</th><th>Stages completed</th><th>Distance</th>' in drv_html,
           f'status={r.status_code}')
     # #56: /drivers stats are computed from stage_runs (the stored users
     # counters are retired) — the smoke driver's clean rows (48210 + 1200 m)

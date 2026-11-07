@@ -600,26 +600,26 @@ def drivers():
     table by tools/repair_stage_runs_backfill.sh)."""
     from sqlalchemy import func
 
-    club_count: dict[str, int] = {}
-    for c in Club.query.all():
-        for m in c.members:
-            uname = m.user.username if m.user else None
-            if uname:
-                club_count[uname] = club_count.get(uname, 0) + 1
     stats = (db.session.query(StageRun.username, func.count(StageRun.id),
                               func.sum(StageRun.distance_m))
              .group_by(StageRun.username).all())
     by_user = {u: (int(n), int(d or 0)) for u, n, d in stats}
-    users = User.query.order_by(User.display_name).all()
+    finished = (db.session.query(StageRun.username, func.count(StageRun.id))
+                .filter(StageRun.player_finished.is_(True))
+                .group_by(StageRun.username).all())
+    by_user_done = {u: int(n) for u, n in finished}
+    users = User.query.all()
     rows = [{
         'username': u.username,
         'display_name': u.display_name,
         'country': u.country or '',
-        'clubs': club_count.get(u.username, 0),
         'stages': by_user.get(u.username, (0, 0))[0],
+        'completed': by_user_done.get(u.username, 0),
+        'distance_m': by_user.get(u.username, (0, 0))[1],
         'distance_km': by_user.get(u.username, (0, 0))[1] / 1000.0,
+        'created_at': u.created_at or utcnow(),
     } for u in users]
-    rows.sort(key=lambda r: (-r['stages'], r['display_name']))
+    rows.sort(key=lambda r: (-r['distance_m'], r['created_at']))
     return render_template('drivers.html', rows=rows)
 
 

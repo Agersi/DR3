@@ -7,12 +7,12 @@
 </div>
 <div class="table-wrap">
 <table>
-  <tr><th>Driver</th><th>Clubs</th><th>Stages driven</th><th>Distance</th></tr>
+  <tr><th>Driver</th><th>Stages driven</th><th>Stages completed</th><th>Distance</th></tr>
   {% for d in rows %}
   <tr>
     <td>{{ flag_img(flag_url(d.country)) }}<a href="{{ url_for('pages.profile', username=d.username) }}">{{ d.display_name }}</a></td>
-    <td>{{ d.clubs }}</td>
     <td>{{ d.stages }}</td>
+    <td>{{ d.completed }}</td>
     <td>{{ '%.1f'|format(d.distance_km) }} km</td>
   </tr>
   {% else %}
