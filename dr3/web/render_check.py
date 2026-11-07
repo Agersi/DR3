@@ -92,7 +92,7 @@ def main() -> int:
     check('clubs: owner chip rendered full-width centered + title centered one line',
           'class="chip chip-warn owner-chip">Owner: ' in html
           and '.club-card .owner-chip {\n  align-self: flex-start;\n  width: 100%;\n  text-align: center;\n}' in css
-          and '.club-card .title-link {\n  display: block; width: 100%; text-align: center;\n  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;\n  color: var(--text); text-decoration: none;\n}' in css, '')
+          and '.club-card .title-link {\n  display: block;\n  width: 100%;\n  text-align: center;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  color: var(--text);\n  text-decoration: none;\n  font-size: 1.15rem;\n  letter-spacing: 0.01em;\n}' in css, '')
     check('site-wide: bordered boxes get 0.3rem border radius',
           'border-radius: 0.3rem;' in css
           and '.panel, .club-card, .stat-card, .btn, button, input, select, textarea,' in css
