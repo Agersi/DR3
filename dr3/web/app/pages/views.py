@@ -196,6 +196,19 @@ def home_recent_times():
 
 # ── Auth ─────────────────────────────────────────────────
 
+def _login_next() -> str:
+    """Post-login destination: the requested ``next`` if it is a local path,
+    with the subpath prefix restored (links generated before the fix carry a
+    bare path), else the dashboard."""
+    nxt = request.args.get('next') or ''
+    if not nxt.startswith('/') or '://' in nxt or nxt.startswith('//'):
+        return url_for('pages.dashboard')
+    root = request.script_root.rstrip('/')
+    if root and not nxt.startswith(root + '/'):
+        nxt = root + nxt
+    return nxt
+
+
 @pages_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -208,7 +221,7 @@ def login():
             flash('Invalid username or password.', 'error')
             return redirect(url_for('pages.login'))
         session['user_id'] = user.id
-        return redirect(request.args.get('next') or url_for('pages.dashboard'))
+        return redirect(_login_next())
     return render_template('login.html')
 
 

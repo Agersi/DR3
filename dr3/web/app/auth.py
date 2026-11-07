@@ -106,7 +106,7 @@ def login_required(f):
         if not uid:
             if request.path.startswith('/api/'):
                 return jsonify({'ok': False, 'error': 'authentication required'}), 401
-            return redirect(url_for('pages.login', next=request.path))
+            return redirect(url_for('pages.login', next=request.script_root + request.path))
         g.user = db.session.get(User, uid)
         if g.user is None:
             session.clear()
@@ -122,7 +122,7 @@ def verified_required(f):
         if not uid:
             if request.path.startswith('/api/'):
                 return jsonify({'ok': False, 'error': 'authentication required'}), 401
-            return redirect(url_for('pages.login', next=request.path))
+            return redirect(url_for('pages.login', next=request.script_root + request.path))
         user = db.session.get(User, uid)
         if user is None:
             session.clear()

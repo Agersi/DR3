@@ -2100,6 +2100,31 @@ def main() -> int:
     check('subpath: redirects are /rally-prefixed',
           r.headers.get('Location', '').startswith('/rally/'), f"loc={r.headers.get('Location')}")
 
+    # 22b. login "next" carries the subpath prefix (request.path excludes it),
+    #      and legacy unprefixed next values are restored on post
+    from app.models import Club as _Club22
+    with app2.app_context():
+        owner = User.query.filter_by(username='smokedriver').first()
+        db.session.add(_Club22(id='club-subpath', name='Subpath Club', description='',
+                               created_by=owner.id))
+        db.session.commit()
+    r = c2.get('/clubs/club-subpath')
+    html = r.get_data(as_text=True)
+    check('subpath: club login link next is /rally-prefixed',
+          'next=/rally/clubs/club-subpath' in html,
+          re.search(r'href="[^"]*login[^"]*next[^"]*"', html).group(0) if 'next=' in html else html[:400])
+    r = c2.post('/login?next=/clubs/club-subpath',
+                data={'username': 'smokedriver', 'password': 'password123'},
+                follow_redirects=False)
+    check('subpath: legacy unprefixed next restored on login',
+          r.headers.get('Location') == '/rally/clubs/club-subpath',
+          f"loc={r.headers.get('Location')}")
+    r = c2.post('/login?next=https%3A%2F%2Fevil.example.com%2Fx',
+                data={'username': 'smokedriver', 'password': 'password123'},
+                follow_redirects=False)
+    check('subpath: external next rejected',
+          r.headers.get('Location', '').startswith('/rally/'), f"loc={r.headers.get('Location')}")
+
     print()
     if failures:
         print(f'{len(failures)} FAILURES: {failures}')

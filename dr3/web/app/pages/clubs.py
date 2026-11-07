@@ -914,7 +914,7 @@ def join_via_invite_link(club_id: str, token: str):
         )
     if user is None:
         flash('Please sign in to accept the invite.', 'warning')
-        return redirect(url_for('pages.login', next=request.path))
+        return redirect(url_for('pages.login', next=request.script_root + request.path))
     if not user.email_verified:
         flash('Please verify your email before joining clubs.', 'warning')
         return redirect(url_for('pages.account'))

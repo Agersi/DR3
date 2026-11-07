@@ -38,7 +38,7 @@
       <button type="submit" class="ghost">Cancel request</button>
     </form>
   {% elif not logged_in %}
-    <p><a href="{{ url_for('pages.login', next=request.path) }}">Log in</a> to join this club.</p>
+    <p><a href="{{ url_for('pages.login', next=request.script_root ~ request.path) }}">Log in</a> to join this club.</p>
   {% elif join_policy == 'approval' %}
     <form method="post" action="{{ url_for('clubs.request_join_club', club_id=club.id) }}" class="inline">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
