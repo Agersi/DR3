@@ -270,6 +270,15 @@ def main() -> int:
     if club_id:
         r = client.get(f'/clubs/{club_id}')
         check(f'auth GET /clubs/{club_id}', r.status_code == 200, f'status={r.status_code}')
+        det = r.get_data(as_text=True)
+        check('club detail: tabbed menu bar (Events/Members) with Events active by default',
+              'class="club-menu"' in det
+              and '<span class="club-title">' in det
+              and '<a class="active" href="#tab-events" data-tab="events">Events</a>' in det
+              and '<a href="#tab-members" data-tab="members">Members</a>' in det
+              and 'id="tab-members" hidden' in det, f'status={r.status_code}')
+        check('club detail: members tab carries Gold/Silver/Bronze podium columns',
+              '<th>Gold</th><th>Silver</th><th>Bronze</th>' in det, f'status={r.status_code}')
         # championship builder: create a fresh draft, render edit + preview
         r = client.post(f'/clubs/{club_id}/championship/new', data={'num_events': '2', 'num_stages': '3'}, follow_redirects=False)
         check('champ new -> redirect to edit', r.status_code == 302, f'status={r.status_code}')

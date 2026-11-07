@@ -1,277 +1,538 @@
 {% extends "base.html" %}
 {% block title %}{{ club.name }} — Dirt Rally 3.0{% endblock %}
 {% block content %}
-<h1>{{ club.name }}</h1>
-<div class="chips-row">
-  <span class="chip {% if visibility == 'public' %}chip-ok{% else %}chip-warn{% endif %}">{{ visibility }}</span>
-  <span class="chip">{% if join_policy == 'approval' %}Approval to join{% else %}Open join{% endif %}</span>
-</div>
-{% if club.description %}<p>{{ club.description }}</p>{% endif %}
-
 {% set logged_in = session.get('user_id') %}
 
-{# ── Membership actions ─────────────────────────────── #}
-<div class="panel">
-  <h2>Your status</h2>
-  {% if is_member %}
-    <p>You are a member{% if is_owner %} and the owner{% elif is_admin %} (admin){% endif %}.</p>
-    {% if not is_owner %}
-    <form method="post" action="{{ url_for('clubs.leave_club', club_id=club.id) }}" class="inline">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="warn">Leave club</button>
-    </form>
+{# ── Menu bar: club name first, then the tab items ───── #}
+<nav class="club-menu">
+  <span class="club-title">{{ club.name }}</span>
+  <a class="active" href="#tab-events" data-tab="events">Events</a>
+  <a href="#tab-members" data-tab="members">Members</a>
+  {% if is_admin %}<a href="#tab-new-championship" data-tab="new-championship">New Championship</a>{% endif %}
+  {% if is_admin %}<a href="#tab-invites" data-tab="invites">Invites</a>{% endif %}
+  {% if is_owner %}<a href="#tab-management" data-tab="management">Management</a>{% endif %}
+</nav>
+
+{# ── Minimal status row (replaces the old "Your status" panel) ─ #}
+<div class="chips-row club-status">
+  <span class="chip {% if visibility == 'public' %}chip-ok{% else %}chip-warn{% endif %}">{{ visibility }}</span>
+  <span class="chip">{% if join_policy == 'approval' %}Approval to join{% else %}Open join{% endif %}</span>
+  {% if is_owner %}<span class="chip chip-accent">Owner</span>
+  {% elif is_admin %}<span class="chip chip-warn">Admin</span>
+  {% elif is_member %}<span class="chip chip-ok">Member</span>{% endif %}
+  <span class="club-status-actions">
+    {% if is_member and not is_owner %}
+      <form method="post" action="{{ url_for('clubs.leave_club', club_id=club.id) }}" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="warn small">Leave</button>
+      </form>
+    {% elif has_pending_invite %}
+      <span class="chip">Invite pending</span>
+      <form method="post" action="{{ url_for('clubs.accept_invite', club_id=club.id) }}" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="small">Accept invite</button>
+      </form>
+      <form method="post" action="{{ url_for('clubs.decline_invite', club_id=club.id) }}" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="ghost small">Decline</button>
+      </form>
+    {% elif has_pending_request %}
+      <span class="chip">Request pending</span>
+      <form method="post" action="{{ url_for('clubs.cancel_join_request', club_id=club.id) }}" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="ghost small">Cancel</button>
+      </form>
+    {% elif not logged_in %}
+      <a class="btn small" href="{{ url_for('pages.login', next=request.script_root ~ request.path) }}">Log in to join</a>
+    {% elif join_policy == 'approval' %}
+      <form method="post" action="{{ url_for('clubs.request_join_club', club_id=club.id) }}" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="small">Request to join</button>
+      </form>
+    {% else %}
+      <form method="post" action="{{ url_for('clubs.join_club', club_id=club.id) }}" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="small">Join club</button>
+      </form>
     {% endif %}
-  {% elif has_pending_invite %}
-    <p>You have a pending invite to this club.</p>
-    <form method="post" action="{{ url_for('clubs.accept_invite', club_id=club.id) }}" class="inline">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit">Accept invite</button>
-    </form>
-    <form method="post" action="{{ url_for('clubs.decline_invite', club_id=club.id) }}" class="inline">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="ghost">Decline</button>
-    </form>
-  {% elif has_pending_request %}
-    <p>Your join request is pending approval.</p>
-    <form method="post" action="{{ url_for('clubs.cancel_join_request', club_id=club.id) }}" class="inline">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="ghost">Cancel request</button>
-    </form>
-  {% elif not logged_in %}
-    <p><a href="{{ url_for('pages.login', next=request.script_root ~ request.path) }}">Log in</a> to join this club.</p>
-  {% elif join_policy == 'approval' %}
-    <form method="post" action="{{ url_for('clubs.request_join_club', club_id=club.id) }}" class="inline">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit">Request to join</button>
-    </form>
-  {% else %}
-    <form method="post" action="{{ url_for('clubs.join_club', club_id=club.id) }}" class="inline">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit">Join club</button>
-    </form>
-  {% endif %}
+  </span>
 </div>
 
-{# ── Pending join requests (admins) ─────────────────── #}
-{% if is_admin and pending_users %}
-<h2>Pending join requests</h2>
-<div class="table-wrap">
-  <table>
-    <tr><th>User</th><th>Requested</th><th></th></tr>
-    {% for p in pending_users %}
-    <tr>
-      <td>{{ flag_img(flag_url(p.user.country)) }}{{ p.user.display_name }} ({{ p.user.username }})</td>
-      <td class="num">{{ p.requested_at | timeago }}</td>
-      <td>
-        <form method="post" action="{{ url_for('clubs.approve_join_request', club_id=club.id, username=p.user.username) }}" class="inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="small">Approve</button>
-        </form>
-        <form method="post" action="{{ url_for('clubs.deny_join_request', club_id=club.id, username=p.user.username) }}" class="inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="ghost small">Deny</button>
-        </form>
-      </td>
-    </tr>
-    {% endfor %}
-  </table>
-</div>
-{% endif %}
+{% if club.description %}<p>{{ club.description }}</p>{% endif %}
 
-{# ── Members ────────────────────────────────────────── #}
-<h2>Members ({{ members|length }})</h2>
-<div class="table-wrap">
-  <table>
-    <tr><th>User</th><th>Display name</th><th>Role</th>{% if is_owner %}<th></th>{% endif %}</tr>
-    {% for m in members %}
-    <tr>
-      <td>{{ flag_img(flag_url(m.user.country)) }}{{ m.user.username }}</td>
-      <td>{{ m.user.display_name or '' }}</td>
-      <td>
-        {% if m.role == 'owner' %}<span class="chip chip-accent">Owner</span>
-        {% elif m.role == 'admin' %}<span class="chip chip-warn">Admin</span>
-        {% else %}<span class="chip">Member</span>{% endif %}
-      </td>
-      {% if is_owner %}
-      <td>
-        {% if m.role == 'member' %}
-        <form method="post" action="{{ url_for('clubs.promote_club_admin', club_id=club.id, username=m.user.username) }}" class="inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="small">Make admin</button>
-        </form>
-        {% elif m.role == 'admin' %}
-        <form method="post" action="{{ url_for('clubs.demote_club_admin', club_id=club.id, username=m.user.username) }}" class="inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="ghost small">Remove admin</button>
-        </form>
-        {% endif %}
-      </td>
-      {% endif %}
-    </tr>
-    {% endfor %}
-  </table>
-</div>
+<div id="club-tab-content">
 
-{# ── Invites (admins) ───────────────────────────────── #}
-{% if is_admin %}
-<div class="panel">
-  <h2>Invites</h2>
-  <form method="post" action="{{ url_for('clubs.invite_to_club', club_id=club.id) }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label for="invite_user">Invite a user by username</label>
-    <input id="invite_user" name="username" placeholder="username" required>
-    <button type="submit">Send invite</button>
-  </form>
-  {% if pending_invites %}
-  <div class="table-wrap">
-    <table>
-      <tr><th>User</th><th>Invited</th><th></th></tr>
-      {% for i in pending_invites %}
-      <tr>
-        <td>{{ flag_img(flag_url(i.user.country)) }}{{ i.user.username }}</td>
-        <td class="num">{{ i.created_at | timeago }}</td>
-        <td>
-          <form method="post" action="{{ url_for('clubs.cancel_invite', club_id=club.id, username=i.user.username) }}" class="inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="ghost small">Cancel</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </table>
-  </div>
-  {% endif %}
-
-  <h2>Invite links</h2>
-  <form method="post" action="{{ url_for('clubs.create_invite_link', club_id=club.id) }}" class="inline">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit">Create invite link</button>
-  </form>
-  {% if invite_links %}
-  <div class="table-wrap">
-    <table>
-      <tr><th>Link</th><th>Created</th><th></th></tr>
-      {% for link in invite_links %}
-      <tr>
-        <td><code>{{ url_for('clubs.join_via_invite_link', club_id=club.id, token=link.token) }}</code></td>
-        <td class="num">{{ link.created_at | timeago }}</td>
-        <td>
-          <form method="post" action="{{ url_for('clubs.revoke_invite_link', club_id=club.id, token=link.token) }}" class="inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="ghost small">Revoke</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </table>
-  </div>
-  {% endif %}
-</div>
-{% endif %}
-
-{# ── Events / championships + results ───────────────── #}
-<h2>Events</h2>
-{% if live_event %}
-<div class="flash info"><strong>{{ live_event['name'] }}</strong> is live now — ends in {{ live_ends | countdown }}.</div>
-{% endif %}
-
-{% if championships %}
-  {% for c in championships %}
-  <div class="panel">
-    <h2><a href="{{ url_for('pages.event_detail', event_id=c.event['id']) }}">{{ c.event['name'] }}</a></h2>
-    <div class="chips-row">
-      <span class="chip">{{ c.mode_label }}</span>
-      <span class="chip chip-accent">{{ c.scoring_label }} points</span>
-      {% if c.power_stage %}<span class="chip chip-warn">Power stage</span>{% endif %}
-      {% if c.status == 'live' %}
-        <span class="chip chip-ok">Live — ends in {{ c.ends_in | countdown }}</span>
-      {% elif c.status == 'upcoming' %}
-        <span class="chip">Starts in {{ c.event['start_time'] | countdown }}</span>
-      {% else %}
-        <span class="chip chip-warn">Ended</span>
-      {% endif %}
+  {# ── Events (default) — EA WRC-style board ─────────── #}
+  <section class="club-tab" data-tab="events" id="tab-events">
+    {% if board %}
+    <div class="champ-selector" id="champ-selector">
+      <button type="button" class="champ-arrow" id="champ-prev" aria-label="Previous championship">&#9664;</button>
+      <div class="champ-center">
+        <span class="champ-name" id="champ-name"></span>
+        <span class="champ-window" id="champ-window"></span>
+      </div>
+      <button type="button" class="champ-arrow" id="champ-next" aria-label="Next championship">&#9654;</button>
     </div>
 
+    <div class="round-strip" id="round-strip"></div>
+
+    <div class="board-toggles">
+      <div class="mode-toggle" id="mode-toggle">
+        <button type="button" class="mode-btn" data-mode="overall">Overall</button>
+        <button type="button" class="mode-btn" data-mode="stage">Stage</button>
+      </div>
+      <div class="stage-bar" id="stage-bar" hidden></div>
+    </div>
+
+    <div class="board-info" id="board-info"></div>
+
+    <div class="table-wrap board-wrap">
+      <table class="board" id="board-table">
+        <thead>
+          <tr>
+            <th>#</th><th>Driver</th><th>Vehicle</th><th>Class</th><th>Tyre</th>
+            <th>Input</th><th>VR</th><th>Camera</th><th>Assists</th><th>Penalty</th>
+            <th class="num">Time</th><th class="num">Diff 1st</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="board-body">
+          <tr class="board-empty"><td colspan="13">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <script type="application/json" id="board-state">{{ {'club_id': club.id, 'selectors': champ_selectors, 'champ_index': default_champ_index, 'event_id': default_event_id, 'round_index': default_round_index, 'mode': 'overall', 'stage': 0, 'script_root': request.script_root, 'board': board} | tojson }}</script>
+    {% else %}
+    <p>No events yet.</p>
+    {% endif %}
+  </section>
+
+  {# ── Members ──────────────────────────────────────── #}
+  <section class="club-tab" data-tab="members" id="tab-members" hidden>
+    <h2>Members ({{ members|length }})</h2>
     <div class="table-wrap">
       <table>
-        <tr><th>#</th><th>Rally</th><th>Class</th><th>Stages</th><th>Window</th><th>Status</th></tr>
-        {% for r in c.rounds %}
+        <tr><th>User</th><th>Display name</th><th>Role</th><th>Gold</th><th>Silver</th><th>Bronze</th>{% if is_owner %}<th></th>{% endif %}</tr>
+        {% for m in members %}
+          {% set p = podiums.get(m.user.username) or {'gold': 0, 'silver': 0, 'bronze': 0} %}
         <tr>
-          <td class="num">{{ '%02d'|format(r.index + 1) }}</td>
-          <td><a href="{{ url_for('pages.event_detail', event_id=c.event['id']) }}#round-{{ r.index }}">{{ r.location or '(none)' }}</a></td>
-          <td>{{ r.car_class or '' }}</td>
-          <td class="num">{{ r.count }}</td>
-          <td class="num">{{ r.window_text }}</td>
+          <td><a href="{{ url_for('pages.profile', username=m.user.username) }}">{{ flag_img(flag_url(m.user.country)) }}{{ m.user.username }}</a></td>
+          <td>{% if m.user.display_name %}<a href="{{ url_for('pages.profile', username=m.user.username) }}">{{ m.user.display_name }}</a>{% endif %}</td>
           <td>
-            {% if r.status == 'live' %}<span class="chip chip-ok">Live</span>
-            {% elif r.status == 'upcoming' %}<span class="chip">Upcoming</span>
-            {% else %}<span class="chip chip-warn">Ended</span>{% endif %}
+            {% if m.role == 'owner' %}<span class="chip chip-accent">Owner</span>
+            {% elif m.role == 'admin' %}<span class="chip chip-warn">Admin</span>
+            {% else %}<span class="chip">Member</span>{% endif %}
+          </td>
+          <td class="num {% if not p.gold %}dim{% endif %}">{{ p.gold }}</td>
+          <td class="num {% if not p.silver %}dim{% endif %}">{{ p.silver }}</td>
+          <td class="num {% if not p.bronze %}dim{% endif %}">{{ p.bronze }}</td>
+          {% if is_owner %}
+          <td>
+            {% if m.role == 'member' %}
+            <form method="post" action="{{ url_for('clubs.promote_club_admin', club_id=club.id, username=m.user.username) }}" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="small">Make admin</button>
+            </form>
+            {% elif m.role == 'admin' %}
+            <form method="post" action="{{ url_for('clubs.demote_club_admin', club_id=club.id, username=m.user.username) }}" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="ghost small">Remove admin</button>
+            </form>
+            {% endif %}
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+  </section>
+
+  {# ── New Championship (admin) ─────────────────────── #}
+  {% if is_admin %}
+  <section class="club-tab" data-tab="new-championship" id="tab-new-championship" hidden>
+    <h2>New Championship</h2>
+    <p>Schedule a championship that runs over days or weeks. Pick the type (Multi-Location Rally or Rally Season), the points system and the power-stage option on the next screen.</p>
+    <div class="champ-actions">
+      <a class="btn ghost" href="{{ url_for('clubs.championship_new', club_id=club.id) }}">Create New</a>
+      <form method="post" action="{{ url_for('clubs.championship_load_previous', club_id=club.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn ghost" {% if not previous_event %}disabled title="This club has no championship to load yet"{% endif %}>Load Previous</button>
+      </form>
+      <form method="post" action="{{ url_for('clubs.championship_load_draft', club_id=club.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn ghost" {% if not my_drafts %}disabled title="No saved drafts yet"{% endif %}>Load from Draft</button>
+        {% if my_drafts %}
+        <select name="draft_id">
+          {% for d in my_drafts %}
+          <option value="{{ d.id }}">{{ d.label }} ({{ d.created_at }}){% if d.permanent %} — permanent{% endif %}{% if d.source %} — from {{ d.source }}{% endif %}</option>
+          {% endfor %}
+        </select>
+        {% endif %}
+      </form>
+    </div>
+
+    {% if champ_selectors %}
+    <h2>Championships</h2>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Championship</th><th>Status</th><th>Window</th><th></th></tr>
+        {% for s in champ_selectors %}
+        <tr>
+          <td>{{ s.name }}</td>
+          <td>
+            {% if s.status == 'live' %}<span class="chip chip-ok">Live</span>
+            {% elif s.status == 'upcoming' %}<span class="chip chip-warn">Upcoming</span>
+            {% else %}<span class="muted">Ended</span>{% endif %}
+          </td>
+          <td class="num">{{ s.window_text }}</td>
+          <td>
+            <a class="btn danger small" href="{{ url_for('clubs.championship_delete_confirm', club_id=club.id, event_id=s.event_id) }}">Delete</a>
           </td>
         </tr>
         {% endfor %}
       </table>
     </div>
+    {% endif %}
+  </section>
+  {% endif %}
 
-    <h3>Standings</h3>
-    {% if c.standings %}
+  {# ── Invites (admin) — includes pending join requests #}
+  {% if is_admin %}
+  <section class="club-tab" data-tab="invites" id="tab-invites" hidden>
+    <h2>Invites</h2>
+    <form method="post" action="{{ url_for('clubs.invite_to_club', club_id=club.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label for="invite_user">Invite a user by username</label>
+      <input id="invite_user" name="username" placeholder="username" required>
+      <button type="submit">Send invite</button>
+    </form>
+    {% if pending_invites %}
     <div class="table-wrap">
       <table>
-        <tr><th>#</th><th>Driver</th><th>Car</th><th>Points</th><th>Time</th><th>Gap</th></tr>
-        {% for s in c.standings %}
+        <tr><th>User</th><th>Invited</th><th></th></tr>
+        {% for i in pending_invites %}
         <tr>
-          <td class="num">{{ loop.index }}</td>
-          <td>{{ flag_img(flag_for(s.username)) }}{{ s.username }}</td>
-          <td>{{ s.car or '' }}</td>
-          <td class="num">{{ s.points }}</td>
-          <td class="num">{{ s.time_text }}</td>
-          <td class="num">{{ s.gap_str }}</td>
+          <td>{{ flag_img(flag_url(i.user.country)) }}{{ i.user.username }}</td>
+          <td class="num">{{ i.created_at | timeago }}</td>
+          <td>
+            <form method="post" action="{{ url_for('clubs.cancel_invite', club_id=club.id, username=i.user.username) }}" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="ghost small">Cancel</button>
+            </form>
+          </td>
         </tr>
         {% endfor %}
       </table>
     </div>
-    {% else %}
-    <p>No results yet.</p>
     {% endif %}
 
-    {% if is_admin %}
-    <a class="btn danger small" href="{{ url_for('clubs.championship_delete_confirm', club_id=club.id, event_id=c.event['id']) }}">Delete</a>
-    {% endif %}
-  </div>
-  {% endfor %}
-{% else %}
-<p>No events yet.</p>
-{% endif %}
-
-{% if is_admin %}
-<div class="panel">
-  <h2>Championships</h2>
-  <p>Schedule a championship that runs over days or weeks. Pick the type (Multi-Location Rally or Rally Season), the points system and the power-stage option on the next screen.</p>
-  <div class="champ-actions">
-    <a class="btn ghost" href="{{ url_for('clubs.championship_new', club_id=club.id) }}">Create New</a>
-    <form method="post" action="{{ url_for('clubs.championship_load_previous', club_id=club.id) }}">
+    <h2>Invite links</h2>
+    <form method="post" action="{{ url_for('clubs.create_invite_link', club_id=club.id) }}" class="inline">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn ghost" {% if not previous_event %}disabled title="This club has no championship to load yet"{% endif %}>Load Previous</button>
+      <button type="submit">Create invite link</button>
     </form>
-    <form method="post" action="{{ url_for('clubs.championship_load_draft', club_id=club.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn ghost" {% if not my_drafts %}disabled title="No saved drafts yet"{% endif %}>Load from Draft</button>
-      {% if my_drafts %}
-      <select name="draft_id">
-        {% for d in my_drafts %}
-        <option value="{{ d.id }}">{{ d.label }} ({{ d.created_at }}){% if d.permanent %} — permanent{% endif %}{% if d.source %} — from {{ d.source }}{% endif %}</option>
+    {% if invite_links %}
+    <div class="table-wrap">
+      <table>
+        <tr><th>Link</th><th>Created</th><th></th></tr>
+        {% for link in invite_links %}
+        <tr>
+          <td><code>{{ url_for('clubs.join_via_invite_link', club_id=club.id, token=link.token) }}</code></td>
+          <td class="num">{{ link.created_at | timeago }}</td>
+          <td>
+            <form method="post" action="{{ url_for('clubs.revoke_invite_link', club_id=club.id, token=link.token) }}" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="ghost small">Revoke</button>
+            </form>
+          </td>
+        </tr>
         {% endfor %}
-      </select>
-      {% endif %}
-    </form>
-  </div>
-</div>
-{% endif %}
+      </table>
+    </div>
+    {% endif %}
 
-{% if is_owner %}
-<div class="panel">
-  <h2>Delete club</h2>
-  <p>Permanently remove this club, its championships and all results. This cannot be undone.</p>
-  <a class="btn danger" href="{{ url_for('clubs.club_delete_confirm', club_id=club.id) }}">Delete club</a>
+    {% if pending_users %}
+    <h2>Pending join requests</h2>
+    <div class="table-wrap">
+      <table>
+        <tr><th>User</th><th>Requested</th><th></th></tr>
+        {% for p in pending_users %}
+        <tr>
+          <td>{{ flag_img(flag_url(p.user.country)) }}{{ p.user.display_name }} ({{ p.user.username }})</td>
+          <td class="num">{{ p.requested_at | timeago }}</td>
+          <td>
+            <form method="post" action="{{ url_for('clubs.approve_join_request', club_id=club.id, username=p.user.username) }}" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="small">Approve</button>
+            </form>
+            <form method="post" action="{{ url_for('clubs.deny_join_request', club_id=club.id, username=p.user.username) }}" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="ghost small">Deny</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {# ── Management (owner) ───────────────────────────── #}
+  {% if is_owner %}
+  <section class="club-tab" data-tab="management" id="tab-management" hidden>
+    <h2>Club settings</h2>
+    <form method="post" action="{{ url_for('clubs.edit_club', club_id=club.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label for="club_name">Name</label>
+      <input id="club_name" name="name" value="{{ club.name }}" required maxlength="40">
+      <label for="club_desc">Description</label>
+      <textarea id="club_desc" name="description">{{ club.description }}</textarea>
+      <label for="club_vis">Visibility</label>
+      <select id="club_vis" name="visibility">
+        <option value="public" {% if club.visibility == 'public' %}selected{% endif %}>Public</option>
+        <option value="private" {% if club.visibility == 'private' %}selected{% endif %}>Private</option>
+      </select>
+      <label for="club_join">Join policy</label>
+      <select id="club_join" name="join_policy">
+        <option value="open" {% if club.join_policy == 'open' %}selected{% endif %}>Open join</option>
+        <option value="approval" {% if club.join_policy == 'approval' %}selected{% endif %}>Approval to join</option>
+      </select>
+      <button type="submit">Save changes</button>
+    </form>
+
+    <h2>Delete club</h2>
+    <p>Permanently remove this club, its championships and all results. This cannot be undone.</p>
+    <a class="btn danger" href="{{ url_for('clubs.club_delete_confirm', club_id=club.id) }}">Delete club</a>
+  </section>
+  {% endif %}
+
 </div>
-{% endif %}
+
+<script>
+(function () {
+  var links = document.querySelectorAll('.club-menu [data-tab]');
+  var panels = document.querySelectorAll('#club-tab-content .club-tab');
+  function show(name) {
+    links.forEach(function (l) { l.classList.toggle('active', l.getAttribute('data-tab') === name); });
+    panels.forEach(function (p) { p.hidden = p.getAttribute('data-tab') !== name; });
+  }
+  links.forEach(function (l) {
+    l.addEventListener('click', function (e) { e.preventDefault(); show(l.getAttribute('data-tab')); });
+  });
+})();
+</script>
+
+<script>
+(function () {
+  var stateEl = document.getElementById('board-state');
+  if (!stateEl) return;
+  var state;
+  try { state = JSON.parse(stateEl.textContent); } catch (e) { return; }
+  if (!state || !state.board) return;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  var root = state.script_root || '';
+  var INPUT_LABEL = { wheel: 'Wheel', controller: 'Controller', keyboard: 'Keyboard' };
+
+  function boardUrl() {
+    var p = new URLSearchParams();
+    p.set('event', state.event_id);
+    p.set('round', state.round_index);
+    p.set('mode', state.mode);
+    if (state.mode === 'stage') p.set('stage', state.stage);
+    return root + '/clubs/' + state.club_id + '/event-board?' + p.toString();
+  }
+
+  function tyreCell(tyres) {
+    if (!tyres || !tyres.length) return '<span class="muted">—</span>';
+    return tyres.map(function (t) {
+      return '<span class="tyre-chip" title="Compound ' + esc(t) + '">' + esc(t) + '</span>';
+    }).join(' ');
+  }
+
+  function boolCell(v) {
+    if (v === null || v === undefined) return '<span class="muted">—</span>';
+    return v ? '✓' : '✗';
+  }
+
+  function inputCell(v) {
+    return INPUT_LABEL[v] || (v ? esc(v) : '<span class="muted">—</span>');
+  }
+
+  function camCell(v) {
+    if (!v) return '<span class="muted">—</span>';
+    var s = String(v).replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+    return esc(s);
+  }
+
+  function penaltyCell(ms) {
+    if (!ms) return '';
+    var s = ms / 1000;
+    return '+' + (Number.isInteger(s) ? s : s.toFixed(1)) + 's';
+  }
+
+  function renderSelector() {
+    var sel = state.selectors[state.champ_index] || {};
+    document.getElementById('champ-name').textContent = sel.name || '';
+    document.getElementById('champ-window').textContent = sel.window_text || '';
+  }
+
+  function renderRounds(board) {
+    var strip = document.getElementById('round-strip');
+    strip.innerHTML = (board.rounds || []).map(function (r) {
+      var cls = 'round-box' + (r.index === board.round_index ? ' active' : '');
+      return '<button type="button" class="' + cls + '" data-round="' + r.index + '">' +
+        '<span class="round-loc">' + esc(r.location || '(none)') + '</span>' +
+        '<span class="round-class">' + esc(r.car_class || '') + '</span>' +
+        '<span class="round-window">' + esc(r.window_text || '') + '</span>' +
+        '</button>';
+    }).join('');
+  }
+
+  function renderToggles(board) {
+    document.querySelectorAll('#mode-toggle .mode-btn').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-mode') === state.mode);
+    });
+    var bar = document.getElementById('stage-bar');
+    if (state.mode === 'stage') {
+      bar.hidden = false;
+      bar.innerHTML = (board.stages_bar || []).map(function (s) {
+        var cls = 'stage-btn' + (s.local_index === board.stage_local_index ? ' active' : '');
+        return '<button type="button" class="' + cls + '" data-stage="' + s.local_index + '" title="' + esc(s.name) + '">' + esc(s.label) + '</button>';
+      }).join('');
+    } else {
+      bar.hidden = true;
+      bar.innerHTML = '';
+    }
+  }
+
+  function renderInfo(board) {
+    var el = document.getElementById('board-info');
+    if (state.mode === 'stage' && board.info) {
+      var i = board.info;
+      el.innerHTML =
+        '<span class="info-item"><span class="info-key">Stage</span> ' + esc(i.number) + '</span>' +
+        '<span class="info-item info-name">' + esc(i.name || '') + '</span>' +
+        (i.length_km ? '<span class="info-item"><span class="info-key">Length</span> ' + Number(i.length_km).toFixed(2) + ' km</span>' : '') +
+        (i.weather ? '<span class="info-item"><span class="info-key">Weather</span> ' + esc(i.weather) + '</span>' : '') +
+        (i.service ? '<span class="info-item"><span class="info-key">Service</span> ' + esc(i.service) + '</span>' : '');
+    } else {
+      var rnd = (board.rounds || [])[board.round_index] || {};
+      el.innerHTML = '<span class="info-item info-name">Round ' + (board.round_index + 1) +
+        ' — ' + esc(rnd.location || '') + (rnd.car_class ? ' (' + esc(rnd.car_class) + ')' : '') + '</span>';
+    }
+  }
+
+  function expandCell(row) {
+    if (state.mode !== 'stage') return '';
+    if (row.splits && row.splits.length) {
+      return '<button type="button" class="expand-btn" data-pos="' + row.pos + '" aria-label="Show splits">&#9656;</button>';
+    }
+    return '<span class="muted small">configure telemetry</span>';
+  }
+
+  function renderRows(board) {
+    var body = document.getElementById('board-body');
+    var rows = board.rows || [];
+    if (!rows.length) {
+      body.innerHTML = '<tr class="board-empty"><td colspan="13">No results yet.</td></tr>';
+      return;
+    }
+    body.innerHTML = rows.map(function (r) {
+      var tr = '<tr class="board-row' + (r.dnf ? ' dnf' : '') + '" data-pos="' + r.pos + '">' +
+        '<td class="num">' + r.pos + '</td>' +
+        '<td><a href="' + root + esc(r.driver_url) + '">' + esc(r.username) + '</a></td>' +
+        '<td>' + esc(r.vehicle || '') + '</td>' +
+        '<td>' + esc(r.class_label || '') + '</td>' +
+        '<td class="tyre-cell">' + tyreCell(r.tyres) + '</td>' +
+        '<td>' + inputCell(r.input) + '</td>' +
+        '<td>' + boolCell(r.vr) + '</td>' +
+        '<td>' + camCell(r.camera) + '</td>' +
+        '<td>' + boolCell(r.assists) + '</td>' +
+        '<td class="num">' + penaltyCell(r.penalty_ms) + '</td>' +
+        '<td class="num">' + esc(r.time_text) + (r.dnf ? ' <span class="dnf-tag">DNF</span>' : '') + '</td>' +
+        '<td class="num">' + esc(r.diff_str) + '</td>' +
+        '<td class="expand-cell">' + expandCell(r) + '</td>' +
+        '</tr>';
+      if (state.mode === 'stage' && r.splits && r.splits.length) {
+        tr += '<tr class="splits-row" data-splits-for="' + r.pos + '" hidden>' +
+          '<td colspan="13"><span class="info-key">Splits</span> ' +
+          r.splits.map(function (s) { return esc(Number(s).toFixed(2)); }).join('  ') + '</td></tr>';
+      }
+      return tr;
+    }).join('');
+  }
+
+  function renderAll() {
+    var board = state.board;
+    renderSelector();
+    renderRounds(board);
+    renderToggles(board);
+    renderInfo(board);
+    renderRows(board);
+  }
+
+  function load() {
+    fetch(boardUrl(), { headers: { 'Accept': 'application/json' } })
+      .then(function (res) { if (!res.ok) throw new Error(res.status); return res.json(); })
+      .then(function (board) { state.board = board; renderAll(); })
+      .catch(function () {});
+  }
+
+  document.getElementById('champ-prev').addEventListener('click', function () {
+    if (state.champ_index > 0) {
+      state.champ_index -= 1;
+      state.event_id = state.selectors[state.champ_index].event_id;
+      state.round_index = 0;
+      load();
+    }
+  });
+  document.getElementById('champ-next').addEventListener('click', function () {
+    if (state.champ_index < state.selectors.length - 1) {
+      state.champ_index += 1;
+      state.event_id = state.selectors[state.champ_index].event_id;
+      state.round_index = 0;
+      load();
+    }
+  });
+
+  document.getElementById('round-strip').addEventListener('click', function (e) {
+    var btn = e.target.closest('.round-box');
+    if (!btn) return;
+    state.round_index = parseInt(btn.getAttribute('data-round'), 10);
+    load();
+  });
+
+  document.getElementById('mode-toggle').addEventListener('click', function (e) {
+    var btn = e.target.closest('.mode-btn');
+    if (!btn) return;
+    state.mode = btn.getAttribute('data-mode');
+    if (state.mode === 'stage' && !state.stage) state.stage = 0;
+    load();
+  });
+
+  document.getElementById('stage-bar').addEventListener('click', function (e) {
+    var btn = e.target.closest('.stage-btn');
+    if (!btn) return;
+    state.stage = parseInt(btn.getAttribute('data-stage'), 10);
+    load();
+  });
+
+  document.getElementById('board-body').addEventListener('click', function (e) {
+    var btn = e.target.closest('.expand-btn');
+    if (!btn) return;
+    var pos = btn.getAttribute('data-pos');
+    var row = document.querySelector('#board-body .splits-row[data-splits-for="' + pos + '"]');
+    if (row) row.hidden = !row.hidden;
+  });
+
+  renderAll();
+})();
+</script>
 {% endblock %}

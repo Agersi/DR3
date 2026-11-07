@@ -12,6 +12,7 @@ from flask import (
     abort,
     flash,
     g,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -69,17 +70,22 @@ from ..events import (
     event_is_active,
     event_is_upcoming,
     get_all_events,
+    get_event,
     sort_events,
 )
 from ..models import ChampionshipDraft, Club, ClubInvite, Event, Result, User, utcnow
 from ..results_view import (
     championship_rounds,
+    club_podium_counts,
+    current_leg_index,
     effective_end,
+    event_board,
     event_profile,
     event_status,
     mode_label,
     overall_table,
     scoring_label,
+    window_text,
 )
 from ..scoring import SCORING_SYSTEMS, SCORING_WRC, duration_label, power_stage_enabled
 from ..tables import (
@@ -385,6 +391,7 @@ def club_detail(club_id: str):
     # overall standings (points first, bogey-adjusted time as tiebreaker).
     now = utcnow()
     championships = []
+    podium_items = []
     for e in events:
         entries = entries_for_event(e['id'])
         ee = effective_end(e, now)
@@ -400,6 +407,8 @@ def club_detail(club_id: str):
             'rounds': championship_rounds(e, now),
             'standings': overall_table(e, entries),
         })
+        podium_items.append((e, entries))
+    podiums = club_podium_counts(podium_items)
 
     uname = user.username if user else None
     is_admin = user_is_admin(club, uname)
@@ -461,10 +470,60 @@ def club_detail(club_id: str):
         ee = effective_end(live_event, now)
         live_ends = ee.isoformat() if ee else ''
 
+    # Events-tab championship selector + the default board (server-rendered so
+    # the page shows a leaderboard before any JS runs). The arrows walk this
+    # ordered list; it defaults to the live championship, else the most recent
+    # finished one.
+    def _dt(s):
+        try:
+            return datetime.fromisoformat(s) if s else None
+        except ValueError:
+            return None
+
+    champ_selectors = []
+    for i, c in enumerate(championships):
+        rounds = c['rounds']
+        start_iso = rounds[0]['window_start_iso'] if rounds else None
+        end_iso = rounds[-1]['window_end_iso'] if rounds else None
+        champ_selectors.append({
+            'index': i,
+            'event_id': c['event']['id'],
+            'name': f'Championship {i + 1}',
+            'status': c['status'],
+            'window_text': window_text(_dt(start_iso), _dt(end_iso)),
+        })
+
+    default_event_id = None
+    default_round_index = 0
+    if live_event is not None:
+        default_event_id = live_event['id']
+        default_round_index = current_leg_index(live_event, now)
+    else:
+        for c in championships:
+            if c['status'] == 'ended':
+                default_event_id = c['event']['id']
+                break
+        if default_event_id is None and events:
+            default_event_id = events[0]['id']
+
+    board = None
+    default_champ_index = 0
+    if default_event_id is not None:
+        default_event = get_event(default_event_id)
+        if default_event is not None:
+            board = event_board(default_event, default_round_index, 'overall', now=now)
+        for i, s in enumerate(champ_selectors):
+            if s['event_id'] == default_event_id:
+                default_champ_index = i
+                break
+
     return render_template(
         'club_detail.html', club=club, members=members, events=events,
-        championships=championships,
+        championships=championships, podiums=podiums,
         live_event=live_event, live_ends=live_ends,
+        champ_selectors=champ_selectors, board=board,
+        default_event_id=default_event_id, default_round_index=default_round_index,
+        default_champ_index=default_champ_index,
         is_owner=user_is_owner(club, uname),
         is_admin=is_admin,
         is_member=user_is_member(club, uname),
@@ -478,6 +537,42 @@ def club_detail(club_id: str):
         visibility=club_visibility(club),
         join_policy=club_join_policy(club),
     )
+
+
+@clubs_bp.route('/clubs/<club_id>/event-board')
+def club_event_board(club_id: str):
+    """JSON board for the events tab (no-reload toggles fetch this).
+
+    Query args: ``event`` (championship id, must belong to the club),
+    ``round`` (0-based), ``mode`` ('overall'|'stage'), ``stage`` (0-based local
+    stage index, only in stage mode)."""
+    club = _load_club(club_id)
+    user_id = session.get('user_id')
+    user = db.session.get(User, user_id) if user_id else None
+    if not club_is_visible_to(club, user):
+        abort(404)
+
+    event_id = request.args.get('event', '')
+    event = get_event(event_id) if event_id else None
+    if event is None or event.get('club_id') != club_id:
+        abort(404)
+
+    try:
+        round_index = int(request.args.get('round', '0'))
+    except ValueError:
+        round_index = 0
+    mode = request.args.get('mode', 'overall')
+    if mode not in ('overall', 'stage'):
+        mode = 'overall'
+    stage_local_index = None
+    if mode == 'stage':
+        try:
+            stage_local_index = int(request.args.get('stage', '0'))
+        except ValueError:
+            stage_local_index = 0
+
+    board = event_board(event, round_index, mode, stage_local_index)
+    return jsonify(board if board is not None else {'rows': []})
 
 
 @clubs_bp.route('/clubs/<club_id>/edit', methods=['POST'])

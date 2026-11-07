@@ -317,6 +317,27 @@ td:has(.driver-dot) { display: flex; justify-content: center; }
 .club-card .chips-row .members-chip { flex: 1; text-align: center; padding: 0.28rem 0.7rem; font-size: 0.78rem; }
 .club-card .chips-row .chip-ok { width: 100%; text-align: center; }
 
+/* ── Club detail: menu bar + tab panels ─────────────── */
+
+.club-menu { display: flex; gap: 0.2rem 1rem; flex-wrap: wrap; align-items: stretch; margin-bottom: 0.5rem; }
+.club-menu .club-title {
+  font-family: var(--display); text-transform: uppercase; letter-spacing: 0.03em;
+  font-size: 1.5rem; font-weight: 700; align-self: center; margin-right: 0.4rem;
+}
+.club-menu a {
+  font-family: var(--display); text-transform: uppercase; letter-spacing: 0.08em;
+  font-size: 0.9rem; font-weight: 600; color: var(--muted);
+  padding: 0.4rem 0.15rem; border-bottom: 3px solid var(--line);
+}
+.club-menu a:hover { color: var(--text); }
+.club-menu a.active { color: var(--text); border-bottom-color: var(--accent); }
+
+.club-status-actions { margin-left: auto; display: inline-flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+.club-status-actions .inline { display: inline-flex; }
+
+.club-tab[hidden] { display: none; }
+.table-wrap td.dim { color: var(--line); }
+
 /* ── Flash messages ─────────────────────────────────── */
 
 .flash {
@@ -438,11 +459,57 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
 .token-box code { flex: 1 1 260px; margin: 0; background: var(--bg); color: var(--text); border: 2px solid var(--line); padding: 0.55rem 0.7rem; font-size: 0.95rem; }
 .token-box button { flex: none; align-self: center; margin-top: 0; }
 
+/* ── Events-tab board (EA WRC-style) ─────────────────────── */
+.muted { color: var(--muted); }
+.small { font-size: 0.85rem; }
+
+.champ-selector { display: flex; align-items: stretch; gap: 0.6rem; margin-bottom: 0.8rem; }
+.champ-arrow { flex: none; width: 2.6rem; display: flex; align-items: center; justify-content: center; background: var(--card); border: 2px solid var(--line); color: var(--text); cursor: pointer; font-size: 0.9rem; }
+.champ-arrow:hover { border-color: var(--accent); color: var(--accent); }
+.champ-center { flex: 1 1 auto; display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; background: var(--card); border: 2px solid var(--line); padding: 0.45rem 0.8rem; }
+.champ-name { font-family: var(--display); font-weight: 700; font-size: 1.15rem; letter-spacing: 0.01em; }
+.champ-window { color: var(--muted); font-size: 0.9rem; }
+
+.round-strip { display: flex; gap: 0.6rem; overflow-x: auto; padding-bottom: 0.3rem; margin-bottom: 0.8rem; }
+.round-box { flex: none; min-width: 150px; text-align: left; background: var(--card); border: 2px solid var(--line); padding: 0.5rem 0.7rem; cursor: pointer; display: flex; flex-direction: column; gap: 0.15rem; }
+.round-box:hover { border-color: var(--accent); }
+.round-box.active { border-color: var(--accent); box-shadow: 3px 3px 0 var(--shadow); }
+.round-loc { font-weight: 700; font-size: 0.95rem; }
+.round-class, .round-window { color: var(--muted); font-size: 0.8rem; }
+
+.board-toggles { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+.mode-toggle { display: inline-flex; border: 2px solid var(--line); }
+.mode-btn { background: var(--card); border: none; border-right: 2px solid var(--line); padding: 0.4rem 1rem; cursor: pointer; color: var(--muted); font-weight: 700; }
+.mode-btn:last-child { border-right: none; }
+.mode-btn.active { background: var(--accent); color: var(--bg); }
+.stage-bar { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.stage-btn { background: var(--card); border: 2px solid var(--line); padding: 0.3rem 0.6rem; cursor: pointer; font-size: 0.85rem; color: var(--text); }
+.stage-btn:hover { border-color: var(--accent); }
+.stage-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+.board-info { display: flex; gap: 1rem; flex-wrap: wrap; align-items: baseline; padding: 0.4rem 0.2rem 0.6rem; }
+.board-info .info-name { font-weight: 700; }
+.info-key { text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.08em; color: var(--muted); font-family: var(--display); }
+
+table.board { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+table.board th, table.board td { padding: 0.35rem 0.5rem; text-align: left; vertical-align: middle; }
+table.board thead th { border-bottom: 2px solid var(--line); color: var(--muted); font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; }
+table.board .board-row:nth-child(even) td { background: rgba(24, 28, 20, 0.25); }
+table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
+.board-row.dnf td { color: var(--muted); }
+.dnf-tag { font-size: 0.7rem; color: var(--text); border: 1px solid var(--line); padding: 0 0.25rem; margin-left: 0.3rem; white-space: nowrap; }
+.tyre-cell { white-space: nowrap; }
+.tyre-chip { display: inline-block; min-width: 1.1rem; text-align: center; background: var(--bg); border: 1px solid var(--line); color: var(--text); font-size: 0.75rem; padding: 0.05rem 0.3rem; margin-right: 0.2rem; }
+.expand-cell { text-align: right; white-space: nowrap; }
+.expand-btn { background: none; border: none; cursor: pointer; color: var(--accent); font-size: 1rem; padding: 0 0.3rem; }
+.splits-row td { background: var(--bg); color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.board-empty td { text-align: center; color: var(--muted); padding: 1rem; }
+
 /* Rounded corners on every bordered box (edge rules like header/footer/table-row borders stay square) */
 .panel, .club-card, .stat-card, .btn, button, input, select, textarea,
 .opt, .num-tile, .table-wrap, .chip, .flash, code, pre, .codeblock,
 .steps li, .steps li::before, .big404 .num-plate, .token-box code,
-details.create-club .plus { border-radius: 0.3rem; }
+details.create-club .plus, .tyre-chip { border-radius: 0.3rem; }
 
 @media (max-width: 900px) {
   .grid-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -8,6 +8,7 @@ leaderboard computes.
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 
 from .scoring import (
@@ -17,6 +18,7 @@ from .scoring import (
     overall_standings,
     rally_standings,
     scoring_system_for,
+    vehicle_meta,
 )
 from .tables import (
     CHAMP_MODE_SEASON,
@@ -327,3 +329,255 @@ def round_results(rally: dict, entries: list[dict]) -> dict:
             row['gap_str'] = gap_text(row['time_ms'] - leader)
         stages_out.append({'stage': s, 'results': results})
     return {'standings': standings, 'stages': stages_out}
+
+
+def club_podium_counts(items: list[tuple[dict, list[dict]]]) -> dict[str, dict]:
+    """Per-member podium tallies across a club's events.
+
+    ``items`` is one ``(event, entries)`` pair per championship the club has run.
+    For every round (rally) of every event, the drivers who finished that round
+    cleanly — no DNF stage — are ranked by round time and the top three earn
+    gold / silver / bronze. Counts accumulate across all rounds of all events,
+    so each member's totals reflect their whole history with the club."""
+    counts: dict[str, dict] = {}
+    medals = ('gold', 'silver', 'bronze')
+    for event, entries in items:
+        if not entries:
+            continue
+        for rally in championship_view(event):
+            finishers = [r for r in rally_standings(entries, rally)
+                         if _ran_any_stage(r) and r['dnf_stages'] == 0]
+            for i, row in enumerate(finishers[:3]):
+                bucket = counts.setdefault(
+                    row['username'], {'gold': 0, 'silver': 0, 'bronze': 0})
+                bucket[medals[i]] += 1
+    return counts
+
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _stage_runs_by_user(event_id: str) -> dict:
+    """``{username: {flat_stage_index: latest StageRun}}`` for one club event —
+    the per-run attribute source (tyre / input / VR / camera / assists / splits)
+    for the events-tab board. Rows exist only for runs since the stage-detail
+    client shipped; older history has no row and renders blank."""
+    from .models import StageRun
+    out: dict = {}
+    base = _now_utc()
+    for run in StageRun.query.filter_by(event_id=event_id).all():
+        if run.flat_stage_index is None:
+            continue
+        per_user = out.setdefault(run.username, {})
+        prev = per_user.get(run.flat_stage_index)
+        if prev is None or (run.received_at or base) >= (prev.received_at or base):
+            per_user[run.flat_stage_index] = run
+    return out
+
+
+def _most_common(values):
+    """The value a driver used most often across their runs; ``None`` when they
+    never reported it."""
+    counts: dict = {}
+    for v in values:
+        if v is None:
+            continue
+        counts[v] = counts.get(v, 0) + 1
+    if not counts:
+        return None
+    return max(counts.items(), key=lambda kv: kv[1])[0]
+
+
+def _run_attrs(run):
+    """Per-run attribute dict from one StageRun; all-``None`` when there is no
+    stored detail row for that run."""
+    if run is None:
+        return {'tyre': None, 'input': None, 'vr': None, 'camera': None,
+                'assists': None, 'splits': None}
+    splits = None
+    if run.splits_json:
+        try:
+            loaded = json.loads(run.splits_json)
+            splits = loaded if isinstance(loaded, list) and loaded else None
+        except (ValueError, TypeError):
+            splits = None
+    return {
+        'tyre': int(run.tyre_compound) if run.tyre_compound else None,
+        'input': run.input_method,
+        'vr': bool(run.vr_enabled),
+        'camera': run.camera_position,
+        'assists': bool(run.assists_enabled or run.using_assists),
+        'splits': splits,
+    }
+
+
+def _penalty_ms(stage_entry) -> int:
+    """Game-assigned penalties on one stage entry (time + repair). No penalty
+    system of our own — these are just displayed."""
+    if not stage_entry:
+        return 0
+    return (int(stage_entry.get('penalties_ms', 0) or 0)
+            + int(stage_entry.get('repair_penalty_ms', 0) or 0))
+
+
+def event_board(event: dict, round_index: int, mode: str,
+                stage_local_index: int | None = None,
+                now: datetime | None = None) -> dict | None:
+    """The events-tab leaderboard for one championship round.
+
+    ``mode`` is ``'overall'`` (round total per driver) or ``'stage'`` (one stage's
+    board). Times and penalties come from the authoritative ``club_results``
+    stage entries; the per-run columns come from the matching ``stage_runs``
+    rows — in Overall mode each is the value the driver used most across their
+    stages that round, and tyre lists every distinct compound they ran."""
+    from .events import entries_for_event
+
+    now = now or _now_utc()
+    rounds = championship_rounds(event, now)
+    if not rounds:
+        return None
+    try:
+        round_index = int(round_index)
+    except (TypeError, ValueError):
+        round_index = 0
+    round_index = max(0, min(round_index, len(rounds) - 1))
+    rnd = rounds[round_index]
+    offset, count = rnd['offset'], rnd['count']
+    stages_bar = [
+        {'local_index': j, 'label': f'S{j + 1}', 'name': (s.get('name') or '')}
+        for j, s in enumerate(rnd['stages'])
+    ]
+
+    entries = entries_for_event(event['id'])
+    entries_by_user = {e.get('username'): e for e in entries}
+    runs_by_user = _stage_runs_by_user(event['id'])
+
+    raw: list[dict] = []
+    info: dict | None = None
+    j = 0
+    if mode == 'stage' and count <= 0:
+        info = None
+    elif mode == 'stage':
+        try:
+            j = int(stage_local_index) if stage_local_index is not None else 0
+        except (TypeError, ValueError):
+            j = 0
+        j = max(0, min(j, count - 1))
+        flat = offset + j
+        st_meta = rnd['stages'][j]
+        info = {
+            'number': j + 1,
+            'name': st_meta.get('name') or '',
+            'length_km': st_meta.get('distance_km') or 0,
+            'weather': st_meta.get('conditions') or '',
+            'service': st_meta.get('service_area') or '',
+        }
+        for e in entries:
+            seg = e.get('stages') or []
+            se = seg[flat] if flat < len(seg) else None
+            t = int((se or {}).get('time_ms', 0) or 0)
+            rs = int((se or {}).get('race_status', 0) or 0)
+            if t <= 0 and rs == 0:
+                continue
+            run_obj = runs_by_user.get(e.get('username'), {}).get(flat)
+            a = _run_attrs(run_obj)
+            vid = (getattr(run_obj, 'vehicle_id', None) if run_obj else None) \
+                or entries_by_user.get(e.get('username'), {}).get('vehicle_id')
+            raw.append({
+                'username': e.get('username'),
+                'time_ms': t,
+                'penalty_ms': _penalty_ms(se),
+                'score': t + _penalty_ms(se),
+                'dnf': rs != 0,
+                'vid': vid,
+                **a,
+            })
+    else:
+        rally = {'offset': offset, 'count': count, 'stages': rnd['stages'],
+                 'location': rnd['location']}
+        for r in rally_standings(entries, rally):
+            if not _ran_any_stage(r):
+                continue
+            seg = (r.get('stages') or [])[offset:offset + count]
+            penalty = 0
+            tyres: set[int] = set()
+            inputs: list = []
+            vrs: list = []
+            cams: list = []
+            assist_flags: list = []
+            user_runs = runs_by_user.get(r.get('username'), {})
+            for k in range(count):
+                se = seg[k] if k < len(seg) else None
+                penalty += _penalty_ms(se)
+                a = _run_attrs(user_runs.get(offset + k))
+                if a['tyre'] is not None:
+                    tyres.add(a['tyre'])
+                inputs.append(a['input'])
+                vrs.append(a['vr'])
+                cams.append(a['camera'])
+                assist_flags.append(a['assists'])
+            raw.append({
+                'username': r.get('username'),
+                'time_ms': int(r.get('total_time_ms', 0) or 0),
+                'penalty_ms': penalty,
+                'score': int(r.get('total_time_ms', 0) or 0),
+                'dnf': bool(r.get('dnf_stages')),
+                'vid': entries_by_user.get(r.get('username'), {}).get('vehicle_id'),
+                'tyres': sorted(tyres),
+                'input': _most_common(inputs),
+                'vr': _most_common(vrs),
+                'camera': _most_common(cams),
+                'assists': _most_common(assist_flags),
+                'splits': None,
+            })
+
+    raw.sort(key=lambda r: (r['dnf'], r['score']))
+    leader = next((r['score'] for r in raw if not r['dnf']), None)
+
+    rows: list[dict] = []
+    for i, r in enumerate(raw):
+        vid = r.get('vid')
+        name, cls = vehicle_meta(vid) if vid is not None else (None, '')
+        if not name:
+            name = car_label(entries_by_user.get(r['username'], {})) or ''
+        tyres = r.get('tyres')
+        if tyres is None:
+            tyres = [r['tyre']] if r.get('tyre') is not None else []
+        rows.append({
+            'pos': i + 1,
+            'username': r['username'],
+            'driver_url': f'/profile/{r["username"]}',
+            'vehicle': name,
+            'class_label': cls or (rnd.get('car_class') or ''),
+            'tyres': tyres,
+            'input': r.get('input'),
+            'vr': r.get('vr'),
+            'camera': r.get('camera'),
+            'assists': r.get('assists'),
+            'penalty_ms': r['penalty_ms'],
+            'time_text': format_ms(r['time_ms']),
+            'diff_str': ('' if (leader is None or r['dnf'])
+                         else gap_text(r['score'] - leader)),
+            'dnf': r['dnf'],
+            'splits': r.get('splits'),
+        })
+
+    return {
+        'event_id': event['id'],
+        'round_index': round_index,
+        'mode': mode,
+        'stage_local_index': (j if mode == 'stage' else None),
+        'info': info,
+        'stages_bar': stages_bar,
+        # Full round list so the client can rebuild the round boxes for this
+        # championship without a second request.
+        'rounds': [{
+            'index': r['index'],
+            'location': r['location'],
+            'car_class': r['car_class'],
+            'window_text': r['window_text'],
+            'status': r['status'],
+        } for r in rounds],
+        'rows': rows,
+    }

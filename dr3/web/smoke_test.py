@@ -1085,6 +1085,20 @@ def main() -> int:
 
     r = client.get(f'/clubs/{club_id}')
     check('club detail renders for owner', r.status_code == 200 and b'Smoke Crew' in r.data, f'status={r.status_code}')
+    check('club detail: menu bar with Events/Members + admin/owner tabs',
+          b'class="club-menu"' in r.data
+          and b'data-tab="events"' in r.data and b'data-tab="members"' in r.data
+          and b'data-tab="new-championship"' in r.data
+          and b'data-tab="invites"' in r.data
+          and b'data-tab="management"' in r.data, f'status={r.status_code}')
+    check('club detail: Events tab active by default, others hidden',
+          b'<a class="active" href="#tab-events" data-tab="events">Events</a>' in r.data
+          and b'id="tab-members" hidden' in r.data
+          and b'id="tab-management" hidden' in r.data, f'status={r.status_code}')
+    check('club detail: members table has Gold/Silver/Bronze podium columns',
+          b'<th>Gold</th><th>Silver</th><th>Bronze</th>' in r.data, f'status={r.status_code}')
+    check('club detail: status merged into chips-row (no separate Your status panel)',
+          b'class="chips-row club-status"' in r.data and b'Your status' not in r.data, f'status={r.status_code}')
 
     # 13. second user registers, verifies, requests to join
     client2 = app.test_client()
@@ -1144,6 +1158,11 @@ def main() -> int:
 
     r = client2.get(f'/clubs/{club_id}')
     check('club detail visible to non-member (public)', r.status_code == 200, f'status={r.status_code}')
+    check('club detail: non-member sees only Events/Members tabs',
+          b'data-tab="events"' in r.data and b'data-tab="members"' in r.data
+          and b'data-tab="new-championship"' not in r.data
+          and b'data-tab="invites"' not in r.data
+          and b'data-tab="management"' not in r.data, f'status={r.status_code}')
 
     r = client2.post(f'/clubs/{club_id}/request', follow_redirects=False)
     check('join request enqueued', r.status_code == 302, f'status={r.status_code}')
@@ -1575,12 +1594,52 @@ def main() -> int:
         db.session.commit()
     if eid2 and nstages:
         r = client.get(f'/clubs/{club_id}')
-        check('club detail shows rounds + standings with times',
-              r.status_code == 200 and b'Standings' in r.data
-              and (qloc or '').encode() in r.data
-              and b'2:30.000' in r.data and b'3:20.000' in r.data
-              and b'sweden-flag.png' in r.data,
+        det = r.get_data(as_text=True)
+        check('club detail renders events board shell + embedded board state',
+              r.status_code == 200
+              and 'id="board-state"' in det
+              and 'id="champ-selector"' in det
+              and 'id="round-strip"' in det
+              and 'id="mode-toggle"' in det
+              and 'id="stage-bar"' in det
+              and 'id="board-body"' in det,
               f'status={r.status_code}')
+
+        api = client.get(
+            f'/clubs/{club_id}/event-board?event={eid2}&round=0&mode=overall')
+        check('event-board API: overall returns 200 JSON',
+              api.status_code == 200 and api.is_json,
+              f'status={api.status_code}')
+        if api.status_code == 200:
+            b = api.get_json() or {}
+            rows = b.get('rows') or []
+            names = [row['username'] for row in rows]
+            check('event-board API: overall ranks smokedriver ahead of secondpilot',
+                  'smokedriver' in names and 'secondpilot' in names
+                  and names.index('smokedriver') < names.index('secondpilot'),
+                  f'names={names}')
+            check('event-board API: overall carries rounds + stages bar + times',
+                  bool(b.get('rounds')) and bool(b.get('stages_bar'))
+                  and all(row.get('time_text') for row in rows),
+                  f'keys={sorted(b.keys())}')
+
+        api2 = client.get(
+            f'/clubs/{club_id}/event-board?event={eid2}&round=0&mode=stage&stage=0')
+        check('event-board API: stage mode returns info + rows',
+              api2.status_code == 200 and (api2.get_json() or {}).get('info'),
+              f'status={api2.status_code}')
+
+        api3 = client.get(
+            f'/clubs/{club_id}/event-board?event=evt-doesnotexist&round=0&mode=overall')
+        check('event-board API: unknown event id rejected',
+              api3.status_code == 404, f'status={api3.status_code}')
+
+        mem = det[det.index('id="tab-members"'):]
+        check('members tab: Gold/Silver/Bronze columns populated from clean finishes',
+              '<th>Gold</th><th>Silver</th><th>Bronze</th>' in mem
+              and '<td class="num "' in mem      # at least one earned (non-dim) medal cell
+              and '<td class="num dim">' in mem,  # unearned medals dimmed
+              '')
         r = client.get(f'/event/{eid2}')
         check('event detail shows rounds + classification + stage results',
               r.status_code == 200 and b'Round 1' in r.data
