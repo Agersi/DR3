@@ -1736,11 +1736,16 @@ def main() -> int:
         alpha = Club.query.filter_by(name='Order Alpha').first()
         beta = Club.query.filter_by(name='Order Beta').first()
         season = Club.query.filter_by(name='Order Season').first()
+        # Stages on the two single-window events give the dashboard Drivers
+        # column a real scope to count against.
         db.session.add(Event(id='evt-smoke-alpha', name='Order Alpha', club_id=alpha.id,
                              start_time=now - _td(hours=1), end_time=now + _td(days=5),
+                             stages_json=json.dumps([{'id': 'sa1', 'name': 'Stage A'},
+                                                     {'id': 'sa2', 'name': 'Stage B'}]),
                              active=True))
         db.session.add(Event(id='evt-smoke-beta', name='Order Beta', club_id=beta.id,
                              start_time=now - _td(hours=1), end_time=now + _td(hours=2),
+                             stages_json=json.dumps([{'id': 'sb1', 'name': 'Stage B'}]),
                              active=True))
         # Rally Season: three back-to-back 4-day legs. The stored end_time is
         # the LAST leg's end (+11d23h) but the current leg ends in +3d23h, so
@@ -1757,6 +1762,25 @@ def main() -> int:
                              start_time=now - _td(hours=1), end_time=now + _td(days=12, hours=-1),
                              settings_json=json.dumps({'mode': 'season'}),
                              legs_json=json.dumps(season_legs), active=True))
+        # Drivers-column fixture: a second member, smokedriver partial on Alpha
+        # (yellow) and done on Beta (green), the other member fully done on
+        # Alpha (counts toward drivers_done); Season stays untouched (red).
+        from app.clubs import add_member as _add_member
+        from app.models import Result as _Result21
+        other = User.query.filter(User.username != 'smokedriver').first()
+        if other is not None:
+            _add_member(alpha, other)
+            db.session.add(_Result21(event_id='evt-smoke-alpha',
+                                     username=other.username, total_time_ms=120000,
+                                     stages_json=json.dumps(
+                                         [{'time_ms': 61000}, {'time_ms': 59000}])))
+        db.session.add(_Result21(event_id='evt-smoke-alpha', username='smokedriver',
+                                 total_time_ms=60000,
+                                 stages_json=json.dumps([{'time_ms': 60000},
+                                                         {'time_ms': 0}])))
+        db.session.add(_Result21(event_id='evt-smoke-beta', username='smokedriver',
+                                 total_time_ms=45000,
+                                 stages_json=json.dumps([{'time_ms': 45000}])))
         db.session.commit()
         order_club_ids = [alpha.id, beta.id, season.id]
     r = client.get('/clubs')
@@ -1906,8 +1930,9 @@ def main() -> int:
     html = r.get_data(as_text=True)
     check('dashboard renders', r.status_code == 200, f'status={r.status_code}')
     check('dashboard live-events Type column shows championship mode',
-          'Rally Season' in html and 'Multi-Location Rally' in html
-          and '<span class="chip">club</span>' not in html)
+          '<span class="chip">Rally Season</span>' in html
+          and '<span class="chip">Multi-Location</span>' in html
+          and 'Multi-Location Rally' not in html)
     check('dashboard my-clubs names link to club detail pages',
           all(f'href="/clubs/{cid}"' in html for cid in order_club_ids))
     # Order Alpha ends +5d → "4d 23h" at render time (fixture created seconds ago).
@@ -1922,6 +1947,15 @@ def main() -> int:
     # Class column carries the CURRENTLY active leg's class (season leg 1 here,
     # not whatever was stored first).
     check('dashboard class column uses the current leg\'s class', 'class_1' in html)
+    # Drivers column: glowing dot with "finished current event / club members".
+    # Alpha: other member done (1) of 2 members; Beta: smokedriver done, 1 of 1.
+    check('dashboard Drivers column shows finished/total drivers',
+          'Drivers' in html and 'driver-dot' in html
+          and '1/2' in html and '1/1' in html)
+    # Dot colors follow the signed-in user's state: Alpha partial (yellow),
+    # Beta finished (green), Season untouched (red).
+    check('dashboard driver dot colors: yellow partial, green done, red untouched',
+          'dot-yellow' in html and 'dot-green' in html and 'dot-red' in html)
 
     # 23. home page: site stats + footer social links (backlog #25-#29)
     r = client.get('/')

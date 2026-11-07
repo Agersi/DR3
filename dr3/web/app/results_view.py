@@ -144,6 +144,40 @@ def current_leg_index(event: dict, now: datetime) -> int:
     return idx
 
 
+def current_event_scope(event: dict, now: datetime) -> tuple[int, int]:
+    """Flat stage range ``(offset, count)`` of the championship's CURRENT window.
+
+    Rally Seasons run leg by leg, so the scope is the active leg; Multi-Location
+    rallies and legacy events share one window across the whole championship."""
+    rallies = championship_view(event)
+    if mode_of(event) == CHAMP_MODE_SEASON:
+        r = rallies[current_leg_index(event, now)]
+        return r['offset'], r['count']
+    return 0, sum(r['count'] for r in rallies)
+
+
+def scope_participation(entry: dict, offset: int, count: int) -> tuple[int, bool]:
+    """``(genuinely finished stages, touched at all)`` within a flat stage range.
+
+    Mirrors ``rally_standings``' done-count: a stage counts as finished only
+    with a real time and no DNF race_status; it is 'touched' when it carries any
+    time or DNF marker (a pre-persisted limit value still proves the driver was
+    in that stage)."""
+    seg = (entry.get('stages') or [])[offset:offset + count]
+    done = 0
+    touched = False
+    for s in seg:
+        if not s:
+            continue
+        t = int(s.get('time_ms', 0) or 0)
+        rs = int(s.get('race_status', 0) or 0)
+        if t > 0 or rs != 0:
+            touched = True
+        if t > 0 and rs == 0:
+            done += 1
+    return done, touched
+
+
 def event_profile(event: dict | None, now: datetime) -> dict | None:
     """Filterable profile of a championship for the club list page.
 

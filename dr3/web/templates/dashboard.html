@@ -15,10 +15,10 @@
 
 <div class="panel">
   <h2>My live club events</h2>
-  {% if active_events %}
-  <div class="table-wrap">
-    <table>
-      <tr><th>Event</th><th>Type</th><th>Current event</th><th>Championship</th><th>Location</th><th>Class</th></tr>
+    {% if active_events %}
+    <div class="table-wrap">
+      <table class="live-events">
+      <tr><th>Event</th><th>Type</th><th>Current event</th><th>Championship</th><th>Location</th><th>Class</th><th>Drivers</th></tr>
       {% for e in active_events %}
       <tr>
         <td><a href="{{ url_for('pages.event_detail', event_id=e['id']) }}">{{ e['name'] }}</a></td>
@@ -27,6 +27,10 @@
         <td>{{ e.end_time | countdown }}</td>
         <td>{{ e.get('location') or '' }}</td>
         <td>{{ e.get('car_class') or '' }}</td>
+        <td>
+          <span class="driver-dot dot-{{ e.driver_status }}"
+                title="{{ e.drivers_done }} of {{ e.club_members }} drivers finished the current event">{{ e.drivers_done }}/{{ e.club_members }}</span>
+        </td>
       </tr>
       {% endfor %}
     </table>

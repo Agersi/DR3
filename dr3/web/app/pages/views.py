@@ -37,7 +37,13 @@ from ..clubs import (
     set_pending_requests,
 )
 from ..db import db
-from ..events import event_is_active, event_is_upcoming, get_all_events, sort_events
+from ..events import (
+    entries_for_event,
+    event_is_active,
+    event_is_upcoming,
+    get_all_events,
+    sort_events,
+)
 from ..models import (
     ChampionshipDraft,
     Club,
@@ -497,25 +503,53 @@ def user_tokens(user: User) -> list[GameToken]:
 @pages_bp.route('/dashboard')
 @login_required
 def dashboard():
-    from ..results_view import effective_end, event_profile, mode_label
+    from ..results_view import (
+        current_event_scope,
+        effective_end,
+        event_profile,
+        mode_of,
+        scope_participation,
+    )
+    from ..tables import CHAMP_MODE_SEASON
 
     now = utcnow()
     memberships = ClubMember.query.filter_by(user_id=g.user.id).all()
     my_clubs = [m.club for m in memberships if m.club is not None]
-    my_club_ids = {m.club_id for m in memberships}
+    club_by_id = {c.id: c for c in my_clubs}
     events = []
     for e in sort_events(get_all_events()):
-        if not (event_is_active(e) and e.get('club_id') in my_club_ids):
+        club = club_by_id.get(e.get('club_id'))
+        if not (event_is_active(e) and club is not None):
             continue
         prof = event_profile(e, now) or {}
+        # Current window: the active leg for seasons, the whole shared window
+        # otherwise.  Drives both the countdown and the Drivers column.
+        offset, count = current_event_scope(e, now)
+        entries = entries_for_event(e['id'])
+        drivers_done = sum(
+            1 for en in entries
+            if count and scope_participation(en, offset, count)[0] == count)
+        my_entry = next((en for en in entries
+                         if en.get('username') == g.user.username), None)
+        if count:
+            my_done, my_touched = (scope_participation(my_entry, offset, count)
+                                   if my_entry else (0, False))
+            driver_status = ('green' if my_done == count
+                             else 'yellow' if my_touched else 'red')
+        else:
+            driver_status = 'red'
         events.append({
             **e,
-            'mode_label': mode_label(e),
+            'mode_label': ('Rally Season' if mode_of(e) == CHAMP_MODE_SEASON
+                           else 'Multi-Location'),
             # Current event = the active leg's window end (seasons switch legs;
             # multi/legacy share one window, so it equals the stored end).
             'current_end': effective_end(e, now),
             # Class of the currently active leg, not the first stored one.
             'car_class': prof.get('car_class') or e.get('car_class'),
+            'driver_status': driver_status,
+            'drivers_done': drivers_done,
+            'club_members': len(club.members),
         })
     active_token = next(
         (t for t in g.user.tokens if t.revoked_at is None), None
