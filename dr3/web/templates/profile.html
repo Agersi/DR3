@@ -20,10 +20,12 @@
     {% if stats.top_locations %}<tr><th>Most driven locations</th><td>{% for l in stats.top_locations %}{{ l.label }} ({{ '%.1f'|format(l.km) }} km){% if not loop.last %} · {% endif %}{% endfor %}</td></tr>{% endif %}
     {% if target.show_device_name and stats.devices %}<tr><th>Input devices</th><td>{% for d in stats.devices %}{{ d.label }} ({{ d.pct }}%){% if not loop.last %} · {% endif %}{% endfor %}</td></tr>
     {% elif target.show_device_name and stats.device %}<tr><th>Input device</th><td>{{ stats.device }}</td></tr>{% endif %}
-    {% if target.show_days_played and stats.days_played %}<tr><th>Days played</th><td class="num">{{ stats.days_played }}</td></tr>{% endif %}
-    {% if target.show_seconds_played and stats.seconds_played %}<tr><th>Time played</th><td class="num">{{ stats.seconds_played }}</td></tr>{% endif %}
-    {% if target.show_sessions and stats.sessions %}<tr><th>Sessions</th><td class="num">{{ stats.sessions }}</td></tr>{% endif %}
   </table>
+  {% set ns = namespace(play_chips=[]) %}
+  {% if target.show_days_played and stats.days_played %}{% set ns.play_chips = ns.play_chips + ['Days played: ' ~ stats.days_played] %}{% endif %}
+  {% if target.show_seconds_played and stats.seconds_played %}{% set ns.play_chips = ns.play_chips + ['Time played: ' ~ stats.seconds_played] %}{% endif %}
+  {% if target.show_sessions and stats.sessions %}{% set ns.play_chips = ns.play_chips + ['Sessions: ' ~ stats.sessions] %}{% endif %}
+  {% if ns.play_chips %}<div class="chips-row play-chips">{% for c in ns.play_chips %}<span class="chip chip-warn">{{ c }}</span>{% endfor %}</div>{% endif %}
 </div>
 {% endif %}
 {% endblock %}

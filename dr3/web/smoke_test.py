@@ -507,6 +507,27 @@ def main() -> int:
           and '<th>Most driven locations</th>' in prof_html,
           f'status={r.status_code}')
 
+    # Play counters render as chip-warn chips on one row after the table.
+    r = client.post('/account', data={
+        'action': 'profile', 'display_name': 'Smoke Driver',
+        'country': 'Sweden', 'bio': '',
+        'favorite_car_id': '565', 'favorite_location_id': '4',
+        'show_device_name': 'on', 'show_days_played': 'on',
+        'show_seconds_played': 'on', 'show_sessions': 'on',
+    }, follow_redirects=False)
+    check('account profile save with play counters visible redirects',
+          r.status_code == 302, f'status={r.status_code}')
+    prof_chips = client.get('/profile/smokedriver').get_data(as_text=True)
+    check('profile: play counters are chip-warn chips in one row after the table',
+          '<div class="chips-row play-chips">' in prof_chips
+          and prof_chips.count('<span class="chip chip-warn">') == 3
+          and '>Days played: 12</span>' in prof_chips
+          and '>Time played: 12h 0m</span>' in prof_chips
+          and '>Sessions: 7</span>' in prof_chips
+          and '</table>' in prof_chips
+          and prof_chips.index('</table>') < prof_chips.index('play-chips'),
+          f'status={r.status_code}')
+
     # home recent-times rows carry the driver's flag url (backlog #40)
     r = client.get('/api/home/recent-times?offset=0&limit=25')
     j = r.get_json() or {}

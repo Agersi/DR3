@@ -142,6 +142,14 @@ def main() -> int:
     prof = client.get('/profile/smokedriver').get_data(as_text=True)
     check('profile: per-device distance list (#57)',
           'Input devices' in prof and 'Simucube 2 Pro (100%)' in prof, '')
+    check('profile: play counters as chip-warn chips row after the table',
+          '<div class="chips-row play-chips">' in prof
+          and '>Days played: 12</span>' in prof
+          and '>Time played: 12h 0m</span>' in prof
+          and '>Sessions: 7</span>' in prof, '')
+    check('profile: play-chips CSS (one line, equal spacing around + between)',
+          '.play-chips { justify-content: space-evenly; margin: 0.8rem 0 0; }'
+          in client.get('/static/css/style.css').get_data(as_text=True), '')
 
     # home hero: three panels for anonymous visitors (Join Now / What's New / Discord)
     check('home anon: Join Now panel with Register + How it works',
