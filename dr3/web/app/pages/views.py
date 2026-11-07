@@ -497,16 +497,26 @@ def user_tokens(user: User) -> list[GameToken]:
 @pages_bp.route('/dashboard')
 @login_required
 def dashboard():
-    from ..results_view import mode_label
+    from ..results_view import effective_end, event_profile, mode_label
 
+    now = utcnow()
     memberships = ClubMember.query.filter_by(user_id=g.user.id).all()
     my_clubs = [m.club for m in memberships if m.club is not None]
     my_club_ids = {m.club_id for m in memberships}
-    events = [
-        {**e, 'mode_label': mode_label(e)}
-        for e in sort_events(get_all_events())
-        if event_is_active(e) and e.get('club_id') in my_club_ids
-    ]
+    events = []
+    for e in sort_events(get_all_events()):
+        if not (event_is_active(e) and e.get('club_id') in my_club_ids):
+            continue
+        prof = event_profile(e, now) or {}
+        events.append({
+            **e,
+            'mode_label': mode_label(e),
+            # Current event = the active leg's window end (seasons switch legs;
+            # multi/legacy share one window, so it equals the stored end).
+            'current_end': effective_end(e, now),
+            # Class of the currently active leg, not the first stored one.
+            'car_class': prof.get('car_class') or e.get('car_class'),
+        })
     active_token = next(
         (t for t in g.user.tokens if t.revoked_at is None), None
     )

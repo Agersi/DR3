@@ -1747,7 +1747,7 @@ def main() -> int:
         # ordering must use the current leg — it sorts before Alpha (+5d).
         season_legs = [
             {'name': f'Round {i + 1}', 'location': f'Loc {i + 1}',
-             'car_class': 'class_a',
+             'car_class': f'class_{i + 1}',
              'stages': [{'id': f's{i}a', 'name': f'Stage A {i + 1}'},
                         {'id': f's{i}b', 'name': f'Stage B {i + 1}'}],
              'duration': {'days': 4, 'hours': 0, 'mins': 0}}
@@ -1911,11 +1911,17 @@ def main() -> int:
     check('dashboard my-clubs names link to club detail pages',
           all(f'href="/clubs/{cid}"' in html for cid in order_club_ids))
     # Order Alpha ends +5d → "4d 23h" at render time (fixture created seconds ago).
-    check('dashboard live-events show time left countdown',
-          'Time left' in html and '4d 23h' in html)
-    # Season's stored end_time is the LAST leg (+11d23h); time left must count down
-    # to the full championship end, not the current leg's end (+3d23h).
-    check('dashboard season time left uses full championship end', '11d' in html)
+    check('dashboard live-events show current-event + championship countdowns',
+          'Current event' in html and 'Championship' in html
+          and 'Time left' not in html and '4d 23h' in html)
+    # Season's stored end_time is the LAST leg (+11d23h): Championship counts down
+    # to the full championship end while Current event shows the current leg's
+    # end (+3d23h → "3d 2x" a few seconds later).
+    check('dashboard season columns: current leg vs full championship end',
+          '11d' in html and '3d 2' in html)
+    # Class column carries the CURRENTLY active leg's class (season leg 1 here,
+    # not whatever was stored first).
+    check('dashboard class column uses the current leg\'s class', 'class_1' in html)
 
     # 23. home page: site stats + footer social links (backlog #25-#29)
     r = client.get('/')
