@@ -670,18 +670,35 @@ def _profile_stats(user: User) -> dict:
     distance_m = int(db.session.query(func.sum(StageRun.distance_m))
                      .filter_by(username=user.username).scalar() or 0)
 
-    def _top(column):
+    def _car_label(vid) -> str:
+        """Car name; the class in parentheses only when another catalog car
+        shares the same name."""
+        from ..scoring import VEHICLES
+
+        title, class_label = vehicle_meta(vid)
+        if not class_label:
+            return title
+        same_name = sum(1 for m in VEHICLES.values() if str(m['name']) == title)
+        return f'{title} ({class_label})' if same_name > 1 else title
+
+    def _loc_label(lid) -> str:
+        try:
+            return Location(int(lid)).display_name
+        except ValueError:
+            return f'Location {lid}'
+
+    def _top3(column):
         rows = (db.session.query(column, func.sum(StageRun.distance_m),
                                  func.count(StageRun.id))
                 .filter(StageRun.username == user.username, column.isnot(None))
                 .group_by(column).all())
-        if not rows:
-            return None, 0
-        vid, dist, _n = max(rows, key=lambda r: (int(r[1] or 0), int(r[2])))
-        return vid, int(dist or 0)
+        return [(v, int(d or 0)) for v, d, _n in sorted(
+            rows, key=lambda r: (-int(r[1] or 0), -int(r[2])))[:3]]
 
-    car_id, car_km_m = _top(StageRun.vehicle_id)
-    loc_id, loc_km_m = _top(StageRun.location_id)
+    top_cars = [{'label': _car_label(v), 'km': d / 1000.0}
+                for v, d in _top3(StageRun.vehicle_id)]
+    top_locations = [{'label': _loc_label(v), 'km': d / 1000.0}
+                     for v, d in _top3(StageRun.location_id)]
 
     # Device + play counters come from the newest run that actually reported
     # them (half-merged rows carry none and must not blank the panel).
@@ -718,33 +735,15 @@ def _profile_stats(user: User) -> dict:
                 'km': g['dist'] / 1000.0,
             })
 
-    car_label = ''
-    if car_id is not None:
-        title, class_label = vehicle_meta(car_id)
-        car_label = f'{title} ({class_label})' if class_label else title
-    loc_label = ''
-    if loc_id is not None:
-        try:
-            loc_label = Location(int(loc_id)).display_name
-        except ValueError:
-            loc_label = f'Location {loc_id}'
-
-    fav_car, fav_loc = '', ''
-    if user.favorite_car_id:
-        title, class_label = vehicle_meta(user.favorite_car_id)
-        fav_car = f'{title} ({class_label})' if class_label else title
-    if user.favorite_location_id:
-        try:
-            fav_loc = Location(int(user.favorite_location_id)).display_name
-        except ValueError:
-            fav_loc = f'Location {user.favorite_location_id}'
+    fav_car = _car_label(user.favorite_car_id) if user.favorite_car_id else ''
+    fav_loc = _loc_label(user.favorite_location_id) if user.favorite_location_id else ''
 
     return {
         'runs': total,
         'pct_completed': round(finished / total * 100),
         'distance_km': distance_m / 1000.0,
-        'top_car': car_label, 'top_car_km': car_km_m / 1000.0,
-        'top_location': loc_label, 'top_location_km': loc_km_m / 1000.0,
+        'top_cars': top_cars,
+        'top_locations': top_locations,
         'fav_car': fav_car, 'fav_location': fav_loc,
         # Device + play counters from the newest run that reported them.
         'device': _device_label(latest_input) if latest_input else '',

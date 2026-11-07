@@ -495,6 +495,17 @@ def main() -> int:
           'Simucube 2 Pro' in prof_html and 'Days played' not in prof_html
           and 'Sessions' not in prof_html,
           f'status={r.status_code}')
+    check('profile: favorites are separate Favorite Car / Favorite Location rows',
+          '<th>Favorite Car</th>' in prof_html
+          and '<th>Favorite Location</th>' in prof_html
+          and '<th>Favorites</th>' not in prof_html,
+          f'status={r.status_code}')
+    check('profile: unique car name renders without class parens',
+          '>Porsche 911 RGT Rally Spec</td>' in prof_html, '')
+    check('profile: most driven cars/locations rows present',
+          '<th>Most driven cars</th>' in prof_html
+          and '<th>Most driven locations</th>' in prof_html,
+          f'status={r.status_code}')
 
     # home recent-times rows carry the driver's flag url (backlog #40)
     r = client.get('/api/home/recent-times?offset=0&limit=25')
@@ -1060,6 +1071,40 @@ def main() -> int:
         u2 = User.query.filter_by(username='secondpilot').first()
         v2 = u2.verify_token if u2 else ''
     client2.get(f'/verify_email/{v2}', follow_redirects=True)
+
+    # Profile top-3 fixture: three cars + three locations with distinct
+    # distances; two of the car names are shared by another catalog car, so
+    # only those labels may carry the class in parentheses.
+    with app.app_context():
+        from app.auth import issue_game_token
+        u2r = db.session.get(User, u2.id)
+        tok2 = issue_game_token(u2r).token
+        db.session.commit()
+    headers2 = {'Authorization': f'Bearer {tok2}'}
+    for _ch, _vid, _cls, _loc, _dist, _fin in (
+            (910001, 566, 78, 4, 30000, True),
+            (910002, 580, 108, 31, 20000, True),
+            (910003, 565, 97, 13, 10000, False)):
+        r = client2.post('/api/game/stage-detail', headers=headers2, json={
+            'challenge_id': _ch, 'event_index': 0, 'stage_index': 0,
+            'challenge_type': -1, 'track_id': _loc, 'track_model_id': _loc,
+            'location_id': _loc, 'vehicle_class_id': _cls, 'vehicle_id': _vid,
+            'player_finished': _fin, 'stage_time_ms': 60000,
+            'distance_driven': _dist,
+        })
+        check(f'stage-detail secondpilot vid {_vid} ok',
+              (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+    prof3 = client2.get('/profile/secondpilot').get_data(as_text=True)
+    check('profile: most driven cars top-3 by distance, class parens only for shared names',
+          'Audi S1 EKS RX Quattro (RX Supercars) (30.0 km)' in prof3
+          and 'Peugeot 208 WRX (RX Supercars 2019) (20.0 km)' in prof3
+          and 'Porsche 911 RGT Rally Spec (10.0 km)' in prof3
+          and prof3.index('Audi S1 EKS RX Quattro') < prof3.index('Peugeot 208 WRX')
+          < prof3.index('Porsche 911 RGT Rally Spec'),
+          f'status={r.status_code}')
+    check('profile: most driven locations top-3 by distance',
+          'Monte Carlo (30.0 km)' in prof3 and 'Spain (20.0 km)' in prof3
+          and 'Finland (10.0 km)' in prof3, '')
 
     r = client2.get(f'/clubs/{club_id}')
     check('club detail visible to non-member (public)', r.status_code == 200, f'status={r.status_code}')

@@ -11,14 +11,13 @@
 <div class="panel">
   <h2>Driving</h2>
   <table>
-    {% if stats.fav_car or stats.fav_location %}
-    <tr><th>Favorites</th><td>{% if stats.fav_car %}{{ stats.fav_car }}{% endif %}{% if stats.fav_car and stats.fav_location %} · {% endif %}{% if stats.fav_location %}{{ stats.fav_location }}{% endif %}</td></tr>
-    {% endif %}
+    {% if stats.fav_car %}<tr><th>Favorite Car</th><td>{{ stats.fav_car }}</td></tr>{% endif %}
+    {% if stats.fav_location %}<tr><th>Favorite Location</th><td>{{ stats.fav_location }}</td></tr>{% endif %}
     <tr><th>Stages driven</th><td class="num">{{ stats.runs }}</td></tr>
     <tr><th>Stages completed</th><td class="num">{{ stats.pct_completed }}%</td></tr>
     <tr><th>Distance via DR3</th><td class="num">{{ '%.1f'|format(stats.distance_km) }} km</td></tr>
-    {% if stats.top_car %}<tr><th>Most driven car</th><td>{{ stats.top_car }} ({{ '%.1f'|format(stats.top_car_km) }} km)</td></tr>{% endif %}
-    {% if stats.top_location %}<tr><th>Most driven location</th><td>{{ stats.top_location }} ({{ '%.1f'|format(stats.top_location_km) }} km)</td></tr>{% endif %}
+    {% if stats.top_cars %}<tr><th>Most driven cars</th><td>{% for c in stats.top_cars %}{{ c.label }} ({{ '%.1f'|format(c.km) }} km){% if not loop.last %} · {% endif %}{% endfor %}</td></tr>{% endif %}
+    {% if stats.top_locations %}<tr><th>Most driven locations</th><td>{% for l in stats.top_locations %}{{ l.label }} ({{ '%.1f'|format(l.km) }} km){% if not loop.last %} · {% endif %}{% endfor %}</td></tr>{% endif %}
     {% if target.show_device_name and stats.devices %}<tr><th>Input devices</th><td>{% for d in stats.devices %}{{ d.label }} ({{ d.pct }}%){% if not loop.last %} · {% endif %}{% endfor %}</td></tr>
     {% elif target.show_device_name and stats.device %}<tr><th>Input device</th><td>{{ stats.device }}</td></tr>{% endif %}
     {% if target.show_days_played and stats.days_played %}<tr><th>Days played</th><td class="num">{{ stats.days_played }}</td></tr>{% endif %}
