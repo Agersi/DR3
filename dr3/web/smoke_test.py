@@ -1784,6 +1784,21 @@ def main() -> int:
         db.session.add(_Result21(event_id='evt-smoke-beta', username='smokedriver',
                                  total_time_ms=45000,
                                  stages_json=json.dumps([{'time_ms': 45000}])))
+        # My-clubs panel fixture: both clubs are owned by the OTHER user —
+        # smokedriver is a plain member of 'Order Plain' (must NOT appear on
+        # the dashboard) and a promoted admin of 'Order Managed' (must appear).
+        from app.clubs import set_club_admins as _set_admins
+        if other is not None:
+            sd = User.query.filter_by(username='smokedriver').first()
+            plain = Club(id='club-order-plain', name='Order Plain', description='',
+                         visibility='public', join_policy='open', created_by=other.id)
+            managed = Club(id='club-order-managed', name='Order Managed', description='',
+                           visibility='public', join_policy='open', created_by=other.id)
+            db.session.add_all([plain, managed])
+            db.session.flush()
+            _add_member(plain, sd)
+            _add_member(managed, sd)
+            _set_admins(managed, ['smokedriver'])
         db.session.commit()
         order_club_ids = [alpha.id, beta.id, season.id]
     r = client.get('/clubs')
@@ -1938,6 +1953,13 @@ def main() -> int:
           and 'Multi-Location Rally' not in html)
     check('dashboard my-clubs names link to club detail pages',
           all(f'href="/clubs/{cid}"' in html for cid in order_club_ids))
+    # My-clubs panel is owner/admin-only: smokedriver's own clubs show, the
+    # foreign-owned club where smokedriver is a promoted admin shows, and the
+    # foreign-owned club with a plain membership does not.
+    check('dashboard my-clubs lists an admin club of another owner',
+          'href="/clubs/club-order-managed"' in html)
+    check('dashboard my-clubs hides a plain-membership club',
+          'Order Plain' not in html and 'club-order-plain' not in html)
     # Order Alpha ends +5d → "4d 23h" at render time (fixture created seconds ago).
     check('dashboard live-events show current-event + championship countdowns',
           'Current event' in html and 'Championship' in html

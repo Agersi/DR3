@@ -31,6 +31,7 @@ from ..clubs import (
     clear_cooldown,
     club_admins,
     club_invites,
+    club_role,
     pending_requests,
     set_club_admins,
     set_club_invites,
@@ -516,6 +517,10 @@ def dashboard():
     memberships = ClubMember.query.filter_by(user_id=g.user.id).all()
     my_clubs = [m.club for m in memberships if m.club is not None]
     club_by_id = {c.id: c for c in my_clubs}
+    # The "My clubs" panel only lists clubs the user manages (owner or admin);
+    # plain memberships still count for the live-events table above.
+    admin_clubs = [c for c in my_clubs
+                   if club_role(c, g.user.username) in ('owner', 'admin')]
     events = []
     for e in sort_events(get_all_events()):
         club = club_by_id.get(e.get('club_id'))
@@ -564,7 +569,7 @@ def dashboard():
         active_events=events,
         token=active_token.token if active_token else '',
         unread=unread,
-        my_clubs=my_clubs,
+        admin_clubs=admin_clubs,
     )
 
 

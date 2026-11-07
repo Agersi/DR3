@@ -42,10 +42,10 @@
 
 <div class="panel">
   <h2>My clubs</h2>
-  {% if my_clubs %}
-  <ul>{% for c in my_clubs %}<li><a href="{{ url_for('clubs.club_detail', club_id=c.id) }}">{{ c.name }}</a></li>{% endfor %}</ul>
+  {% if admin_clubs %}
+  <ul>{% for c in admin_clubs %}<li><a href="{{ url_for('clubs.club_detail', club_id=c.id) }}">{{ c.name }}</a></li>{% endfor %}</ul>
   {% else %}
-  <p>You are not in any clubs yet — <a href="{{ url_for('clubs.clubs_list') }}">browse clubs</a>.</p>
+  <p>You don't own or admin any clubs yet — <a href="{{ url_for('clubs.clubs_list') }}">browse clubs</a>.</p>
   {% endif %}
 </div>
 
