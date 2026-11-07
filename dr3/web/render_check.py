@@ -82,6 +82,16 @@ def main() -> int:
           and '.club-card .chips-row { justify-content: space-between; }' in css
           and '.club-card .chips-row .members-chip { flex: 1; text-align: center; padding: 0.28rem 0.7rem; font-size: 0.78rem; }' in css
           and '.club-card .chips-row .chip-ok { width: 100%; text-align: center; }' in css, '')
+    tpl = (HERE / 'templates' / 'clubs.html').read_text(encoding='utf-8')
+    check('clubs: upcoming chip uses chip-ok + owner chip between title and desc',
+          'class="chip chip-ok">Starts in' in tpl
+          and 'chip chip-accent">Starts in' not in tpl
+          and 'class="chip chip-warn owner-chip">Owner: {{ c.owner.username }}' in tpl
+          and tpl.find('owner-chip') > tpl.find('title-link')
+          and tpl.find('owner-chip') < tpl.find('class="desc"'), '')
+    check('clubs: owner chip rendered + compact styling',
+          'class="chip chip-warn owner-chip">Owner: ' in html
+          and '.club-card .owner-chip { align-self: flex-start; }' in css, '')
     check('site-wide: bordered boxes get 0.3rem border radius',
           'border-radius: 0.3rem;' in css
           and '.panel, .club-card, .stat-card, .btn, button, input, select, textarea,' in css

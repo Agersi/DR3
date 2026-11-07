@@ -140,6 +140,7 @@ hr {
 .club-card .title-link { color: var(--text); text-decoration: none; }
 .club-card .title-link:hover { color: var(--text); text-decoration: underline; }
 .club-card .desc { color: var(--muted); font-size: 0.95rem; flex: 1; }
+.club-card .owner-chip { align-self: flex-start; }
 
 .grid-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1.1rem; margin: 1.1rem 0; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.1rem; margin: 1.1rem 0; }

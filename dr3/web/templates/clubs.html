@@ -57,6 +57,7 @@
   {%- set tint = 'in' if role else ('out' if logged_in else '') -%}
   <div class="club-card {{ tint }}">
     <h3><a class="title-link" href="{{ url_for('clubs.club_detail', club_id=c.id) }}">{{ c.name }}</a></h3>
+    {% if c.owner %}<span class="chip chip-warn owner-chip">Owner: {{ c.owner.username }}</span>{% endif %}
     <p class="desc">{{ c.description or 'No description yet.' }}</p>
     <div class="chips-row">
       <span class="chip chip-warn members-chip">{{ c.members|length }} members</span>
@@ -77,7 +78,7 @@
         {% if info.live %}
         <span class="chip chip-ok">Live — ends in {{ info.end | countdown }}</span>
         {% else %}
-        <span class="chip chip-accent">Starts in {{ info.event['start_time'] | countdown }}</span>
+        <span class="chip chip-ok">Starts in {{ info.event['start_time'] | countdown }}</span>
         {% endif %}
       {% endif %}
     </div>
