@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.64**
+- The "Start automatically when DR3 opens" option is now off by default and can only be enabled once you've saved your game token.
+
 **v0.1.63**
 - Wheel wear now carries over between locations in multi-location rallies instead of resetting to a fresh set of wheels.
 

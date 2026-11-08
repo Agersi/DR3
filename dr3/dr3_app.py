@@ -1353,10 +1353,16 @@ def run_gui():
         t = token_var.get().strip()
         config["game_token"] = t
         config.setdefault("api_url", API_URL)
+        if not t:
+            # No token -> auto-start can't be enabled; force it off.
+            auto_start_var.set(False)
+            config["auto_start_server"] = False
         save_config(config)
         if not t:
             token_status_label.configure(text="No token", fg=ACCENT)
+            auto_cb.configure(state="disabled")
             return
+        auto_cb.configure(state="normal")
         token_status_label.configure(text="Testing token...", fg=MUTED)
         save_btn.configure(state="disabled")
 
@@ -1554,7 +1560,12 @@ def run_gui():
     stop_btn.pack(side="left")
 
     # Shares STOP's row (side packing) so the Main tab gains no height.
-    auto_start_var = tk.BooleanVar(value=config.get("auto_start_server", True))
+    # Auto-start is opt-in (off by default on a fresh install) and can only be
+    # enabled once a game token is configured — without one the server has
+    # nothing to connect to, so auto-starting would just open the dashboard.
+    _has_token = bool(config.get("game_token"))
+    auto_start_var = tk.BooleanVar(
+        value=bool(config.get("auto_start_server", False)) and _has_token)
     auto_cb = tk.Checkbutton(
         btn_frame, text="Start automatically when DR3 opens",
         variable=auto_start_var, bg=BG, fg=TEXT,
@@ -1562,6 +1573,8 @@ def run_gui():
         font=(UI_FONT, 9), highlightthickness=0, bd=0, anchor="w",
     )
     auto_cb.pack(side="right")
+    if not _has_token:
+        auto_cb.configure(state="disabled")
 
     def _update_auto_start():
         config["auto_start_server"] = auto_start_var.get()
@@ -2307,10 +2320,11 @@ def run_gui():
     stop_btn.configure(command=on_stop)
 
     # Auto-click START when we were just relaunched after a successful setcap,
-    # or when the "start automatically" option is on (default). on_start
-    # disables the START button first, so a manual click can't double-start.
+    # or when the "start automatically" option is on AND a token is set (it's
+    # off by default on a fresh install). on_start disables the START button
+    # first, so a manual click can't double-start.
     if os.environ.pop("DR3_AUTO_START", "") == "1" \
-            or config.get("auto_start_server", True):
+            or (config.get("auto_start_server", False) and config.get("game_token")):
         root.after(800, on_start)
 
     def _spawn_update_on_exit():
