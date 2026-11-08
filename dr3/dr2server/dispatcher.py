@@ -1122,6 +1122,27 @@ class RpcDispatcher:
             vehicle_id, 0)
         return vehicle_id, livery_id
 
+    @staticmethod
+    def _done_in_range(completed_stages: List[Dict[str, Any]],
+                       offset: int, count: int) -> int:
+        """Number of completed stages whose flat slot falls in
+        ``[offset, offset + count)`` — the within-leg progress of a
+        multi-event championship.  Unlike a prefix count (``len - offset``),
+        this is correct for Rally Season players who joined mid-season: their
+        first played leg IS the active one, so their slots start at
+        ``offset``, not 0 (a prefix count read 0 and never showed the leg as
+        complete)."""
+        n = 0
+        for s in completed_stages:
+            v = s.get("stage_index")
+            try:
+                idx = int(v) if v is not None else -1
+            except (TypeError, ValueError):
+                idx = -1
+            if offset <= idx < offset + count:
+                n += 1
+        return n
+
     def _multi_event_progress(
         self, challenge_id: int, layout: List[int], active: int,
         ep: Optional[Dict[str, Any]], carry_over: bool = False,
@@ -1158,9 +1179,11 @@ class RpcDispatcher:
         completed_count = len(completed)
         offset = sum(layout[:active])
         event_stage_count = layout[active] if 0 <= active < len(layout) else 0
-        # Stages complete in order, so within-event progress is the flat count
-        # minus this event's starting offset, clamped to the event's stage count.
-        done_in_event = max(0, min(completed_count - offset, event_stage_count))
+        # Within-event progress counts the completed stages in this event's
+        # flat range (see _done_in_range).  A prefix count breaks for Rally
+        # Season mid-season joiners, whose slots start at `offset`, not 0.
+        done_in_event = self._done_in_range(
+            completed, offset, event_stage_count)
         if done_in_event <= 0:
             if not carry_over or completed_count <= 0:
                 return None  # not started -> enterable, no Progress entry
@@ -3046,7 +3069,10 @@ class RpcDispatcher:
             _ev_count = _layout[sub_index] if 0 <= sub_index < len(_layout) else 0
         else:
             _ev_count = sum(_layout)
-        done_in_event = max(0, min(len(completed_stages) - rally_offset, _ev_count))
+        # Range count (see _done_in_range): a prefix count would read an
+        # already-finished leg as unstarted for mid-season season joiners.
+        done_in_event = self._done_in_range(
+            completed_stages, rally_offset, _ev_count)
         event_complete = _ev_count > 0 and done_in_event >= _ev_count
 
         if last_prior is not None:

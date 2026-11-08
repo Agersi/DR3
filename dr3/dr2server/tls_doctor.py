@@ -155,10 +155,13 @@ def scan_windows_cert_store(timeout: float = 15.0, refresh: bool = False) -> Lis
     if not _is_windows():
         return []
     try:
+        # CREATE_NO_WINDOW: the GUI client must not flash a console window
+        # for the background cert-store scan.
         proc = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive",
              "-Command", _STORE_SCAN_PS],
-            capture_output=True, text=True, timeout=timeout)
+            capture_output=True, text=True, timeout=timeout,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except (OSError, subprocess.SubprocessError):
         return []
     entries = parse_store_scan(proc.stdout or "")

@@ -176,6 +176,23 @@ def main():
     check("#19 GetClubs seeded next leg State", unwrap(p["State"]), 1)
     check("#19 GetClubs seeded next leg AttemptsLeft", unwrap(p["AttemptsLeft"]), 1)
 
+    # Rally Season mid-season joiner (2026-11-08, t_dstreet): season legs
+    # open by wall-clock, so the first played leg IS the active one — its
+    # completed slots start at that leg's offset, not 0. The old prefix count
+    # read 0 and the club never showed as complete on the clubs screen.
+    ep_midjoin = {"completed_stages": [stage(i) for i in range(6, 12)],
+                  "attempts_used": 0}
+    p = d._multi_event_progress(999, [6, 6], 1, ep_midjoin, carry_over=False)
+    check("#19 season midjoin finished leg State", unwrap(p["State"]), 2)
+    check("#19 season midjoin finished leg AttemptsLeft",
+          unwrap(p["AttemptsLeft"]), 0)
+
+    ep_midjoin_part = {"completed_stages": [stage(6), stage(7), stage(8)],
+                       "attempts_used": 0}
+    p = d._multi_event_progress(999, [6, 6], 1, ep_midjoin_part, carry_over=False)
+    check("#19 season midjoin partial leg State", unwrap(p["State"]), 1)
+    check("#19 season midjoin partial leg StageIndex", unwrap(p["StageIndex"]), 3)
+
     # _build_user_progress (the Clubs.GetClubs Progress list).
     d2 = make_dispatcher(FakeApi(progress_events=[
         {"event_id": "evtA", "completed_stages": [stage(0), stage(1), stage(2)],
@@ -223,6 +240,26 @@ def main():
     d4._challenge_subevent_map = {CHAL: 0}
     r = d4._stage_begin(sb(0, CHAL))  # restart attempt on a finished event
     check("#19 SB restart-attempt AttemptsLeft", unwrap(r["Progress"]["AttemptsLeft"]), 0)
+
+    # Mid-season joiner re-begin: the finished leg's slots start at its
+    # offset (6), so the prefix count read the leg as unstarted and offered a
+    # restart; the range count must report AttemptsLeft=0.
+    d7 = make_dispatcher(FakeApi(
+        events={"evtG": {"events": [
+            {"stages": [{}] * 6},
+            {"stages": [{}] * 6},
+        ]}},
+        progress_events=[
+            {"event_id": "evtG",
+             "completed_stages": [stage(i) for i in range(6, 12)],
+             "total_time_ms": 6000, "attempts_used": 0},
+        ],
+    ))
+    d7._challenge_event_map = {CHAL: "evtG"}
+    d7._challenge_subevent_map = {CHAL: 1}
+    r = d7._stage_begin(sb(0, CHAL))
+    check("#19 SB midjoin finished-leg restart AttemptsLeft",
+          unwrap(r["Progress"]["AttemptsLeft"]), 0)
 
     # StageComplete: finishing the last stage -> State=2 + AttemptsLeft=0;
     # an intermediate finish -> State=0 + AttemptsLeft=1.

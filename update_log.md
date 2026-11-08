@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.60**
+- Club events now show as completed on the clubs screen once you finish the current rally, and DR3 no longer flashes a console window at startup.
+
 **v0.1.59**
 - Fixed a rare connection problem where clubs would not load on PCs with certain old certificates installed.
 
