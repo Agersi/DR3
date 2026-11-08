@@ -292,6 +292,11 @@ def main() -> int:
               and '.champ-arrow { flex: none; width: 2.8rem; height: 2.8rem; display: flex; align-items: center; justify-content: center; background: var(--card); border: 2px solid var(--line); color: var(--text); cursor: pointer; font-size: 0.9rem; margin: 0; }' in board_css
               and '.champ-center { flex: 1 1 auto; display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; background: var(--card); border: 2px solid var(--line); padding: 0.4rem 0.8rem; align-content: center; }' in board_css
               and '.champ-window { color: var(--muted); font-size: 0.85rem; }' in board_css, '')
+        check('club detail: champ arrows disabled at the boundaries',
+              "document.getElementById('champ-prev').disabled = state.champ_index >= state.selectors.length - 1;" in det
+              and "document.getElementById('champ-next').disabled = state.champ_index <= 0;" in det
+              and '.champ-arrow:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }' in board_css
+              and '.champ-arrow:disabled { color: var(--line); cursor: default; }' in board_css, '')
         # championship builder: create a fresh draft, render edit + preview
         r = client.post(f'/clubs/{club_id}/championship/new', data={'num_events': '2', 'num_stages': '3'}, follow_redirects=False)
         check('champ new -> redirect to edit', r.status_code == 302, f'status={r.status_code}')

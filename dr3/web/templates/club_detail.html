@@ -382,6 +382,8 @@
     var sel = state.selectors[state.champ_index] || {};
     document.getElementById('champ-name').textContent = sel.name || '';
     document.getElementById('champ-window').textContent = sel.window_text || '';
+    document.getElementById('champ-prev').disabled = state.champ_index >= state.selectors.length - 1;
+    document.getElementById('champ-next').disabled = state.champ_index <= 0;
   }
 
   function renderRounds(board) {

@@ -465,7 +465,8 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
 
 .champ-selector { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.3rem; }
 .champ-arrow { flex: none; width: 2.8rem; height: 2.8rem; display: flex; align-items: center; justify-content: center; background: var(--card); border: 2px solid var(--line); color: var(--text); cursor: pointer; font-size: 0.9rem; margin: 0; }
-.champ-arrow:hover { border-color: var(--accent); color: var(--accent); }
+.champ-arrow:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.champ-arrow:disabled { color: var(--line); cursor: default; }
 .champ-center { flex: 1 1 auto; display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; background: var(--card); border: 2px solid var(--line); padding: 0.4rem 0.8rem; align-content: center; }
 .champ-name { font-family: var(--display); font-weight: 700; font-size: 1.15rem; letter-spacing: 0.01em; }
 .champ-window { color: var(--muted); font-size: 0.85rem; }
