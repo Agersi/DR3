@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.62**
+- Your car setup is no longer reset after a terminal damage — it carries over to the next service area.
+
 **v0.1.61**
 - Fixed multi-location rallies: after terminal damage, the championship now only continues if a service area is actually ahead — otherwise it ends here.
 

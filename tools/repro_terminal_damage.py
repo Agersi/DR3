@@ -53,6 +53,7 @@ progress resumes right after the last flagged stage.
 
 Run: python tools\repro_terminal_damage.py   (from D:\CODE\DR2)
 """
+import base64
 import sys
 from pathlib import Path
 
@@ -61,6 +62,7 @@ sys.path.insert(0, r"D:\CODE\DR2\dr3")
 from dr2server.account_store import AccountStore
 from dr2server.api_client import _location_id_for
 from dr2server.dispatcher import RpcDispatcher
+from dr2server.tuning import TuningBlob
 
 FAILS = 0
 
@@ -476,6 +478,91 @@ def main():
                                 api.progress["events"][0], carry_over=True)
     check("carry-table: livery from the default table",
           (unwrap(p["VehicleId"]), unwrap(p["LiveryId"])), (564, 3673))
+
+    # Lost-tune report (2026-11-08): after a terminal damage the LAST
+    # completed entry is the sparse DNF close-out (the StageComplete payload
+    # has no TuningSetup), so reading vehicle state from it served the neutral
+    # default blob and the game adopted it — the driver's tune was gone at the
+    # next service area. Every Progress builder must walk back to the nearest
+    # stage whose begin captured the real setup (same pattern as _carry_vehicle).
+    driver_blob = (b"\x01\x00\x00\x00" b"\x10\x00\x00\x00"
+                   b"driver-tune-payload-xyz")
+    drv_b64 = base64.b64encode(driver_blob).decode("ascii")
+
+    # (a) The DNF close-out response itself: the pre-persisted wrecked entry
+    # keeps the begin-captured tuning blob, the sparse close-out has none.
+    api = FakeApi(
+        events={"evtT": {"stages": [stage(0), stage(1)]}},
+        progress_events=[
+            {"event_id": "evtT",
+             "completed_stages": [
+                 {**stage(0, time_ms=900000), "race_status": 5,
+                  "tuning_setup_b64": drv_b64},
+                 sparse(1, 469),
+             ],
+             "total_time_ms": 1800000, "attempts_used": 0},
+        ],
+    )
+    d = make_dispatcher(api)
+    d._challenge_event_map = {800001: "evtT"}
+    d._challenge_subevent_map = {800001: 0}
+    # Post-marker state in this fixture (flag already applied), so the wreck
+    # resolves via the session's last StageBegin, not the pre-persist signature.
+    d._last_begin_stage[(800001, 0)] = 0
+    r = d._stage_complete(sc(1, race_status=5))
+    check("tune-dnf: DNF marker sent", len(api.submitted), 1)
+    check("tune-dnf: close-out response carries the driver's setup",
+          r["Progress"]["TuningSetup"], driver_blob)
+    check("tune-dnf: not the neutral default blob",
+          r["Progress"]["TuningSetup"] == TuningBlob.default_bytes(), False)
+    check("tune-dnf: tyres walked back to the real pre-wreck values",
+          (unwrap(r["Progress"]["TyreCompound"]),
+           unwrap(r["Progress"]["TyresRemaining"])),
+          (6, 1))
+
+    # (b) Negative control: no stored tuning anywhere -> neutral default.
+    api = FakeApi(
+        events={"evtT": {"stages": [stage(0), stage(1)]}},
+        progress_events=[
+            {"event_id": "evtT",
+             "completed_stages": [
+                 {**stage(0, time_ms=900000), "race_status": 5},
+                 sparse(1, 469),
+             ],
+             "total_time_ms": 1800000, "attempts_used": 0},
+        ],
+    )
+    d = make_dispatcher(api)
+    d._challenge_event_map = {800001: "evtT"}
+    d._challenge_subevent_map = {800001: 0}
+    d._last_begin_stage[(800001, 0)] = 0
+    r = d._stage_complete(sc(1, race_status=5))
+    check("tune-dnf fallback: no stored setup anywhere -> neutral default",
+          r["Progress"]["TuningSetup"], TuningBlob.default_bytes())
+
+    # (c) Carry-over into the NEXT leg (GetClubs seed): same walk-back.
+    api = FakeApi(
+        events={"evtT": {"stages": [stage(0), stage(1)]}},
+        progress_events=[
+            {"event_id": "evtT",
+             "completed_stages": [
+                 {**stage(0, time_ms=900000), "race_status": 5,
+                  "tuning_setup_b64": drv_b64},
+                 sparse(1, 469),
+             ],
+             "total_time_ms": 1800000, "attempts_used": 0},
+        ],
+    )
+    d = make_dispatcher(api)
+    p = d._multi_event_progress(800002, [2, 2], 1,
+                                api.progress["events"][0], carry_over=True)
+    check("tune-carry: Progress entry served", p is not None, True)
+    if p:
+        check("tune-carry: next-leg seed carries the driver's setup",
+              p["TuningSetup"], driver_blob)
+        check("tune-carry: tyres from the real pre-wreck stage",
+              (unwrap(p["TyreCompound"]), unwrap(p["TyresRemaining"])),
+              (6, 1))
 
     # Service-area retirement (2026-10-29 crash, +0x100840): the player
     # retires BEFORE any stage-begin capture, so the web side has no vehicle

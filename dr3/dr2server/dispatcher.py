@@ -1123,6 +1123,23 @@ class RpcDispatcher:
         return vehicle_id, livery_id
 
     @staticmethod
+    def _last_state_entry(
+        completed: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Most recent stage entry that actually carries a tuning blob.
+
+        DNF close-out entries are sparse (time/race_status/vehicle only — the
+        StageComplete payload has no TuningSetup), so after a terminal damage
+        ``completed[-1]`` holds no setup and reading vehicle state from it
+        serves the neutral default blob: the driver's tune is lost at the next
+        service area.  Walk back to the nearest stage whose begin captured the
+        real setup (same pattern as _carry_vehicle)."""
+        for e in reversed(completed):
+            if e.get("tuning_setup_b64"):
+                return e
+        return completed[-1] if completed else {}
+
+    @staticmethod
     def _done_in_range(completed_stages: List[Dict[str, Any]],
                        offset: int, count: int) -> int:
         """Number of completed stages whose flat slot falls in
@@ -1188,14 +1205,15 @@ class RpcDispatcher:
             if not carry_over or completed_count <= 0:
                 return None  # not started -> enterable, no Progress entry
             last = completed[completed_count - 1]
+            state_entry = self._last_state_entry(completed)
             vehicle_id, livery_id = self._carry_vehicle(completed)
             if prev_was_rx:
                 # RX stage tyre values are invalid on rally tracks — seed the
                 # upstream defaults instead (see docstring).
                 tyre_compound, tyres_remaining = 7, 2
             else:
-                tyre_compound = int(last.get("tyre_compound", 0) or 7)
-                tyres_remaining = int(last.get("tyres_remaining", 0) or 2)
+                tyre_compound = int(state_entry.get("tyre_compound", 0) or 7)
+                tyres_remaining = int(state_entry.get("tyres_remaining", 0) or 2)
             return self._build_progress_dict(
                 challenge_id=challenge_id,
                 target_stage_index=0,
@@ -1210,7 +1228,8 @@ class RpcDispatcher:
                 vehicle_damage=self._damage_from_dict(last.get("vehicle_damage")),
                 tyre_compound=tyre_compound,
                 tyres_remaining=tyres_remaining,
-                tuning_bytes=self._decode_tuning_b64(last.get("tuning_setup_b64", "") or ""),
+                tuning_bytes=self._decode_tuning_b64(
+                    state_entry.get("tuning_setup_b64", "") or ""),
                 attempts_left=self._attempts_left_for(ep),
                 event_index=event_index,
             )
@@ -1220,6 +1239,7 @@ class RpcDispatcher:
         target_stage_index = (event_stage_count - 1) if all_done else done_in_event
 
         last = completed[completed_count - 1] if completed else {}
+        state_entry = self._last_state_entry(completed)
         vehicle_id, livery_id = self._carry_vehicle(completed)
         return self._build_progress_dict(
             challenge_id=challenge_id,
@@ -1235,9 +1255,10 @@ class RpcDispatcher:
             has_repaired=bool(last.get("has_repaired", False)),
             repair_penalty_ms=int(last.get("repair_penalty_ms", 0) or 0),
             vehicle_damage=self._damage_from_dict(last.get("vehicle_damage")),
-            tyre_compound=int(last.get("tyre_compound", 0) or 7),
-            tyres_remaining=int(last.get("tyres_remaining", 0) or 2),
-            tuning_bytes=self._decode_tuning_b64(last.get("tuning_setup_b64", "") or ""),
+            tyre_compound=int(state_entry.get("tyre_compound", 0) or 7),
+            tyres_remaining=int(state_entry.get("tyres_remaining", 0) or 2),
+            tuning_bytes=self._decode_tuning_b64(
+                state_entry.get("tuning_setup_b64", "") or ""),
             attempts_left=self._attempts_left_for(ep, completed=(state == 2)),
             event_index=event_index,
         )
@@ -1655,6 +1676,7 @@ class RpcDispatcher:
             )
 
             last_stage = completed_stages[-1]
+            state_entry = self._last_state_entry(completed_stages)
             next_stage_idx = last_stage.get("stage_index", 0) + 1
             if all_done:
                 stage_index_out = total_stages_in_event - 1
@@ -1676,9 +1698,10 @@ class RpcDispatcher:
                 has_repaired=bool(last_stage.get("has_repaired", False)),
                 repair_penalty_ms=int(last_stage.get("repair_penalty_ms", 0) or 0),
                 vehicle_damage=self._damage_from_dict(last_stage.get("vehicle_damage")),
-                tyre_compound=int(last_stage.get("tyre_compound", 0) or 7),
-                tyres_remaining=int(last_stage.get("tyres_remaining", 0) or 2),
-                tuning_bytes=self._decode_tuning_b64(last_stage.get("tuning_setup_b64", "") or ""),
+                tyre_compound=int(state_entry.get("tyre_compound", 0) or 7),
+                tyres_remaining=int(state_entry.get("tyres_remaining", 0) or 2),
+                tuning_bytes=self._decode_tuning_b64(
+                    state_entry.get("tuning_setup_b64", "") or ""),
                 attempts_left=self._attempts_left_for(ep, completed=all_done),
             ))
 
@@ -3475,9 +3498,11 @@ class RpcDispatcher:
         # TyresRemaining — those were set at StageBegin and persisted by the
         # web side under the in_progress key, then merged into the stage entry.
         # Pull them from the latest completed stage entry (just-submitted on
-        # the happy path, prior stage on DNF). Fall back to defaults when the
-        # web fetch hasn't seen our submission yet.
-        latest = completed_stages[-1] if completed_stages else {}
+        # the happy path, prior stage on DNF). A DNF close-out entry is sparse
+        # (no setup of its own), so walk back to the nearest stage that has a
+        # real tuning blob — otherwise a terminal damage serves the neutral
+        # default setup and the driver's tune is lost at the next service.
+        latest = self._last_state_entry(completed_stages)
         tuning_bytes = self._decode_tuning_b64(latest.get("tuning_setup_b64", "") or "")
         tyre_compound = int(latest.get("tyre_compound", 0) or 7)
         tyres_remaining = int(latest.get("tyres_remaining", 0) or 2)
