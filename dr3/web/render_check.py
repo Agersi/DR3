@@ -61,11 +61,11 @@ def main() -> int:
     check('clubs: filter tile styling scoped to .filters (builder page untouched)',
           '.filters { position: sticky; top: 0; z-index: 20; padding: 0.9rem; }' in css
           and '.filters .opt-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin: 0.6rem 0 0 0; }' in css
-          and           '.filters .opt-title { text-align: center; letter-spacing: 0.01em; }' in css
+              and           '.filters .opt-title { text-align: center; letter-spacing: 0.01em; font-size: 0.74rem; }' in css
           and           '.filters .opt { display: flex; flex-direction: column; transition: transform 0.12s ease, box-shadow 0.12s ease; }' in css
           and '.filters .opt:hover {' in css and 'transform: scale(1.03)' in css
           and 'inset 0 0 18px -8px rgba(175, 175, 175, 0.6)' in css
-          and '.opt-state { display: block; margin-top: auto; text-align: center; text-transform: uppercase; color: var(--text); font-size: 0.9rem; line-height: 1.45; }' in css
+              and '.opt-state { display: block; margin-top: auto; text-align: center; text-transform: uppercase; color: var(--text); font-size: 0.74rem; line-height: 1.45; font-weight: 900; font-style: italic; }' in css
           and '.opt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));' in css
           and 'letter-spacing: 0.07em' in css, '')
     check('clubs: opt-style filter tiles (active toggle + cycling states)',
