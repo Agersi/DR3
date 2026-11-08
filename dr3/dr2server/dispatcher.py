@@ -3082,7 +3082,18 @@ class RpcDispatcher:
             s for s in completed_stages
             if rally_offset <= int(s.get("stage_index", 0) or 0) < gidx
         ]
-        last_prior = prior_completed[-1] if prior_completed else None
+        # Multi-Location Rally carries the car's damage championship-wide (the
+        # wear keeps accumulating across locations), so a new location resumes
+        # with the previous one's final damage instead of a fresh car; other
+        # modes start each rally from zero. Mirrors the champ_time_ms split.
+        if self._event_mode(event_id) == "multi":
+            dmg_prior = [
+                s for s in completed_stages
+                if int(s.get("stage_index", 0) or 0) < gidx
+            ]
+        else:
+            dmg_prior = prior_completed
+        last_prior = dmg_prior[-1] if dmg_prior else None
 
         # A StageBegin for an already-finished event is a restart attempt
         # (backlog 19): report zero remaining attempts so the client has no

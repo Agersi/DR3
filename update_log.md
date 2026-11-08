@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.63**
+- Wheel wear now carries over between locations in multi-location rallies instead of resetting to a fresh set of wheels.
+
 **v0.1.62**
 - Your car setup is no longer reset after a terminal damage — it carries over to the next service area.
 

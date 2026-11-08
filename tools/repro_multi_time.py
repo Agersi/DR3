@@ -72,7 +72,10 @@ def make_dispatcher(api):
     return RpcDispatcher(store, api_client=api)
 
 
-def stage(idx, time_ms):
+def stage(idx, time_ms, wheels_wear=None):
+    dmg = {"bodywork": 12, "engine": 3.5}
+    if wheels_wear is not None:
+        dmg["wheels_wear"] = wheels_wear
     return {
         "stage_index": idx,
         "time_ms": time_ms,
@@ -81,7 +84,7 @@ def stage(idx, time_ms):
         "livery_id": 3233,
         "has_repaired": False,
         "repair_penalty_ms": 0,
-        "vehicle_damage": {"bodywork": 12, "engine": 3.5},
+        "vehicle_damage": dmg,
         "tyre_compound": 6,
         "tyres_remaining": 1,
         "tuning_setup_b64": "",
@@ -208,6 +211,33 @@ def main():
                                 carry_over=True, championship_time=False)
     check("season: GetClubs seeded next-leg ChampTimeMs is 0",
           unwrap(p["ChampTimeMs"]), 0)
+
+    # ------------------------------------------- stage-start damage carry-over
+    # Multi-Location Rally carries the car's wear championship-wide into a new
+    # location (the previous leg's final damage); season starts each rally from
+    # a fresh car. Regression for the wheels_wear reset at location boundaries.
+    dmg_progress = {
+        "event_id": None,
+        "completed_stages": [stage(0, 5000, wheels_wear=100),
+                             stage(1, 6000, wheels_wear=200)],
+        "attempts_used": 0,
+    }
+    for mode_key, event, want in (
+        ("multi", EVENT_MULTI, 200),     # leg0's final damage carried into leg1
+        ("season", EVENT_SEASON, 0),     # per-rally: fresh car at the new rally
+    ):
+        api = FakeApi(
+            events={"evtD": event},
+            progress_events=[progress_for("evtD", dmg_progress)],
+        )
+        d = make_dispatcher(api)
+        base = _stable_int_id("evtD", base=200000)
+        chal = base + 1  # leg 1 challenge
+        d._challenge_event_map[chal] = "evtD"
+        d._challenge_subevent_map[chal] = 1
+        r = d._stage_begin(sb(0, chal))
+        check(f"{mode_key}: SB leg1 stage0 carries WheelsWear",
+              unwrap(r["Progress"]["VehicleDamage"]["WheelsWear"]), want)
 
     # ---------------------------------------------------------------- leaderboard
     def flat(times):
