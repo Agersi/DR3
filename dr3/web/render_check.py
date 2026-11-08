@@ -96,7 +96,8 @@ def main() -> int:
     check('site-wide: bordered boxes get 0.3rem border radius',
           'border-radius: 0.3rem;' in css
           and '.panel, .club-card, .stat-card, .btn, button, input, select, textarea,' in css
-          and '.opt, .num-tile, .table-wrap, .chip, .flash' in css, '')
+          and '.opt, .num-tile, .table-wrap, .chip, .flash' in css
+          and '.tyre-chip, .champ-center { border-radius: 0.3rem; }' in css, '')
 
     # home recent-times box (backlog #42): server-rendered first page +
     # infinite-scroll JS wired to the public endpoint

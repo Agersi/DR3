@@ -510,7 +510,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .panel, .club-card, .stat-card, .btn, button, input, select, textarea,
 .opt, .num-tile, .table-wrap, .chip, .flash, code, pre, .codeblock,
 .steps li, .steps li::before, .big404 .num-plate, .token-box code,
-details.create-club .plus, .tyre-chip { border-radius: 0.3rem; }
+details.create-club .plus, .tyre-chip, .champ-center { border-radius: 0.3rem; }
 
 @media (max-width: 900px) {
   .grid-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
