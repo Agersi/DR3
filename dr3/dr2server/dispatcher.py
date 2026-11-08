@@ -3138,12 +3138,21 @@ class RpcDispatcher:
         The player resumes at the next service area: a stage's ``service_area``
         label describes the service BEFORE that stage (the builder's per-stage
         column), so that is the first stage after the wreck whose label is
-        non-None; when none exists, the next service is the start of the
-        following leg and the rest of this leg is skipped. Every skipped stage
-        is marked DNF at its max time (the per-stage limit table in
+        non-None. When none exists in the current leg, the mode decides:
+        Multi-Location Rally legs form ONE continuous rally across locations —
+        a service exists only where it is labelled, so the start of the
+        following leg is NOT automatically one; the later legs are scanned for
+        the first stage that carries a service, everything from the wreck up to
+        it (whole intervening legs included) is marked DNF, and when no later
+        stage carries a service at all the championship ends here (every
+        remaining stage of every remaining leg is marked DNF). Rally Season
+        legs are separate rallies each starting from their own service park, so
+        only the rest of the current leg is skipped. Every skipped stage is
+        marked DNF at its max time (the per-stage limit table in
         ``stage_limits``). Returns one ``{"stage_index", "time_ms"}`` entry per
-        skipped stage (local indices within the served leg); empty when the leg
-        can't be resolved, in which case the web side falls back to the legacy
+        skipped stage (local indices within the entry's leg; entries targeting
+        another leg carry their own ``event_index``); empty when the leg can't
+        be resolved, in which case the web side falls back to the legacy
         single-marker behavior.
         """
         try:
@@ -3158,28 +3167,46 @@ class RpcDispatcher:
         n = len(stages)
         if n == 0:
             return []
-        try:
-            is_rx = self._leg_is_rx(ev or {}, leg)
-        except Exception:
-            is_rx = False
-        laps_plan: List[int] = []
-        if is_rx:
-            raw_laps = leg.get("rx_laps")
+        def _leg_rx_and_laps(leg_i: Dict[str, Any]) -> tuple[bool, List[int]]:
+            st = leg_i.get("stages") or []
+            try:
+                rx = self._leg_is_rx(ev or {}, leg_i)
+            except Exception:
+                rx = False
+            if not rx:
+                return False, []
+            raw_laps = leg_i.get("rx_laps")
             try:
                 rx_laps = max(1, int(raw_laps)) if raw_laps is not None else None
             except (TypeError, ValueError):
                 rx_laps = None
-            laps_plan = [p[1] for p in rallycross_stage_plan(n, laps=rx_laps)]
+            return True, [p[1] for p in rallycross_stage_plan(len(st), laps=rx_laps)]
 
-        def _limit_ms(i: int) -> int:
-            ws = stages[i] or {}
+        def _stage_limit(leg_i: Dict[str, Any], i: int,
+                         laps_plan_i: List[int]) -> int:
+            ws = (leg_i.get("stages") or [None])[i] or {}
             tid = ws.get("track_id")
             try:
                 tid = int(tid) if tid is not None else 0
             except (TypeError, ValueError):
                 tid = 0
-            laps = laps_plan[i] if i < len(laps_plan) else None
+            laps = laps_plan_i[i] if i < len(laps_plan_i) else None
             return stage_limit_ms(tid, laps=laps)
+
+        def _stage_service(leg_i: Dict[str, Any], j: int, rx: bool) -> bool:
+            ws = (leg_i.get("stages") or [None])[j] or {}
+            if rx:
+                return True
+            label = ws.get("service_area")
+            # "None" is the no-service label; JSON null means legacy/unset and
+            # falls back to parity (same rule as the served stage build).
+            return (service_area_for_level(label)[0]
+                    if label is not None else (j % 2 == 0))
+
+        is_rx, laps_plan = _leg_rx_and_laps(leg)
+
+        def _limit_ms(i: int) -> int:
+            return _stage_limit(leg, i, laps_plan)
 
         offset = sum(len(l.get("stages") or []) for l in legs[:sub_index])
         ep = (self._user_progress_for_event(event_id)
@@ -3208,23 +3235,56 @@ class RpcDispatcher:
         # The service BEFORE stage j exists iff its label is non-None (RX legs
         # serve a service on every stage — see _apply_rallycross_stage_format),
         # so the next service after the wreck is the first such stage strictly
-        # after it; resume there. No later stage carries one -> the whole rest
-        # of the leg is skipped (next service = start of the following leg).
+        # after it; resume there. No later stage in the leg carries one -> the
+        # rest of the leg is skipped and (in multi mode) the later legs are
+        # scanned too.
         resume = n
         for j in range(wrecked + 1, n):
-            ws = stages[j] or {}
-            if is_rx:
-                has_svc = True
-            else:
-                label = ws.get("service_area")
-                has_svc = (service_area_for_level(label)[0]
-                           if label is not None else (j % 2 == 0))
-            if has_svc:
+            if _stage_service(leg, j, is_rx):
                 resume = j
                 break
+
         plan: List[Dict[str, Any]] = []
-        for i in range(wrecked, resume):
-            plan.append({"stage_index": i, "time_ms": _limit_ms(i)})
+
+        def _add(leg_idx: int, i: int, leg_i: Dict[str, Any],
+                 laps_plan_i: List[int]) -> None:
+            entry: Dict[str, Any] = {
+                "stage_index": i,
+                "time_ms": _stage_limit(leg_i, i, laps_plan_i),
+            }
+            if leg_idx != sub_index:
+                # Cross-leg entries carry their own leg index; the web side
+                # defaults to the marker's leg when it is absent.
+                entry["event_index"] = leg_idx
+            plan.append(entry)
+
+        if self._event_mode(event_id) == "multi" and resume == n:
+            # Multi-Location Rally legs form ONE continuous rally across
+            # locations — unlike Rally Seasons, where every rally starts from
+            # its own service park. Scan the later legs for the first stage
+            # that carries a service; everything from the wreck up to it (whole
+            # intervening legs included) is skipped. When no later stage
+            # carries a service at all, the championship ends here: every
+            # remaining stage of every remaining leg is marked DNF, so nothing
+            # is left to continue from.
+            for i in range(wrecked, n):
+                _add(sub_index, i, leg, laps_plan)
+            for li in range(sub_index + 1, len(legs)):
+                next_leg = legs[li] or {}
+                rx_li, laps_li = _leg_rx_and_laps(next_leg)
+                hit = None
+                for j in range(len(next_leg.get("stages") or [])):
+                    if _stage_service(next_leg, j, rx_li):
+                        hit = j
+                        break
+                upper = hit if hit is not None else len(next_leg.get("stages") or [])
+                for i in range(upper):
+                    _add(li, i, next_leg, laps_li)
+                if hit is not None:
+                    break
+        else:
+            for i in range(wrecked, resume):
+                plan.append({"stage_index": i, "time_ms": _limit_ms(i)})
         return plan
 
     def _stage_complete(self, params: Dict[str, Any]) -> Dict[str, Any]:

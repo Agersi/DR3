@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.61**
+- Fixed multi-location rallies: after terminal damage, the championship now only continues if a service area is actually ahead — otherwise it ends here.
+
 **v0.1.60**
 - Club events now show as completed on the clubs screen once you finish the current rally, and DR3 no longer flashes a console window at startup.
 

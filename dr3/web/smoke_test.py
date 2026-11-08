@@ -861,14 +861,84 @@ def main() -> int:
           all(s.get('vehicle_id') == 469 and s.get('livery_id') == 7
               for s in done) and len(done) == 2, str(ev5)[:300])
 
+    # 7e. Multi-location cross-leg skip plan (2026-11-08): the DNF marker's
+    # dnf_stages can carry entries from LATER legs (each with its own
+    # event_index) — the web must resolve every entry through the championship
+    # layout so stages of later legs get flagged too.
+    with app.app_context():
+        from datetime import timedelta
+        from app.models import Event, utcnow
+        now = utcnow()
+        leg0 = {'location': 'Poland', 'car_class': 'Gravel 1', 'surface': 'Gravel',
+                'duration': {'days': 0, 'hours': 1, 'mins': 0},
+                'stages': [st, st]}
+        leg1 = {'location': 'Finland', 'car_class': 'Gravel 1', 'surface': 'Gravel',
+                'duration': {'days': 0, 'hours': 1, 'mins': 0},
+                'stages': [st, st]}
+        db.session.add(Event(
+            id='smoke-dnf-crossleg', schema_version=2, name='Smoke DNF CrossLeg',
+            type='daily', location='Poland', car_class='Gravel 1',
+            surface='Gravel', conditions='Dry',
+            stages_json=json.dumps([st, st]),
+            settings_json=json.dumps({'mode': 'multi'}),
+            legs_json=json.dumps([leg0, leg1]),
+            start_time=now - timedelta(minutes=5), end_time=now + timedelta(hours=1),
+            active=True, featured=False, club_id=None, system=False,
+        ))
+        db.session.commit()
+
+    eid6 = 'smoke-dnf-crossleg'
+    r = client.post('/api/game/stage-complete', headers=headers, json={
+        'event_id': eid6, 'username': 'smokedriver', 'stage_index': 1,
+        'event_index': 0, 'time_ms': 900000,
+    })
+    check('crossleg: pre-persist ok', (r.get_json() or {}).get('ok') is True,
+          str(r.get_json()))
+
+    r = client.post('/api/game/stage-complete', headers=headers, json={
+        'event_id': eid6, 'username': 'smokedriver', 'stage_index': 1,
+        'event_index': 0, 'time_ms': 0, 'race_status': 5, 'mark_dnf': True,
+        'dnf_stage_index': 1,
+        'dnf_stages': [
+            {'stage_index': 1, 'time_ms': 900000},
+            {'stage_index': 0, 'time_ms': 900000, 'event_index': 1},
+            {'stage_index': 1, 'time_ms': 900000, 'event_index': 1},
+        ],
+    })
+    check('crossleg: marker ok', (r.get_json() or {}).get('ok') is True,
+          str(r.get_json()))
+
+    r = client.get(f'/api/game/leaderboard/{eid6}', headers=headers)
+    j = r.get_json() or {}
+    e0 = (j.get('entries') or [{}])[0]
+    sts = e0.get('stages') or []
+    st1 = sts[1] if len(sts) > 1 else {}
+    st2 = sts[2] if len(sts) > 2 else {}
+    st3 = sts[3] if len(sts) > 3 else {}
+    check('crossleg: wrecked stage of the current leg flagged DNF',
+          st1.get('race_status') == 5 and st1.get('time_ms') == 900000, str(st1)[:200])
+    check('crossleg: LATER-leg entries resolved through the layout (flat 2+3)',
+          st2.get('race_status') == 5 and st2.get('time_ms') == 900000
+          and st3.get('race_status') == 5 and st3.get('time_ms') == 900000,
+          f'{st2} {st3}')
+    check('crossleg: total sums all three limits once each',
+          e0.get('total_time_ms') == 2700000, str(e0.get('total_time_ms')))
+
+    r = client.get('/api/game/my-progress', headers=headers)
+    j = r.get_json() or {}
+    ev6 = next((x for x in j.get('events', []) if x['event_id'] == eid6), {})
+    done = [s['stage_index'] for s in ev6.get('completed_stages', [])]
+    check('crossleg: my-progress counts all flagged stages (championship closed)',
+          sorted(done) == [1, 2, 3], str(ev6)[:300])
+
     # clean up so later recent-times checks see only the original single row
     with app.app_context():
         from app.models import Event, Result
         for res in Result.query.filter(
-                Result.event_id.in_([eid2, eid3, eid4, eid5])).all():
+                Result.event_id.in_([eid2, eid3, eid4, eid5, eid6])).all():
             db.session.delete(res)
         db.session.query(Event).filter(
-            Event.id.in_([eid2, eid3, eid4, eid5])).delete()
+            Event.id.in_([eid2, eid3, eid4, eid5, eid6])).delete()
         db.session.commit()
 
     # 7b. client-version endpoint (source of the client's update banner)

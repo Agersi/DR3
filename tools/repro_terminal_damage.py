@@ -37,8 +37,12 @@ real finish.
 
 Service areas: a stage's service_area label describes the service BEFORE that
 stage (the builder's per-stage column), so the resume point is the first stage
-after the wreck whose label is non-None — or the start of the following leg
-when none exists, in which case the rest of this leg is skipped whole.
+after the wreck whose label is non-None. When none exists in the current leg,
+Multi-Location mode scans the LATER legs for the first serviced stage (whole
+intervening legs skipped; when no later stage carries a service at all the
+championship ends — every remaining stage of every remaining leg is DNF'd,
+cross-leg entries carrying their own event_index); Rally Season skips only the
+rest of the current leg (the next rally starts from its own service park).
 
 Step 3 (service-area auto-advance): the marker also carries dnf_stages — one
 entry per skipped stage, from the wreck up to the first stage after the next
@@ -618,6 +622,144 @@ def main():
               (s.get("dnf_stage_index"), s.get("dnf_stages")),
               (3, [{"stage_index": 3, "time_ms": 1800000}]))
     check("long-leg fallback: State=2 (leg finished for this run)",
+          unwrap(r["Progress"]["State"]), 2)
+
+    # Multi-location cross-leg service scan (2026-11-08 user report): the
+    # championship is Poland [Short, None] / Finland [None, None] / Australia
+    # [None, None] — no service anywhere after the start park. Wreck on Poland
+    # stage 2 (pre-persist at its exact limit, track 617 = 900s; genuine stage
+    # 1 finish below its limit). The old within-leg-only plan left Finland and
+    # Australia unmarked, so the game offered a continuation into a leg with no
+    # service. Now the championship ends: EVERY remaining stage of EVERY
+    # remaining leg is marked DNF, cross-leg entries carrying their own
+    # event_index (all six tracks carry the 900s limit).
+    def pfa_event(mode, au_label):
+        return {
+            "id": "evtP",
+            "settings": {"mode": mode},
+            "events": [
+                {"location": "Poland", "stages": [
+                    {"track_id": 616, "service_area": "Short"},
+                    {"track_id": 617, "service_area": "None"},
+                ]},
+                {"location": "Finland", "stages": [
+                    {"track_id": 507, "service_area": "None"},
+                    {"track_id": 508, "service_area": "None"},
+                ]},
+                {"location": "Australia", "stages": [
+                    {"track_id": 585, "service_area": au_label},
+                    {"track_id": 586, "service_area": "None"},
+                ]},
+            ],
+        }
+
+    pfa_progress = [
+        {"event_id": "evtP",
+         "completed_stages": [
+             {"stage_index": 0, "time_ms": 850000},
+             {"stage_index": 1, "time_ms": 900000},
+         ],
+         "total_time_ms": 850000 + 900000, "attempts_used": 0},
+    ]
+
+    api = FakeApi(events={"evtP": pfa_event("multi", "None")},
+                  progress_events=pfa_progress)
+    d = make_dispatcher(api)
+    d._challenge_event_map = {800001: "evtP"}
+    d._challenge_subevent_map = {800001: 0}
+    r = d._stage_complete(sc(1, race_status=5))
+    check("multi no-service: DNF marker sent", len(api.submitted), 1)
+    if api.submitted:
+        s = api.submitted[0]
+        check("multi no-service: wreck resolved from the pre-persist signature",
+              s.get("dnf_stage_index"), 1)
+        check("multi no-service: whole rest of the championship marked DNF"
+              " (cross-leg entries carry their event_index)",
+              s.get("dnf_stages"),
+              [{"stage_index": 1, "time_ms": 900000},
+               {"stage_index": 0, "time_ms": 900000, "event_index": 1},
+               {"stage_index": 1, "time_ms": 900000, "event_index": 1},
+               {"stage_index": 0, "time_ms": 900000, "event_index": 2},
+               {"stage_index": 1, "time_ms": 900000, "event_index": 2}])
+    check("multi no-service: State=2 (championship finished for this run)",
+          unwrap(r["Progress"]["State"]), 2)
+
+    # Same championship but with a service BEFORE Australia stage 2 (label on
+    # its second stage): the scan must skip Poland's wrecked stage + ALL of
+    # Finland + Australia stage 1, then stop at that later-leg service.
+    api = FakeApi(events={"evtP": pfa_event("multi", "None")},
+                  progress_events=pfa_progress)
+    d = make_dispatcher(api)
+    d._challenge_event_map = {800001: "evtP"}
+    d._challenge_subevent_map = {800001: 0}
+    # Give Australia stage 2 the service (label describes service BEFORE it).
+    api.events["evtP"]["events"][2]["stages"] = [
+        {"track_id": 585, "service_area": "None"},
+        {"track_id": 586, "service_area": "Short"},
+    ]
+    r = d._stage_complete(sc(1, race_status=5))
+    check("multi later-leg service: DNF marker sent", len(api.submitted), 1)
+    if api.submitted:
+        s = api.submitted[0]
+        check("multi later-leg service: wrecked stage + whole intervening"
+              " leg + stages before the later-leg service skipped",
+              (s.get("dnf_stage_index"), s.get("dnf_stages")),
+              (1, [{"stage_index": 1, "time_ms": 900000},
+                   {"stage_index": 0, "time_ms": 900000, "event_index": 1},
+                   {"stage_index": 1, "time_ms": 900000, "event_index": 1},
+                   {"stage_index": 0, "time_ms": 900000, "event_index": 2}]))
+    check("multi later-leg service: State=2 (leg finished for this run)",
+          unwrap(r["Progress"]["State"]), 2)
+
+    # Rally Season with the identical layout: legs are separate rallies each
+    # starting from their own service park, so NO cross-leg scan — only the
+    # rest of the current leg is skipped and the next rally stays enterable.
+    api = FakeApi(events={"evtP": pfa_event("season", "None")},
+                  progress_events=pfa_progress)
+    d = make_dispatcher(api)
+    d._challenge_event_map = {800001: "evtP"}
+    d._challenge_subevent_map = {800001: 0}
+    r = d._stage_complete(sc(1, race_status=5))
+    check("season: DNF marker sent", len(api.submitted), 1)
+    if api.submitted:
+        s = api.submitted[0]
+        check("season: no cross-leg scan — rest of the current leg only"
+              " (next rally starts from its own service park)",
+              s.get("dnf_stages"),
+              [{"stage_index": 1, "time_ms": 900000}])
+    check("season: State=2 (leg finished for this run)",
+          unwrap(r["Progress"]["State"]), 2)
+
+    # Wreck on the LAST leg of a multi championship (Australia stage 2): no
+    # later legs to scan — only the rest of the current leg is marked, and the
+    # championship reads complete (all six flat slots now carry entries).
+    api = FakeApi(events={"evtP": pfa_event("multi", "None")},
+                  progress_events=[
+                      {"event_id": "evtP",
+                       "completed_stages": [
+                           {"stage_index": 0, "time_ms": 850000},
+                           {"stage_index": 1, "time_ms": 720000},
+                           {"stage_index": 2, "time_ms": 640000},
+                           {"stage_index": 3, "time_ms": 650000},
+                           {"stage_index": 4, "time_ms": 660000},
+                           {"stage_index": 5, "time_ms": 900000},
+                       ],
+                       "total_time_ms": (850000 + 720000 + 640000 + 650000
+                                         + 660000 + 900000),
+                       "attempts_used": 0},
+                  ])
+    d = make_dispatcher(api)
+    d._challenge_event_map = {800001: "evtP"}
+    d._challenge_subevent_map = {800001: 2}
+    r = d._stage_complete(sc(1, race_status=5))
+    check("multi last leg: DNF marker sent", len(api.submitted), 1)
+    if api.submitted:
+        s = api.submitted[0]
+        check("multi last leg: wreck on the final leg -> rest of that leg"
+              " only, no cross-leg entries",
+              (s.get("dnf_stage_index"), s.get("dnf_stages")),
+              (1, [{"stage_index": 1, "time_ms": 900000}]))
+    check("multi last leg: State=2 (championship finished for this run)",
           unwrap(r["Progress"]["State"]), 2)
 
     print()

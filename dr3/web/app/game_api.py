@@ -406,8 +406,10 @@ def api_game_stage_complete():
         # and only flag entries as non-finishes. Never burns an attempt — a
         # mid-leg DNF must not lock out the rest of the leg. dnf_stages (step 3)
         # lists every skipped stage — from the wreck up to the next service
-        # area — with its max time: each gets flagged, and any without a stored
-        # pre-persisted value is given the limit, so the count-based progress
+        # area, which in Multi-Location mode can span later legs (each such
+        # entry carries its own event_index; absent = this marker's leg) — with
+        # its max time: each gets flagged, and any without a stored pre-
+        # persisted value is given the limit, so the count-based progress
         # resumes right after the last flagged stage.
         rs = int(data.get('race_status') or 4)
         dnf_list = data.get('dnf_stages')
@@ -417,9 +419,12 @@ def api_game_stage_complete():
                 try:
                     si = int(item.get('stage_index'))
                     t = int(item.get('time_ms') or 0)
+                    ei = item.get('event_index')
+                    if ei is None:
+                        ei = event_index
+                    p = global_stage_index(event, int(ei), si)
                 except (TypeError, ValueError):
                     continue
-                p = global_stage_index(event, event_index, si)
                 if p >= 0:
                     targets.append((p, max(0, t)))
         if not targets:
