@@ -480,6 +480,10 @@ def club_detail(club_id: str):
         except ValueError:
             return None
 
+    chrono_rank = {c['event']['id']: i for i, c in enumerate(
+        sorted(championships, key=lambda c: (c['event'].get('start_time') or '',
+                                             c['event']['id'])))}
+
     champ_selectors = []
     for i, c in enumerate(championships):
         rounds = c['rounds']
@@ -488,7 +492,7 @@ def club_detail(club_id: str):
         champ_selectors.append({
             'index': i,
             'event_id': c['event']['id'],
-            'name': f'Championship {i + 1}',
+            'name': f'Championship {chrono_rank[c["event"]["id"]]}',
             'status': c['status'],
             'window_text': window_text(_dt(start_iso), _dt(end_iso)),
         })

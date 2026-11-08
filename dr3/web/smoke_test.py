@@ -1609,6 +1609,18 @@ def main() -> int:
               and 'id="board-body"' in det,
               f'status={r.status_code}')
 
+        m = re.search(r'id="board-state">(.*?)</script>', det, re.S)
+        sels = json.loads(m.group(1))['selectors'] if m else []
+        with app.app_context():
+            starts = {e.id: e.start_time for e in Event.query.filter_by(club_id=club_id)}
+        chrono = [eid for eid, _ in sorted(starts.items(), key=lambda kv: (kv[1] or '', kv[0]))]
+        want_names = {eid: f'Championship {i}' for i, eid in enumerate(chrono)}
+        got_names = {s['event_id']: s['name'] for s in sels}
+        check('club detail: championship numbers chronological from 0 (oldest first)',
+              got_names == want_names
+              and next((s['name'] for s in sels if s['event_id'] == eid2), '') == 'Championship 0',
+              f'got={got_names} want={want_names}')
+
         api = client.get(
             f'/clubs/{club_id}/event-board?event={eid2}&round=0&mode=overall')
         check('event-board API: overall returns 200 JSON',
