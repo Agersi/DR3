@@ -1099,6 +1099,10 @@ def main() -> int:
           b'<th>Gold</th><th>Silver</th><th>Bronze</th>' in r.data, f'status={r.status_code}')
     check('club detail: status merged into chips-row (no separate Your status panel)',
           b'class="chips-row club-status"' in r.data and b'Your status' not in r.data, f'status={r.status_code}')
+    owner_actions = ('/clubs/%s/leave' % club_id).encode()
+    check('club detail: owner sees no join/leave action',
+          b'Join club' not in r.data and b'Request to join' not in r.data
+          and b'/join"' not in r.data and owner_actions not in r.data, f'status={r.status_code}')
 
     # 13. second user registers, verifies, requests to join
     client2 = app.test_client()

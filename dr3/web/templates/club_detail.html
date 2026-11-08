@@ -21,7 +21,8 @@
   {% elif is_admin %}<span class="chip chip-warn">Admin</span>
   {% elif is_member %}<span class="chip chip-ok">Member</span>{% endif %}
   <span class="club-status-actions">
-    {% if is_member and not is_owner %}
+    {% if is_owner %}
+    {% elif is_member %}
       <form method="post" action="{{ url_for('clubs.leave_club', club_id=club.id) }}" class="inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="warn small">Leave</button>
