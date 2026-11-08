@@ -487,16 +487,16 @@
   }
 
   document.getElementById('champ-prev').addEventListener('click', function () {
-    if (state.champ_index > 0) {
-      state.champ_index -= 1;
+    if (state.champ_index < state.selectors.length - 1) {
+      state.champ_index += 1;
       state.event_id = state.selectors[state.champ_index].event_id;
       state.round_index = 0;
       load();
     }
   });
   document.getElementById('champ-next').addEventListener('click', function () {
-    if (state.champ_index < state.selectors.length - 1) {
-      state.champ_index += 1;
+    if (state.champ_index > 0) {
+      state.champ_index -= 1;
       state.event_id = state.selectors[state.champ_index].event_id;
       state.round_index = 0;
       load();

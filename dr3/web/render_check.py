@@ -279,6 +279,13 @@ def main() -> int:
               and 'id="tab-members" hidden' in det, f'status={r.status_code}')
         check('club detail: members tab carries Gold/Silver/Bronze podium columns',
               '<th>Gold</th><th>Silver</th><th>Bronze</th>' in det, f'status={r.status_code}')
+        check('club detail: champ arrows step left=N-1 (older) / right=N+1 (newer)',
+              "document.getElementById('champ-prev').addEventListener('click', function () {\n"
+              '    if (state.champ_index < state.selectors.length - 1) {\n'
+              '      state.champ_index += 1;' in det
+              and "document.getElementById('champ-next').addEventListener('click', function () {\n"
+              '    if (state.champ_index > 0) {\n'
+              '      state.champ_index -= 1;' in det, f'status={r.status_code}')
         # championship builder: create a fresh draft, render edit + preview
         r = client.post(f'/clubs/{club_id}/championship/new', data={'num_events': '2', 'num_stages': '3'}, follow_redirects=False)
         check('champ new -> redirect to edit', r.status_code == 302, f'status={r.status_code}')
