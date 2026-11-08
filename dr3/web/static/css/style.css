@@ -463,12 +463,12 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
 .muted { color: var(--muted); }
 .small { font-size: 0.85rem; }
 
-.champ-selector { display: flex; align-items: stretch; gap: 0.6rem; margin-bottom: 0.8rem; }
-.champ-arrow { flex: none; width: 2.6rem; display: flex; align-items: center; justify-content: center; background: var(--card); border: 2px solid var(--line); color: var(--text); cursor: pointer; font-size: 0.9rem; }
+.champ-selector { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.3rem; }
+.champ-arrow { flex: none; width: 2.8rem; height: 2.8rem; display: flex; align-items: center; justify-content: center; background: var(--card); border: 2px solid var(--line); color: var(--text); cursor: pointer; font-size: 0.9rem; margin: 0; }
 .champ-arrow:hover { border-color: var(--accent); color: var(--accent); }
-.champ-center { flex: 1 1 auto; display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; background: var(--card); border: 2px solid var(--line); padding: 0.45rem 0.8rem; }
+.champ-center { flex: 1 1 auto; display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; background: var(--card); border: 2px solid var(--line); padding: 0.4rem 0.8rem; align-content: center; }
 .champ-name { font-family: var(--display); font-weight: 700; font-size: 1.15rem; letter-spacing: 0.01em; }
-.champ-window { color: var(--muted); font-size: 0.9rem; }
+.champ-window { color: var(--muted); font-size: 0.85rem; }
 
 .round-strip { display: flex; gap: 0.6rem; overflow-x: auto; padding-bottom: 0.3rem; margin-bottom: 0.8rem; }
 .round-box { flex: none; min-width: 150px; text-align: left; background: var(--card); border: 2px solid var(--line); padding: 0.5rem 0.7rem; cursor: pointer; display: flex; flex-direction: column; gap: 0.15rem; }

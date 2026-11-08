@@ -286,6 +286,12 @@ def main() -> int:
               and "document.getElementById('champ-next').addEventListener('click', function () {\n"
               '    if (state.champ_index > 0) {\n'
               '      state.champ_index -= 1;' in det, f'status={r.status_code}')
+        board_css = client.get('/static/css/style.css').get_data(as_text=True)
+        check('club detail: champ selector CSS (centered row, square arrows, tight margins)',
+              '.champ-selector { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.3rem; }' in board_css
+              and '.champ-arrow { flex: none; width: 2.8rem; height: 2.8rem; display: flex; align-items: center; justify-content: center; background: var(--card); border: 2px solid var(--line); color: var(--text); cursor: pointer; font-size: 0.9rem; margin: 0; }' in board_css
+              and '.champ-center { flex: 1 1 auto; display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; background: var(--card); border: 2px solid var(--line); padding: 0.4rem 0.8rem; align-content: center; }' in board_css
+              and '.champ-window { color: var(--muted); font-size: 0.85rem; }' in board_css, '')
         # championship builder: create a fresh draft, render edit + preview
         r = client.post(f'/clubs/{club_id}/championship/new', data={'num_events': '2', 'num_stages': '3'}, follow_redirects=False)
         check('champ new -> redirect to edit', r.status_code == 302, f'status={r.status_code}')
