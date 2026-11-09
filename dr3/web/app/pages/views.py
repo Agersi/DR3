@@ -171,6 +171,7 @@ def _home_stats(now) -> dict:
         'stages_driven': stages_driven,
         'survival_rate': survival_rate,
         'total_distance_km': total_distance_m / 1000.0,
+        'total_distance_miles': total_distance_m / 1000.0 * 0.621371,
         'last_terminal': last_terminal,
         'recent': _recent_stage_times(0, 10),
     }

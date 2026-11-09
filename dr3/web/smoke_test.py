@@ -2255,16 +2255,19 @@ def main() -> int:
     check('home survival rate matches stage_runs finish ratio',
           (f'{n_stages / n_driven * 100:.1f}%' if n_driven else '—') in html,
           f'done={n_stages} driven={n_driven}')
-    check('home total distance card matches stage_runs sum',
-          f'{dist_m / 1000.0:.1f}' in html, str(dist_m))
+    # Distance card is two-part: km + miles (km x 0.621371), both from the sum.
+    check('home distance card shows km + miles from stage_runs sum',
+          f'{dist_m / 1000.0:.1f}' in html
+          and f'{dist_m / 1000.0 * 0.621371:.1f}' in html, str(dist_m))
     check('home lists recent stage time (smokedriver 6:59.000)',
           'Smoke Driver' in html and '6:59.000' in html)
     # stat cards link out; distance/stages cards stay static
     check('home stat cards: drivers link + combined clubs card (top all, bottom active)',
-          '<a class="stat-card" href="/drivers">' in html
+          '<a class="stat-card stat-drivers" href="/drivers">' in html
           and '<a class="stat-link" href="/clubs">' in html
           and '<a class="stat-link" href="/clubs?active=1">' in html
           and 'Kilometers Driven' in html
+          and 'Miles Driven' in html
           and 'Days without a Terminal Damage' in html)
     # terminal-damage card reflects the newest rs 4/5 stage slot
     with app.app_context():

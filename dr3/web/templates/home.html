@@ -54,7 +54,7 @@
 
 <h2>DR3 in numbers</h2>
 <div class="grid-stats">
-  <a class="stat-card" href="{{ url_for('pages.drivers') }}">
+  <a class="stat-card stat-drivers" href="{{ url_for('pages.drivers') }}">
     <span class="stat-num">{{ stats.drivers }}</span><span class="stat-label">Drivers</span>
   </a>
   <div class="stat-card stat-clubs">
@@ -65,8 +65,13 @@
       <span class="stat-num">{{ stats.active_clubs }}</span><span class="stat-label">Active clubs</span>
     </a>
   </div>
-  <div class="stat-card">
-    <span class="stat-num">{{ '%.1f'|format(stats.total_distance_km) }}</span><span class="stat-label">Kilometers Driven</span>
+  <div class="stat-card stat-distance">
+    <div class="stat-part">
+      <span class="stat-num">{{ '%.1f'|format(stats.total_distance_km) }}</span><span class="stat-label">Kilometers Driven</span>
+    </div>
+    <div class="stat-part">
+      <span class="stat-num">{{ '%.1f'|format(stats.total_distance_miles) }}</span><span class="stat-label">Miles Driven</span>
+    </div>
   </div>
   <div class="stat-card stat-stages">
     <div class="stat-part">
@@ -76,7 +81,7 @@
       <span class="stat-num">{{ stats.survival_rate }}</span><span class="stat-label">Survival Rate</span>
     </div>
   </div>
-  <div class="stat-card">
+  <div class="stat-card stat-days">
     <span class="stat-num">{{ stats.last_terminal.days if stats.last_terminal else '–' }}</span>
     <span class="stat-label">Days without a Terminal Damage</span>
     <span class="stat-sub">{% if stats.last_terminal %}last: {{ stats.last_terminal.driver }}{% else %}none recorded yet{% endif %}</span>

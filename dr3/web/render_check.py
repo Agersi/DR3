@@ -119,16 +119,21 @@ def main() -> int:
           and '.recent-box::-webkit-scrollbar { width: 10px; }' in css
           and '.recent-box::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--card); }' in css, '')
     check('home: stat cards link out (drivers + combined clubs card) + terminal-damage card',
-          '<a class="stat-card" href="/drivers">' in html
+          '<a class="stat-card stat-drivers" href="/drivers">' in html
           and '<a class="stat-link" href="/clubs">' in html
           and '<a class="stat-link" href="/clubs?active=1">' in html
           and 'Kilometers Driven' in html
+          and 'Miles Driven' in html
           and 'Stages Driven' in html
           and 'Survival Rate' in html
           and 'Days without a Terminal Damage' in html
           and 'stat-sub' in html
           and client.get('/static/css/style.css').get_data(as_text=True)
           .find('a.stat-card:hover {') != -1, '')
+    check('home: per-card stat-num font sizes (drivers 5rem, days-without-TD 3.5rem)',
+          '.stat-drivers .stat-num { font-size: 5rem; }' in css
+          and '.stat-days .stat-num { font-size: 3.5rem; }' in css
+          and '<div class="stat-card stat-days">' in html, '')
     check('home: stat card base CSS (space-between + centered)',
           '.stat-card {\n  background: var(--card);\n  border: 2px solid var(--line);\n  box-shadow: 4px 4px 0 var(--shadow);\n  padding: 1rem 1.1rem;\n  display: flex;\n  flex-direction: column;\n  gap: 0.35rem;\n  justify-content: space-between;\n  text-align: center;\n}' in css, '')
     check('home: combined clubs card CSS (stacked link rows + divider)',
@@ -142,6 +147,13 @@ def main() -> int:
           and '<div class="stat-card stat-stages">' in html
           and '<span class="stat-label">Stages Driven</span>' in html
           and '<span class="stat-label">Survival Rate</span>' in html, '')
+    check('home: distance card CSS (km + miles parts + divider)',
+          '.stat-distance {\n  padding: 0;\n  gap: 0;\n}' in css
+          and '.stat-distance .stat-part {\n  display: flex;\n  flex-direction: column;\n  gap: 0.35rem;\n  text-decoration: none;\n  padding: .7rem 1.1rem;\n  border: 2px solid transparent;\n  transition: transform 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;\n}' in css
+          and '.stat-distance .stat-part + .stat-part { border-top: 2px solid var(--line); }' in css
+          and '<div class="stat-card stat-distance">' in html
+          and '<span class="stat-label">Kilometers Driven</span>' in html
+          and '<span class="stat-label">Miles Driven</span>' in html, '')
     check('home: combined clubs card per-row hover (top half: top radii + scale 1.06 + card border/bg/shadow)',
           '.stat-clubs .stat-link:hover {\n  border-top-left-radius: .3rem;\n  border-top-right-radius: .3rem;\n  transform: scale(1.06);\n  z-index: 1;\n  border: 2px solid var(--line);\n  box-shadow: 4px 4px 0 var(--shadow);\n  background: var(--card);\n  box-shadow: inset 0 0 18px -8px rgba(175, 175, 175, 0.6), 4px 4px 0 var(--shadow), 0 8px 20px rgba(0, 0, 0, 0.35);\n}' in css, '')
     check('home: combined clubs card per-row hover (bottom half: bottom radii, top radii zeroed)',

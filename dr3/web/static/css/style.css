@@ -174,6 +174,8 @@ hr {
 .stat-num { font-family: var(--display); font-weight: 700; font-size: 2rem; line-height: 1; color: var(--accent); }
 .stat-label { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.85rem; color: var(--muted); }
 .stat-sub { font-family: var(--body); text-transform: none; letter-spacing: normal; font-size: 0.78rem; color: var(--muted); }
+.stat-drivers .stat-num { font-size: 5rem; }
+.stat-days .stat-num { font-size: 3.5rem; }
 a.stat-card { text-decoration: none; transition: transform 0.12s ease, box-shadow 0.12s ease; }
 a.stat-card:hover {
   transform: scale(1.03); z-index: 1;
@@ -229,6 +231,20 @@ a.stat-card:hover {
   transition: transform 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
 }
 .stat-stages .stat-part + .stat-part { border-top: 2px solid var(--line); }
+.stat-distance {
+  padding: 0;
+  gap: 0;
+}
+.stat-distance .stat-part {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  text-decoration: none;
+  padding: .7rem 1.1rem;
+  border: 2px solid transparent;
+  transition: transform 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+.stat-distance .stat-part + .stat-part { border-top: 2px solid var(--line); }
 
 /* ── Home panels (hero replacement) ────────────────── */
 
