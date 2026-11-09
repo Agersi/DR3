@@ -122,15 +122,17 @@ def main() -> int:
           '<a class="stat-card" href="/drivers">' in html
           and '<a class="stat-link" href="/clubs">' in html
           and '<a class="stat-link" href="/clubs?active=1">' in html
-          and 'Total distance' in html
+          and 'Kilometers Driven' in html
           and 'Days without a Terminal Damage' in html
           and 'stat-sub' in html
           and client.get('/static/css/style.css').get_data(as_text=True)
           .find('a.stat-card:hover {') != -1, '')
     check('home: combined clubs card CSS (stacked link rows + divider)',
-          '.stat-clubs { padding: 0; }' in css
-          and '.stat-clubs .stat-link {\n  display: flex; flex-direction: column; gap: 0.35rem;\n  text-decoration: none; padding: 1rem 1.1rem;\n}' in css
+          '.stat-clubs {\n  padding: 0;\n  gap: 0;\n}' in css
+          and '.stat-clubs .stat-link {\n  display: flex; flex-direction: column; gap: 0.35rem;\n  text-decoration: none; padding: 1rem 1.1rem;\n  transition: background 0.12s ease, box-shadow 0.12s ease;\n}' in css
           and '.stat-clubs .stat-link + .stat-link { border-top: 2px solid var(--line); }' in css, '')
+    check('home: combined clubs card per-row hover (two-button affordance)',
+          '.stat-clubs .stat-link:hover {\n  background: rgba(24, 28, 20, 0.25);\n  box-shadow: inset 0 0 18px -8px rgba(175, 175, 175, 0.6);\n}' in css, '')
     r = client.get('/drivers')
     drv_html = r.get_data(as_text=True)
     check('drivers page renders with the smoke driver',

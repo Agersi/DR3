@@ -2258,7 +2258,7 @@ def main() -> int:
           '<a class="stat-card" href="/drivers">' in html
           and '<a class="stat-link" href="/clubs">' in html
           and '<a class="stat-link" href="/clubs?active=1">' in html
-          and 'Total distance' in html
+          and 'Kilometers Driven' in html
           and 'Days without a Terminal Damage' in html)
     # terminal-damage card reflects the newest rs 4/5 stage slot
     with app.app_context():
