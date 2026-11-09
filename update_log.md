@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.66**
+- The telemetry status line now wraps instead of getting cut off, and the window is slightly taller so the Overlay page fits without a scrollbar.
+
 **v0.1.65**
 - Telemetry now works out of the box — DR3 sets up the game's data feed for you and shows its status on the Main tab.
 

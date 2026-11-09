@@ -1140,9 +1140,9 @@ def run_gui():
         except tk.TclError:
             pass
 
-    # Center on screen (tall enough that the update banner never forces a
-    # scrollbar on the Main tab)
-    w, h = 440, 610
+    # Center on screen. Tall enough that EVERY tab — including the Overlay
+    # tab's full card stack — fits without forcing a scrollbar.
+    w, h = 440, 630
     x = (root.winfo_screenwidth() - w) // 2
     y = (root.winfo_screenheight() - h) // 2
     root.geometry(f"{w}x{h}+{x}+{y}")
@@ -1460,7 +1460,17 @@ def run_gui():
     # failure modes (port busy / no data arriving) that used to only show up
     # as missing splits.
     tel_label = tk.Label(status_frame, text="", font=(UI_FONT, 9),
-                         fg=MUTED, bg=BG_CARD, anchor="w")
+                         fg=MUTED, bg=BG_CARD, anchor="w", justify="left")
+
+    def _tel_wrap(_e):
+        # Wrap to the label's full width so long status messages (e.g. the
+        # game-port hint) wrap to a second line instead of clipping — the window
+        # is fixed-size, so this width is stable once packed with fill="x".
+        w = tel_label.winfo_width()
+        if w > 20:
+            tel_label.configure(wraplength=w)
+
+    tel_label.bind("<Configure>", _tel_wrap)
 
     tel_tick = {"id": None}
     _game_udp_cache = {"ts": 0.0, "val": None}

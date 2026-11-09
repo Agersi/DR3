@@ -150,7 +150,8 @@ def check_gui(mod) -> int:
         mapped = sb is not None and sb.winfo_ismapped()
         fits = content_h <= visible_h + 2
         print(f"INFO {name}: content={content_h}px visible={visible_h}px scrollbar={'shown' if mapped else 'hidden'}")
-        if name in ("Main", "Logs") and (mapped or not fits):
+        # The window is sized so NO tab needs a scrollbar (Overlay included).
+        if mapped or not fits:
             failures += 1
             print(f"FAIL {name} tab overflows the window (scrollbar would appear)")
     notebook.select(tabs[0])
@@ -171,7 +172,11 @@ def check_gui(mod) -> int:
     # While the server runs the row is packed — confirm Main still fits then.
     if len(tel_labels) == 1:
         tel = tel_labels[0]
-        tel.configure(text="Telemetry listening on :20999 \u2014 no recent data")
+        # Use the longest real message (the game-port hint that used to clip):
+        # it must wrap to a second line (wraplength set) and still fit.
+        long_msg = ("Game sends UDP to :20777, DR3 listens on :20999 "
+                    "\u2014 forwarded in SimHub")
+        tel.configure(text=long_msg)
         tel.pack(fill="x", padx=15, pady=(0, 8))
         root.update_idletasks()
         root.update()
@@ -179,12 +184,16 @@ def check_gui(mod) -> int:
         bbox = canvas.bbox("all")
         running_h = bbox[3] if bbox else 0
         visible_h = canvas.winfo_height()
-        print(f"INFO Main with telemetry row: content={running_h}px visible={visible_h}px")
+        wraplen = int(tel.cget("wraplength") or 0)
+        print(f"INFO Main with telemetry row: content={running_h}px visible={visible_h}px wraplength={wraplen}")
         tel.pack_forget()
         root.update()
         if running_h > visible_h + 2:
             failures += 1
             print("FAIL Main tab overflows the window with the telemetry row shown")
+        if wraplen <= 0:
+            failures += 1
+            print("FAIL telemetry label has no wraplength (long message would clip)")
 
     if len(tel_labels) == 1 and not tel_labels[0].winfo_ismapped():
         print("OK   telemetry row exists in the status card, hidden while stopped")
