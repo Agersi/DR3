@@ -130,11 +130,14 @@ def _home_stats(now) -> dict:
         if event_is_active(ed, now) or event_is_upcoming(ed, now):
             active_clubs.add(e.club_id)
 
-    stages_done = 0
-    for r in Result.query.all():
-        for s in json.loads(r.stages_json or '[]'):
-            if int(s.get('time_ms', 0) or 0) > 0:
-                stages_done += 1
+    from sqlalchemy import func
+
+    # Same definition as /drivers + the profile pages: every recorded run
+    # (club, official, time trial) that finished cleanly — DNF markers stored
+    # at their stage limit no longer count as completed.
+    stages_done = StageRun.query.filter(StageRun.player_finished.is_(True)).count()
+    total_distance_m = int(db.session.query(func.sum(StageRun.distance_m))
+                           .scalar() or 0)
 
     last_terminal_at = None
     last_terminal_user = None
@@ -162,6 +165,7 @@ def _home_stats(now) -> dict:
         'clubs': Club.query.count(),
         'active_clubs': len(active_clubs),
         'stages_done': stages_done,
+        'total_distance_km': total_distance_m / 1000.0,
         'last_terminal': last_terminal,
         'recent': _recent_stage_times(0, 10),
     }

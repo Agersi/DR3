@@ -57,12 +57,17 @@
   <a class="stat-card" href="{{ url_for('pages.drivers') }}">
     <span class="stat-num">{{ stats.drivers }}</span><span class="stat-label">Drivers</span>
   </a>
-  <a class="stat-card" href="{{ url_for('clubs.clubs_list') }}">
-    <span class="stat-num">{{ stats.clubs }}</span><span class="stat-label">Clubs</span>
-  </a>
-  <a class="stat-card" href="{{ url_for('clubs.clubs_list', active='1') }}">
-    <span class="stat-num">{{ stats.active_clubs }}</span><span class="stat-label">Active clubs</span>
-  </a>
+  <div class="stat-card stat-clubs">
+    <a class="stat-link" href="{{ url_for('clubs.clubs_list') }}">
+      <span class="stat-num">{{ stats.clubs }}</span><span class="stat-label">Clubs</span>
+    </a>
+    <a class="stat-link" href="{{ url_for('clubs.clubs_list', active='1') }}">
+      <span class="stat-num">{{ stats.active_clubs }}</span><span class="stat-label">Active clubs</span>
+    </a>
+  </div>
+  <div class="stat-card">
+    <span class="stat-num">{{ '%.1f'|format(stats.total_distance_km) }}</span><span class="stat-label">Total distance</span>
+  </div>
   <div class="stat-card"><span class="stat-num">{{ stats.stages_done }}</span><span class="stat-label">Stages completed</span></div>
   <div class="stat-card">
     <span class="stat-num">{{ stats.last_terminal.days if stats.last_terminal else '–' }}</span>

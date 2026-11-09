@@ -2236,24 +2236,29 @@ def main() -> int:
           'trademark of Codemasters' in html
           and 'not affiliated with Codemasters or EA' in html)
     with app.app_context():
-        from app.models import Result as _Result2
+        from sqlalchemy import func as _func
+        from app.models import Result as _Result2, StageRun as _StageRun
         n_drivers = User.query.count()
         n_clubs = Club.query.count()
-        n_stages = sum(1 for rr in _Result2.query.all()
-                       for s in json.loads(rr.stages_json or '[]')
-                       if int(s.get('time_ms', 0) or 0) > 0)
+        # Same definition as /drivers: cleanly finished stage_runs rows of all
+        # run types (club + official + time trial), DNF markers excluded.
+        n_stages = _StageRun.query.filter(_StageRun.player_finished.is_(True)).count()
+        dist_m = int(db.session.query(_func.sum(_StageRun.distance_m)).scalar() or 0)
     nums = {label: num for num, label in _re.findall(
         r'stat-num">(\d+)</span><span class="stat-label">([^<]+)<', html)}
     check('home stat cards match DB counts',
           nums.get('Drivers') == str(n_drivers) and nums.get('Clubs') == str(n_clubs)
           and nums.get('Stages completed') == str(n_stages), str(nums))
+    check('home total distance card matches stage_runs sum',
+          f'{dist_m / 1000.0:.1f}' in html, str(dist_m))
     check('home lists recent stage time (smokedriver 6:59.000)',
           'Smoke Driver' in html and '6:59.000' in html)
-    # stat cards link out; stages card stays static
-    check('home stat cards: drivers/clubs/active link, stages static',
+    # stat cards link out; distance/stages cards stay static
+    check('home stat cards: drivers link + combined clubs card (top all, bottom active)',
           '<a class="stat-card" href="/drivers">' in html
-          and '<a class="stat-card" href="/clubs">' in html
-          and '<a class="stat-card" href="/clubs?active=1">' in html
+          and '<a class="stat-link" href="/clubs">' in html
+          and '<a class="stat-link" href="/clubs?active=1">' in html
+          and 'Total distance' in html
           and 'Days without a Terminal Damage' in html)
     # terminal-damage card reflects the newest rs 4/5 stage slot
     with app.app_context():
