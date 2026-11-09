@@ -23,21 +23,24 @@
 <div class="panel" id="telemetry-apps">
   <h2>Using SimHub or another Telemetry app</h2>
   <p>DR3 reads the game's live telemetry over UDP to compute real per-segment stage
-     splits (used on the website and for time trial ghosts). It picks the port
-     automatically: if your game config declares an enabled <code>&lt;custom_udp&gt;</code>
-     stream, DR3 listens there (typically
-     <code>127.0.0.1:20999</code>); otherwise it listens on the game's own standard
-     telemetry port (<code>20777</code>). No setup is needed if you don't use any
-     other telemetry app.</p>
-  <p>If you run SimHub (or a similar tool) alongside DR3, keep that app on the
-     game's standard port (<code>20777</code>) and forward its UDP telemetry output
-     to the custom port DR3 listens on — for example in SimHub's settings, enable
-     the UDP broadcast/forward option and target <code>127.0.0.1</code>, port
-     <code>20999</code>. Both tools then receive data.</p>
-  <p class="meta">If the port is already taken or no data arrives, DR3 logs a clear
-     message and splits simply fall back to an even profile — stage times and time
-     trials still record normally. You can also pin a specific port with
-     <code>"telemetry_port"</code> in the DR3 <code>config.json</code>.</p>
+     splits (used on the website and for time trial ghosts). DR3 listens on its own
+     port — <code>telemetry_port</code> in its <code>config.json</code>, default
+     <code>20999</code>. When DR3 starts it quietly makes sure the game actually sends
+     telemetry there: if the game's UDP is missing or switched off, DR3 turns it on;
+     if the game is already sending to the SimHub default port (<code>20777</code>) DR3
+     leaves that alone; if it's on any other port DR3 points it at <code>20999</code>.
+     A backup of the file is kept and a line appears in the Logs tab whenever DR3 changes
+     anything, so nothing is ever edited without a trace.</p>
+  <p>If you run SimHub (or a similar tool) alongside DR3, keep the game on its standard
+     port (<code>20777</code>) — DR3 won't touch that value — and forward SimHub's UDP
+     telemetry output to DR3's port: in SimHub's settings enable the UDP broadcast/
+     forward option and target <code>127.0.0.1</code>, port <code>20999</code>. Both
+     tools then receive data.</p>
+  <p class="meta">To change DR3's own port, edit <code>"telemetry_port"</code> in the
+     DR3 <code>config.json</code>, then press STOP and START (or relaunch DR3). The
+     Main-tab telemetry line always shows the current state — connected, waiting for
+     data, or why it isn't receiving. If no data arrives, splits simply fall back to an
+     even profile and stage times / time trials still record normally.</p>
 </div>
 
 <div class="panel" id="auto-launch">

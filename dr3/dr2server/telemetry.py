@@ -1,10 +1,12 @@
 """UDP telemetry listener for DiRT Rally 2.0.
 
-Binds the game's UDP telemetry port — an enabled ``<custom_udp>`` stream when
-the game config has one (SimHub keeps the standard ``<udp>`` port, DR3 is
-secondary), else the standard ``<udp>`` port; auto-detected from the game's
-``hardware_settings_config.xml``, default 20777 — and records per-stage run
-trajectories.
+Binds the UDP telemetry port configured for DR3 (``telemetry_port`` in
+config.json, default 20999) and records per-stage run trajectories. The game's
+``hardware_settings_config.xml`` ``<udp>`` element is normalized so the game
+sends to a port DR3 receives: a missing/disabled ``<udp>`` is enabled (at the
+DR3 port), an enabled one on 20777 (the SimHub default) is left alone, and any
+other enabled port is rewritten to the DR3 port. See read_game_udp() /
+ensure_game_udp_for_dr3().
 The game emits one 264-byte datagram (~50 Hz) while a stage is live; field [1]
 is the stage clock (s) and field [2] is distance-along-stage (m), which is all
 that is needed to reproduce the per-segment split times that
@@ -106,6 +108,147 @@ def detect_udp_port(default: int = 20777) -> int:
     except Exception:
         pass
     return default
+
+
+# ---------------------------------------------------------------------------
+# Game hardware config — telemetry UDP enable/normalize for DR3
+# ---------------------------------------------------------------------------
+
+# The SimHub default the game ships on. We never rewrite an enabled <udp>
+# element that is already on this port (SimHub receives there and forwards to
+# DR3's own port).
+SIMHUB_UDP_PORT = 20777
+
+
+def game_config_path() -> str:
+    """Absolute path of the game's hardware_settings_config.xml."""
+    home = os.path.expanduser("~")
+    return os.path.join(
+        home, "Documents", "My Games", "DiRT Rally 2.0",
+        "hardwaresettings", "hardware_settings_config.xml")
+
+
+def _xml_elem_attrs(tag: str, text: str) -> Optional[dict]:
+    """Attribute dict of the first ``<tag ...>`` element in ``text``; None when
+    absent. The leading ``<`` in the match keeps this from ever hitting a
+    differently-named element that merely ends in the tag name (e.g.
+    ``custom_udp`` vs ``udp``)."""
+    m = re.search(r"<%s\b([^>]*?)/?>" % tag, text)
+    if not m:
+        return None
+    attrs = {}
+    for name, value in re.findall(r'(\w+)="([^"]*)"', m.group(1)):
+        attrs[name] = value
+    return attrs
+
+
+def read_game_udp(path: Optional[str] = None) -> dict:
+    """Best-effort description of the game's ``<udp>`` element for the status
+    indicator. Returns ``{"present": bool, "enabled": bool, "port": int|None}``;
+    present=False / enabled=False / port=None when the file is missing or has no
+    ``<udp>`` line."""
+    out = {"present": False, "enabled": False, "port": None}
+    try:
+        p = path or game_config_path()
+        if not os.path.isfile(p):
+            return out
+        with open(p, "r", encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    except Exception:
+        return out
+    attrs = _xml_elem_attrs("udp", text)
+    if attrs is None:
+        return out
+    out["present"] = True
+    out["enabled"] = attrs.get("enabled") == "true"
+    port = attrs.get("port", "")
+    if port.isdigit():
+        n = int(port)
+        if 0 < n < 65536:
+            out["port"] = n
+    return out
+
+
+def _set_attr_in_elem(text: str, tag: str, attr: str, value: str) -> str:
+    """Rewrite ``attr`` to ``value`` on the first ``<tag ...>`` element, or add
+    it if absent. Only that attribute changes — the rest of the element (and its
+    exact self-closing style) is preserved."""
+    m = re.search(r"<%s\b[^>]*>" % tag, text)
+    if not m:
+        return text
+    el = m.group(0)
+    am = re.search(r'\b%s="[^"]*"' % attr, el)
+    if am:
+        new_el = el[:am.start()] + f'{attr}="{value}"' + el[am.end():]
+    else:
+        close = el.rfind(">")
+        slash = el.rfind("/")
+        if slash != -1 and slash == close - 1:
+            new_el = el[:slash] + f' {attr}="{value}"' + el[slash:]
+        else:
+            new_el = el[:close] + f' {attr}="{value}"' + el[close:]
+    return text[:m.start()] + new_el + text[m.end():]
+
+
+def ensure_game_udp_for_dr3(target_port: int, path: Optional[str] = None,
+                            log=None) -> Optional[str]:
+    """Normalize the game's ``<udp>`` element so DR3 (listening on
+    ``target_port``) receives telemetry. Silent edit + ``.bak`` backup; writes
+    only when a change is needed. Returns a short action description for the log,
+    or None when nothing changed / no file / no safe edit.
+
+    Rules:
+      * no ``<udp>`` element          -> insert one, enabled, at target_port
+      * disabled                      -> set enabled="true" (port kept)
+      * enabled and port == 20777     -> leave untouched (SimHub default)
+      * enabled and other port        -> rewrite port to target_port
+    """
+    p = path or game_config_path()
+    if not os.path.isfile(p):
+        return None
+    try:
+        with open(p, "r", encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    except Exception:
+        return None
+
+    attrs = _xml_elem_attrs("udp", text)
+    new_text = None
+    action = None
+
+    if attrs is None:
+        el = ('<udp enabled="true" extradata="3" ip="127.0.0.1" '
+              f'port="{target_port}" delay="1" />')
+        m = re.search(r"<motion_platform\b[^>]*>", text)
+        if not m:
+            return None
+        new_text = text[:m.end()] + "\n        " + el + text[m.end():]
+        action = f"game config had no <udp> line — added one on :{target_port}"
+    else:
+        enabled = attrs.get("enabled") == "true"
+        port = int(attrs["port"]) if attrs.get("port", "").isdigit() else None
+        if not enabled:
+            new_text = _set_attr_in_elem(text, "udp", "enabled", "true")
+            action = f"game UDP was disabled — enabled it on :{port or '?'}"
+        elif port is not None and port != SIMHUB_UDP_PORT and port != target_port:
+            new_text = _set_attr_in_elem(text, "udp", "port", str(target_port))
+            action = (f"game UDP was on :{port} — set it to DR3's port "
+                      f":{target_port}")
+
+    if new_text is None or new_text == text:
+        return None
+    try:
+        with open(p + ".bak", "w", encoding="utf-8") as fh:
+            fh.write(text)
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write(new_text)
+    except Exception as exc:
+        if log:
+            log(f"[TEL] could not update game UDP config: {exc}")
+        return None
+    if log:
+        log(f"[TEL] {action} (backup written to ...{os.path.basename(p)}.bak)")
+    return action
 
 
 @dataclass

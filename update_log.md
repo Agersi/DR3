@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.65**
+- Telemetry now works out of the box — DR3 sets up the game's data feed for you and shows its status on the Main tab.
+
 **v0.1.64**
 - The "Start automatically when DR3 opens" option is now off by default and can only be enabled once you've saved your game token.
 

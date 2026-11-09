@@ -2,7 +2,8 @@
 
 - tel_status_text() maps every state to the right text/color key
   (stopped/hidden, disabled in config, port busy, waiting for data,
-  connected, stale-after-data);
+  connected, stale-after-data, and the game-aware hints: UDP disabled -> warn,
+  game already on DR3's port -> muted, game on a different port -> warn);
 - the real GUI boots with the new status-card row, and while the server is
   stopped the Main tab still fits the fixed window (no scrollbar) and the
   telemetry row exists but is hidden.
@@ -70,6 +71,28 @@ def check_states(mod) -> int:
     st = t(True, True, {"port": 20999}, FakeListener(packets_seen=5, last_packet_wall=now - 30))
     check("stale after having seen data",
           st is not None and st[1] == "muted" and "no recent data" in st[0], repr(st))
+
+    # Game-aware hints (server up, listening, never seen a packet).
+    st = t(True, True, {"port": 20999}, FakeListener(packets_seen=0),
+           game={"present": True, "enabled": False, "port": None})
+    check("game UDP disabled -> warn (restart the game)",
+          st is not None and st[1] == "warn" and "restart the game" in st[0], repr(st))
+
+    st = t(True, True, {"port": 20999}, FakeListener(packets_seen=0),
+           game={"present": True, "enabled": True, "port": 20999})
+    check("game already on DR3 port -> muted (start a stage)",
+          st is not None and st[1] == "muted" and "start a stage" in st[0], repr(st))
+
+    st = t(True, True, {"port": 20999}, FakeListener(packets_seen=0),
+           game={"present": True, "enabled": True, "port": 20777})
+    check("game on a different port -> warn (forward in SimHub)",
+          st is not None and st[1] == "warn" and ":20777" in st[0]
+          and "SimHub" in st[0], repr(st))
+
+    st = t(True, True, {"port": 20999}, FakeListener(packets_seen=0),
+           game={"present": True, "enabled": True, "port": None})
+    check("game enabled but no parseable port -> muted",
+          st is not None and st[1] == "muted" and "start a stage" in st[0], repr(st))
 
     return failures
 

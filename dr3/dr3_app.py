@@ -974,6 +974,23 @@ def save_config(config: dict) -> None:
     CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
 
 
+# DR3's own UDP telemetry port. Always present in config.json after first run
+# (see ensure_telemetry_defaults); users change it by editing config.json.
+DEFAULT_TELEMETRY_PORT = 20999
+
+
+def ensure_telemetry_defaults(config: dict) -> None:
+    """Make sure ``telemetry_port`` is a valid port, defaulting to 20999, and
+    persist on first run so the key is visible/editable in config.json."""
+    try:
+        if int(config.get("telemetry_port") or 0):
+            return
+    except (TypeError, ValueError):
+        pass
+    config["telemetry_port"] = DEFAULT_TELEMETRY_PORT
+    save_config(config)
+
+
 # ---------------------------------------------------------------------------
 # Elevated helper-script content (Linux: invoked via pkexec).
 # Windows uses the in-process `--admin-helper` re-launch path instead.
@@ -1029,14 +1046,18 @@ def _linux_admin_stop_script() -> str:
     )
 
 
-def tel_status_text(server_up: bool, enabled: bool, holder: dict, listener) -> Optional[tuple]:
+def tel_status_text(server_up: bool, enabled: bool, holder: dict, listener,
+                    game=None) -> Optional[tuple]:
     """(text, color-key) for the Main-tab telemetry row; None hides it.
 
     States: server stopped (None), disabled in config.json, bind failed
-    (holder carries the busy port), listening with no data yet, connected
-    (fresh packets within 20 s), or listening but silent after having seen
-    data. ``listener`` may be any object exposing .port / .packets_seen /
-    .last_packet_wall (the TelemetryListener does).
+    (holder carries the busy port), connected (fresh packets within 20 s), or —
+    with no recent data — a game-aware hint from ``game`` (the parsed
+    hardware_settings_config.xml ``<udp>`` element as read_game_udp() returns):
+    file missing/unreadable, UDP disabled, game already sending to our port, or
+    game on a different port (forward in SimHub). ``listener`` may be any object
+    exposing .port / .packets_seen / .last_packet_wall (the TelemetryListener
+    does); ``game`` may be None.
     """
     if not server_up:
         return None
@@ -1049,9 +1070,19 @@ def tel_status_text(server_up: bool, enabled: bool, holder: dict, listener) -> O
     fresh = (time.time() - listener.last_packet_wall) <= 20.0
     if fresh:
         return (f"\u2713 Telemetry connected on :{port}", "good")
-    if listener.packets_seen == 0:
+    if listener.packets_seen > 0:
+        return (f"Telemetry listening on :{port} \u2014 no recent data", "muted")
+    # No data yet and never seen any — give a game-aware hint.
+    if game is None or not game.get("present"):
         return (f"Telemetry waiting for data on :{port}", "muted")
-    return (f"Telemetry listening on :{port} \u2014 no recent data", "muted")
+    if not game.get("enabled"):
+        return ("Game UDP disabled \u2014 DR3 enabled it; restart the game", "warn")
+    gport = game.get("port")
+    if gport is None or gport == port:
+        return (f"Listening on the game's port :{port} \u2014 start a stage to see data",
+                "muted")
+    return (f"Game sends UDP to :{gport}, DR3 listens on :{port} \u2014 forward in "
+            f"SimHub or set telemetry_port to {gport}", "warn")
 
 
 # ---------------------------------------------------------------------------
@@ -1063,6 +1094,7 @@ def run_gui():
     from tkinter import ttk, messagebox
 
     config = load_config()
+    ensure_telemetry_defaults(config)
     server_thread: Optional[threading.Thread] = None
     server_running = threading.Event()
     shutdown_flag = threading.Event()
@@ -1091,7 +1123,8 @@ def run_gui():
     TEXT = "#ECDFCC"
     MUTED = "#697565"
     BORDER = "#697565"
-    _TEL_COLORS = {"good": GREEN, "bad": RED, "muted": MUTED}
+    WARN = "#afff95"
+    _TEL_COLORS = {"good": GREEN, "bad": RED, "muted": MUTED, "warn": WARN}
 
     # --- Window setup ---
     root = tk.Tk()
@@ -1430,6 +1463,17 @@ def run_gui():
                          fg=MUTED, bg=BG_CARD, anchor="w")
 
     tel_tick = {"id": None}
+    _game_udp_cache = {"ts": 0.0, "val": None}
+
+    def _game_udp():
+        # Re-read the game's <udp> element at most once every 10 s — the file is
+        # stable while the game runs and we don't want to touch disk each tick.
+        now = time.time()
+        if now - _game_udp_cache["ts"] > 10.0:
+            from dr2server.telemetry import read_game_udp
+            _game_udp_cache["val"] = read_game_udp()
+            _game_udp_cache["ts"] = now
+        return _game_udp_cache["val"]
 
     def _update_tel_indicator():
         app = app_holder.get("instance")
@@ -1440,6 +1484,7 @@ def run_gui():
             enabled=bool(config.get("telemetry_enabled", True)),
             holder=telemetry_holder,
             listener=listener,
+            game=_game_udp() if server_running.is_set() else None,
         )
         if state is None:
             tel_label.pack_forget()
@@ -1472,6 +1517,25 @@ def run_gui():
                 _LOG_FILE.flush()
             except Exception:
                 pass
+
+    def _normalize_game_udp():
+        """Silently enable/point the game's <udp> telemetry at DR3's port so
+        telemetry works out of the box (writes a .bak backup + a log line only
+        when something actually changes)."""
+        if not IS_WIN or not bool(config.get("telemetry_enabled", True)):
+            return
+        from dr2server.telemetry import ensure_game_udp_for_dr3
+        try:
+            tp = int(config.get("telemetry_port") or 0)
+        except (TypeError, ValueError):
+            tp = 0
+        if not tp:
+            tp = DEFAULT_TELEMETRY_PORT
+        ensure_game_udp_for_dr3(tp, log=log)
+
+    # Run once shortly after boot so the game config is already correct by the
+    # time the user launches the game (no restart needed for a fresh fix).
+    root.after(600, _normalize_game_udp)
 
     def _cert_store_scan():
         from dr2server.tls_doctor import (expired_let_encrypt_certs,
@@ -1975,15 +2039,14 @@ def run_gui():
             dispatcher_holder["instance"] = app.dispatcher
 
             # UDP telemetry listener (real per-segment stage splits). Enabled by
-            # default; binds the game's telemetry port, auto-detected from the
-            # game's hardware_settings_config.xml: an enabled <custom_udp>
-            # stream wins (the SimHub setup — SimHub keeps the standard 20777
-            # and forwards its UDP output to this port, typically 20999), else
-            # the game's own <udp> port. Overridable via "telemetry_port" in
-            # config.json. A bind failure just leaves telemetry off (with an
-            # actionable log line) — the server still runs and splits fall back
-            # to the even profile.
-            from dr2server.telemetry import TelemetryListener, detect_udp_port
+            # default; binds DR3's own telemetry port from config.json
+            # ("telemetry_port", default 20999). The game's <udp> element is
+            # normalized at startup (ensure_game_udp_for_dr3) so the game sends
+            # to a port DR3 receives — when it stays on the SimHub default 20777,
+            # SimHub forwards its UDP output here. A bind failure just leaves
+            # telemetry off (with an actionable log line) — the server still runs
+            # and splits fall back to the even profile.
+            from dr2server.telemetry import TelemetryListener
             telemetry_listener = None
             if bool(config.get("telemetry_enabled", True)):
                 try:
@@ -1991,7 +2054,7 @@ def run_gui():
                 except (TypeError, ValueError):
                     tel_port = 0
                 if not tel_port:
-                    tel_port = detect_udp_port(20777)
+                    tel_port = DEFAULT_TELEMETRY_PORT
                 candidate = TelemetryListener(
                     port=tel_port,
                     logger=lambda m: root.after(0, lambda msg=m: log(msg)),
@@ -2085,6 +2148,8 @@ def run_gui():
     def on_start():
         nonlocal config, server_thread
         config = load_config()
+        ensure_telemetry_defaults(config)
+        _normalize_game_udp()
         start_btn.configure(state="disabled")
         log("Starting DR3...")
 
