@@ -2240,15 +2240,21 @@ def main() -> int:
         from app.models import Result as _Result2, StageRun as _StageRun
         n_drivers = User.query.count()
         n_clubs = Club.query.count()
-        # Same definition as /drivers: cleanly finished stage_runs rows of all
-        # run types (club + official + time trial), DNF markers excluded.
+        # Same definitions as /drivers: every recorded run (club + official +
+        # time trial) counts as driven; cleanly finished rows give the survival
+        # rate (DNF markers stored at their stage limit are not finished).
         n_stages = _StageRun.query.filter(_StageRun.player_finished.is_(True)).count()
+        n_driven = _StageRun.query.count()
         dist_m = int(db.session.query(_func.sum(_StageRun.distance_m)).scalar() or 0)
     nums = {label: num for num, label in _re.findall(
         r'stat-num">(\d+)</span><span class="stat-label">([^<]+)<', html)}
     check('home stat cards match DB counts',
           nums.get('Drivers') == str(n_drivers) and nums.get('Clubs') == str(n_clubs)
-          and nums.get('Stages completed') == str(n_stages), str(nums))
+          and nums.get('Stages Driven') == str(n_driven), str(nums))
+    # Survival rate = clean finishes / all runs, one decimal.
+    check('home survival rate matches stage_runs finish ratio',
+          (f'{n_stages / n_driven * 100:.1f}%' if n_driven else '—') in html,
+          f'done={n_stages} driven={n_driven}')
     check('home total distance card matches stage_runs sum',
           f'{dist_m / 1000.0:.1f}' in html, str(dist_m))
     check('home lists recent stage time (smokedriver 6:59.000)',

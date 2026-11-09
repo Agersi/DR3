@@ -68,7 +68,14 @@
   <div class="stat-card">
     <span class="stat-num">{{ '%.1f'|format(stats.total_distance_km) }}</span><span class="stat-label">Kilometers Driven</span>
   </div>
-  <div class="stat-card"><span class="stat-num">{{ stats.stages_done }}</span><span class="stat-label">Stages completed</span></div>
+  <div class="stat-card stat-stages">
+    <div class="stat-part">
+      <span class="stat-num">{{ stats.stages_driven }}</span><span class="stat-label">Stages Driven</span>
+    </div>
+    <div class="stat-part">
+      <span class="stat-num">{{ stats.survival_rate }}</span><span class="stat-label">Survival Rate</span>
+    </div>
+  </div>
   <div class="stat-card">
     <span class="stat-num">{{ stats.last_terminal.days if stats.last_terminal else '–' }}</span>
     <span class="stat-label">Days without a Terminal Damage</span>

@@ -132,10 +132,14 @@ def _home_stats(now) -> dict:
 
     from sqlalchemy import func
 
-    # Same definition as /drivers + the profile pages: every recorded run
-    # (club, official, time trial) that finished cleanly — DNF markers stored
-    # at their stage limit no longer count as completed.
+    # Same definitions as /drivers + the profile pages: every recorded run
+    # (club, official, time trial) counts as driven; only clean finishes count
+    # toward the survival rate — DNF markers stored at their stage limit are
+    # driven but not finished.
     stages_done = StageRun.query.filter(StageRun.player_finished.is_(True)).count()
+    stages_driven = StageRun.query.count()
+    survival_rate = (f'{stages_done / stages_driven * 100:.1f}%'
+                     if stages_driven else '—')
     total_distance_m = int(db.session.query(func.sum(StageRun.distance_m))
                            .scalar() or 0)
 
@@ -164,7 +168,8 @@ def _home_stats(now) -> dict:
         'drivers': User.query.count(),
         'clubs': Club.query.count(),
         'active_clubs': len(active_clubs),
-        'stages_done': stages_done,
+        'stages_driven': stages_driven,
+        'survival_rate': survival_rate,
         'total_distance_km': total_distance_m / 1000.0,
         'last_terminal': last_terminal,
         'recent': _recent_stage_times(0, 10),
