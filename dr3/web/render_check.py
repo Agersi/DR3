@@ -129,10 +129,10 @@ def main() -> int:
           .find('a.stat-card:hover {') != -1, '')
     check('home: combined clubs card CSS (stacked link rows + divider)',
           '.stat-clubs {\n  padding: 0;\n  gap: 0;\n}' in css
-          and '.stat-clubs .stat-link {\n  display: flex; flex-direction: column; gap: 0.35rem;\n  text-decoration: none; padding: 1rem 1.1rem;\n  transition: transform 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;\n}' in css
+          and '.stat-clubs .stat-link {\n  display: flex; flex-direction: column; gap: 0.35rem;\n  text-decoration: none; padding: 1rem 1.1rem;\n  transition: padding 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;\n}' in css
           and '.stat-clubs .stat-link + .stat-link { border-top: 2px solid var(--line); }' in css, '')
-    check('home: combined clubs card per-row hover (grow like the drivers card)',
-          '.stat-clubs .stat-link:hover {\n  transform: scale(1.03); z-index: 1;\n  background: rgba(24, 28, 20, 0.25);\n  box-shadow: inset 0 0 18px -8px rgba(175, 175, 175, 0.6);\n}' in css, '')
+    check('home: combined clubs card per-row hover (hovered half physically grows)',
+          '.stat-clubs .stat-link:hover {\n  padding: 1.4rem 1.1rem;\n  background: rgba(24, 28, 20, 0.25);\n  box-shadow: inset 0 0 18px -8px rgba(175, 175, 175, 0.6);\n}' in css, '')
     r = client.get('/drivers')
     drv_html = r.get_data(as_text=True)
     check('drivers page renders with the smoke driver',
