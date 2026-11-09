@@ -131,8 +131,10 @@ def main() -> int:
           '.stat-clubs {\n  padding: 0;\n  gap: 0;\n}' in css
           and '.stat-clubs .stat-link {\n  display: flex; flex-direction: column; gap: 0.35rem;\n  text-decoration: none; padding: 1rem 1.1rem;\n  transition: transform 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;\n}' in css
           and '.stat-clubs .stat-link + .stat-link { border-top: 2px solid var(--line); }' in css, '')
-    check('home: combined clubs card per-row hover (drivers-card treatment: scale + shadow + z-index)',
-          '.stat-clubs .stat-link:hover {\n  transform: scale(1.03); z-index: 1;\n  background: rgba(24, 28, 20, 0.25);\n  box-shadow: inset 0 0 18px -8px rgba(175, 175, 175, 0.6), 4px 4px 0 var(--shadow), 0 8px 20px rgba(0, 0, 0, 0.35);\n}' in css, '')
+    check('home: combined clubs card per-row hover (top half: top radii + scale 1.06 + card border/bg/shadow)',
+          '.stat-clubs .stat-link:hover {\n  border-top-left-radius: .3rem;\n  border-top-right-radius: .3rem;\n  transform: scale(1.06);\n  z-index: 1;\n  border: 2px solid var(--line);\n  box-shadow: 4px 4px 0 var(--shadow);\n  background: var(--card);\n  box-shadow: inset 0 0 18px -8px rgba(175, 175, 175, 0.6), 4px 4px 0 var(--shadow), 0 8px 20px rgba(0, 0, 0, 0.35);\n}' in css, '')
+    check('home: combined clubs card per-row hover (bottom half: bottom radii)',
+          '.stat-clubs .stat-link + .stat-link:hover {\n  border-bottom-left-radius: .3rem;\n  border-bottom-right-radius: .3rem;\n  transform: scale(1.06);\n  z-index: 1;\n  border: 2px solid var(--line);\n  box-shadow: 4px 4px 0 var(--shadow);\n  background: var(--card);\n  box-shadow: inset 0 0 18px -8px rgba(175, 175, 175, 0.6), 4px 4px 0 var(--shadow), 0 8px 20px rgba(0, 0, 0, 0.35);\n}' in css, '')
     r = client.get('/drivers')
     drv_html = r.get_data(as_text=True)
     check('drivers page renders with the smoke driver',
