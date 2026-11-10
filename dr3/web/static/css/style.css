@@ -543,9 +543,14 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
 .champ-name { font-family: var(--display); font-weight: 700; font-size: 1.15rem; letter-spacing: 0.01em; }
 .champ-window { color: var(--muted); font-size: 0.85rem; }
 
-.round-strip { display: flex; gap: 0.6rem; overflow-x: auto; padding-bottom: 0.3rem; margin-bottom: 0.8rem; }
+.round-strip { display: flex; gap: 0.6rem; overflow-x: auto; padding-bottom: 0.3rem; margin-bottom: 0.8rem; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }
+.round-strip::-webkit-scrollbar { height: 10px; }
+.round-strip::-webkit-scrollbar-track { background: rgba(24, 28, 20, 0.5); }
+.round-strip::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--card); }
+.round-strip::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 .round-box {
   flex: none;
+  width: 33%;
   text-align: left;
   background: var(--card);
   border: none;
@@ -562,8 +567,8 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
 .round-class-thumb {
   position: absolute;
   top: 0;
-  left: 0.3rem;
-  width: 6rem;
+  left: .5rem;
+  width: 4.5rem;
 }
 .round-loc { font-weight: 700; font-size: 0.95rem; }
 .round-window { color: var(--muted); font-size: 0.8rem; }
