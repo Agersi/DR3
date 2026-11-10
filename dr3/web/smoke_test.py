@@ -1682,8 +1682,22 @@ def main() -> int:
         m = re.search(r'id="board-state">(.*?)</script>', det, re.S)
         bs = json.loads(m.group(1)) if m else {}
         sels = bs.get('selectors') or []
+        from app.class_thumbs import CLASS_THUMB_SLUGS
+        from app.locations import THUMB_SLUGS, _slug
+
+        def _want_thumb(loc):
+            s = _slug(loc)
+            return f'/static/locations/{s}.png' if s in THUMB_SLUGS else ''
+
+        def _want_class(label):
+            s = _slug(label)
+            return f'/static/classes/{s}.png' if s in CLASS_THUMB_SLUGS else ''
+
         check('club detail: embedded board state carries round thumbnails',
-              any(rd.get('thumb_url') for rd in (bs.get('board') or {}).get('rounds') or []),
+              all(rd.get('thumb_url') == _want_thumb(rd['location'])
+                  and rd.get('class_thumb_url') == _want_class(rd['car_class'])
+                  for rd in (bs.get('board') or {}).get('rounds') or [])
+              and any(rd.get('thumb_url') for rd in (bs.get('board') or {}).get('rounds') or []),
               f"board_rounds={(bs.get('board') or {}).get('rounds')}")
         with app.app_context():
             starts = {e.id: e.start_time for e in Event.query.filter_by(club_id=club_id)}
@@ -1712,16 +1726,12 @@ def main() -> int:
                   bool(b.get('rounds')) and bool(b.get('stages_bar'))
                   and all(row.get('time_text') for row in rows),
                   f'keys={sorted(b.keys())}')
-            from app.locations import THUMB_SLUGS, _slug
-
-            def _want_thumb(loc):
-                s = _slug(loc)
-                return f'/static/locations/{s}.png' if s in THUMB_SLUGS else ''
-
-            check('event-board API: rounds carry location thumbnails',
+            check('event-board API: rounds carry location + class thumbnails',
                   all(rd.get('thumb_url') == _want_thumb(rd['location'])
+                      and rd.get('class_thumb_url') == _want_class(rd['car_class'])
                       for rd in b.get('rounds') or [])
-                  and any(rd.get('thumb_url') for rd in b.get('rounds') or []),
+                  and any(rd.get('thumb_url') for rd in b.get('rounds') or [])
+                  and any(rd.get('class_thumb_url') for rd in b.get('rounds') or []),
                   f"rounds={b.get('rounds')}")
 
         api2 = client.get(

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+from .class_thumbs import class_thumb_url
 from .locations import location_thumb_url
 from .scoring import (
     car_label,
@@ -578,6 +579,7 @@ def event_board(event: dict, round_index: int, mode: str,
             'location': r['location'],
             'thumb_url': location_thumb_url(r['location']),
             'car_class': r['car_class'],
+            'class_thumb_url': class_thumb_url(r['car_class']),
             'window_text': r['window_text'],
             'status': r['status'],
         } for r in rounds],

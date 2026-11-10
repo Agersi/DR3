@@ -390,10 +390,14 @@
     var strip = document.getElementById('round-strip');
     strip.innerHTML = (board.rounds || []).map(function (r) {
       var cls = 'round-box' + (r.index === board.round_index ? ' active' : '');
+      var thumb = r.thumb_url ?
+        '<span class="round-thumb-wrap">' +
+        '<img class="round-thumb" src="' + esc(r.thumb_url) + '" alt="">' +
+        (r.class_thumb_url ? '<img class="round-class-thumb" src="' + esc(r.class_thumb_url) + '" alt="">' : '') +
+        '</span>' : '';
       return '<button type="button" class="' + cls + '" data-round="' + r.index + '">' +
-        (r.thumb_url ? '<img class="round-thumb" src="' + esc(r.thumb_url) + '" alt="">' : '') +
+        thumb +
         '<span class="round-loc">' + esc(r.location || '(none)') + '</span>' +
-        '<span class="round-class">' + esc(r.car_class || '') + '</span>' +
         '<span class="round-window">' + esc(r.window_text || '') + '</span>' +
         '</button>';
     }).join('');

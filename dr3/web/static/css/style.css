@@ -547,9 +547,11 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
 .round-box { flex: none; min-width: 150px; text-align: left; background: var(--card); border: 2px solid var(--line); padding: 0.5rem 0.7rem; cursor: pointer; display: flex; flex-direction: column; gap: 0.15rem; }
 .round-box:hover { border-color: var(--accent); }
 .round-box.active { border-color: var(--accent); box-shadow: 3px 3px 0 var(--shadow); }
-.round-thumb { display: block; width: 100%; aspect-ratio: 736 / 347; object-fit: cover; margin-bottom: 0.25rem; }
+.round-thumb-wrap { position: relative; display: block; margin-bottom: 0.25rem; }
+.round-thumb { display: block; width: 100%; aspect-ratio: 736 / 347; object-fit: cover; }
+.round-class-thumb { position: absolute; top: 0.3rem; left: 0.3rem; width: 2.4rem; height: 2.4rem; object-fit: cover; background: var(--card); border: 2px solid var(--line); }
 .round-loc { font-weight: 700; font-size: 0.95rem; }
-.round-class, .round-window { color: var(--muted); font-size: 0.8rem; }
+.round-window { color: var(--muted); font-size: 0.8rem; }
 
 .board-toggles { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
 .mode-toggle { display: inline-flex; border: 2px solid var(--line); }
@@ -583,7 +585,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .panel, .club-card, .stat-card, .btn, button, input, select, textarea,
 .opt, .num-tile, .table-wrap, .chip, .flash, code, pre, .codeblock,
 .steps li, .steps li::before, .big404 .num-plate, .token-box code,
-details.create-club .plus, .tyre-chip, .champ-center, .round-thumb { border-radius: 0.3rem; }
+details.create-club .plus, .tyre-chip, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }
 
 @media (max-width: 900px) {
   .grid-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -97,7 +97,7 @@ def main() -> int:
           'border-radius: 0.3rem;' in css
           and '.panel, .club-card, .stat-card, .btn, button, input, select, textarea,' in css
           and '.opt, .num-tile, .table-wrap, .chip, .flash' in css
-          and '.tyre-chip, .champ-center, .round-thumb { border-radius: 0.3rem; }' in css, '')
+          and '.tyre-chip, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in css, '')
 
     # home recent-times box (backlog #42): server-rendered first page +
     # infinite-scroll JS wired to the public endpoint
@@ -330,10 +330,15 @@ def main() -> int:
               and "document.getElementById('champ-next').disabled = state.champ_index <= 0;" in det
               and '.champ-arrow:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }' in board_css
               and '.champ-arrow:disabled { color: var(--line); cursor: default; }' in board_css, '')
-        check('club detail: round boxes carry location thumbnails (JS + CSS)',
-              "(r.thumb_url ? '<img class=\"round-thumb\" src=\"' + esc(r.thumb_url) + '\" alt=\"\">' : '')" in det
-              and '.round-thumb { display: block; width: 100%; aspect-ratio: 736 / 347; object-fit: cover; margin-bottom: 0.25rem; }' in board_css
-              and 'details.create-club .plus, .tyre-chip, .champ-center, .round-thumb { border-radius: 0.3rem; }' in board_css, '')
+        check('club detail: round boxes show location thumb + top-left class badge (JS + CSS)',
+              '<span class="round-thumb-wrap">' in det
+              and "(r.class_thumb_url ? '<img class=\"round-class-thumb\" src=\"' + esc(r.class_thumb_url) + '\" alt=\"\">' : '')" in det
+              and '<span class="round-class">' not in det
+              and '.round-thumb-wrap { position: relative; display: block; margin-bottom: 0.25rem; }' in board_css
+              and '.round-thumb { display: block; width: 100%; aspect-ratio: 736 / 347; object-fit: cover; }' in board_css
+              and '.round-class-thumb { position: absolute; top: 0.3rem; left: 0.3rem; width: 2.4rem; height: 2.4rem; object-fit: cover; background: var(--card); border: 2px solid var(--line); }' in board_css
+              and '.round-window { color: var(--muted); font-size: 0.8rem; }' in board_css
+              and 'details.create-club .plus, .tyre-chip, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in board_css, '')
         # championship builder: create a fresh draft, render edit + preview
         r = client.post(f'/clubs/{club_id}/championship/new', data={'num_events': '2', 'num_stages': '3'}, follow_redirects=False)
         check('champ new -> redirect to edit', r.status_code == 302, f'status={r.status_code}')
