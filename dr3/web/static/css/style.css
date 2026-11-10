@@ -571,10 +571,10 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
   width: min(4.5rem, 20%);
 }
 .round-loc {
-  font-weight: 700;
+  font-weight: 900;
   font-size: 0.95rem;
   position: absolute;
-  top: min(5rem, 38%);
+  bottom: 2.45rem;
   left: 0;
   right: 0;
   padding-left: .5rem;
@@ -582,13 +582,16 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
   background: color-mix(in srgb, var(--accent-deep) 50%, transparent);
 }
 .round-window {
-  color: var(--muted);
+  border-bottom-left-radius: .3rem;
+  border-bottom-right-radius: .3rem;
+  color: var(--accent);
+  font-weight: 500;
   font-size: 0.8rem;
   position: absolute;
-  top: min(6.5rem, 49%);
+  bottom: 0;
   left: 0;
   right: 0;
-  padding-left: .5rem;
+  padding-left: .75rem;
   background: color-mix(in srgb, var(--accent-deep) 50%, transparent);
 }
 
