@@ -123,6 +123,13 @@ def create_app() -> Flask:
 
         return {'countries': COUNTRIES, 'flag_url': flag_url, 'flag_for': flag_for}
 
+    @app.context_processor
+    def inject_location_thumbs():
+        """``location_thumb_url(name)`` resolves a location display name to
+        its static thumbnail; ``''`` when the location ships none."""
+        from .locations import location_thumb_url
+        return {'location_thumb_url': location_thumb_url}
+
     from .game_api import game_api_bp
     from .pages import register_page_blueprints
     app.register_blueprint(game_api_bp)
