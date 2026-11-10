@@ -1680,7 +1680,11 @@ def main() -> int:
               f'status={r.status_code}')
 
         m = re.search(r'id="board-state">(.*?)</script>', det, re.S)
-        sels = json.loads(m.group(1))['selectors'] if m else []
+        bs = json.loads(m.group(1)) if m else {}
+        sels = bs.get('selectors') or []
+        check('club detail: embedded board state carries round thumbnails',
+              any(rd.get('thumb_url') for rd in (bs.get('board') or {}).get('rounds') or []),
+              f"board_rounds={(bs.get('board') or {}).get('rounds')}")
         with app.app_context():
             starts = {e.id: e.start_time for e in Event.query.filter_by(club_id=club_id)}
         chrono = [eid for eid, _ in sorted(starts.items(), key=lambda kv: (kv[1] or '', kv[0]))]
@@ -1708,6 +1712,17 @@ def main() -> int:
                   bool(b.get('rounds')) and bool(b.get('stages_bar'))
                   and all(row.get('time_text') for row in rows),
                   f'keys={sorted(b.keys())}')
+            from app.locations import THUMB_SLUGS, _slug
+
+            def _want_thumb(loc):
+                s = _slug(loc)
+                return f'/static/locations/{s}.png' if s in THUMB_SLUGS else ''
+
+            check('event-board API: rounds carry location thumbnails',
+                  all(rd.get('thumb_url') == _want_thumb(rd['location'])
+                      for rd in b.get('rounds') or [])
+                  and any(rd.get('thumb_url') for rd in b.get('rounds') or []),
+                  f"rounds={b.get('rounds')}")
 
         api2 = client.get(
             f'/clubs/{club_id}/event-board?event={eid2}&round=0&mode=stage&stage=0')
