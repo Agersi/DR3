@@ -568,7 +568,7 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
   position: absolute;
   top: 0;
   left: .5rem;
-  width: 4.5rem;
+  width: min(4.5rem, 20%);
 }
 .round-loc { font-weight: 700; font-size: 0.95rem; }
 .round-window { color: var(--muted); font-size: 0.8rem; }

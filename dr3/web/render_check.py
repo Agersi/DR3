@@ -343,7 +343,7 @@ def main() -> int:
               and '.round-strip::-webkit-scrollbar-thumb:hover { background: var(--muted); }' in board_css
               and '.round-thumb-wrap { position: relative; display: block; margin-bottom: 0.25rem; }' in board_css
               and '.round-thumb { display: block; width: 100%; aspect-ratio: 736 / 347; object-fit: cover; }' in board_css
-              and '.round-class-thumb {\n  position: absolute;\n  top: 0;\n  left: .5rem;\n  width: 4.5rem;\n}' in board_css
+              and '.round-class-thumb {\n  position: absolute;\n  top: 0;\n  left: .5rem;\n  width: min(4.5rem, 20%);\n}' in board_css
               and '.round-window { color: var(--muted); font-size: 0.8rem; }' in board_css
               and 'details.create-club .plus, .tyre-chip, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in board_css, '')
         # championship builder: create a fresh draft, render edit + preview
