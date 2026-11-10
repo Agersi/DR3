@@ -570,8 +570,21 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
   left: .5rem;
   width: min(4.5rem, 20%);
 }
-.round-loc { font-weight: 700; font-size: 0.95rem; }
-.round-window { color: var(--muted); font-size: 0.8rem; }
+.round-loc {
+  font-weight: 700;
+  font-size: 0.95rem;
+  position: absolute;
+  top: 5rem;
+  left: .5rem;
+  color: var(--accent);
+}
+.round-window {
+  color: var(--muted);
+  font-size: 0.8rem;
+  position: absolute;
+  top: 6.5rem;
+  left: .5rem;
+}
 
 .board-toggles { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
 .mode-toggle { display: inline-flex; border: 2px solid var(--line); }
