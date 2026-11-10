@@ -544,12 +544,27 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
 .champ-window { color: var(--muted); font-size: 0.85rem; }
 
 .round-strip { display: flex; gap: 0.6rem; overflow-x: auto; padding-bottom: 0.3rem; margin-bottom: 0.8rem; }
-.round-box { flex: none; min-width: 150px; text-align: left; background: var(--card); border: 2px solid var(--line); padding: 0.5rem 0.7rem; cursor: pointer; display: flex; flex-direction: column; gap: 0.15rem; }
-.round-box:hover { border-color: var(--accent); }
-.round-box.active { border-color: var(--accent); box-shadow: 3px 3px 0 var(--shadow); }
+.round-box {
+  flex: none;
+  text-align: left;
+  background: var(--card);
+  border: none;
+  padding: 0 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+}
+.round-box.active {
+  background: var(--accent-deep);
+}
 .round-thumb-wrap { position: relative; display: block; margin-bottom: 0.25rem; }
 .round-thumb { display: block; width: 100%; aspect-ratio: 736 / 347; object-fit: cover; }
-.round-class-thumb { position: absolute; top: 0.3rem; left: 0.3rem; width: 2.4rem; height: 2.4rem; object-fit: cover; background: var(--card); border: 2px solid var(--line); }
+.round-class-thumb {
+  position: absolute;
+  top: 0;
+  left: 0.3rem;
+  width: 6rem;
+}
 .round-loc { font-weight: 700; font-size: 0.95rem; }
 .round-window { color: var(--muted); font-size: 0.8rem; }
 

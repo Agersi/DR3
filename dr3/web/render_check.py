@@ -334,9 +334,11 @@ def main() -> int:
               '<span class="round-thumb-wrap">' in det
               and "(r.class_thumb_url ? '<img class=\"round-class-thumb\" src=\"' + esc(r.class_thumb_url) + '\" alt=\"\">' : '')" in det
               and '<span class="round-class">' not in det
+              and '.round-box {\n  flex: none;\n  text-align: left;\n  background: var(--card);\n  border: none;\n  padding: 0 0;\n  cursor: pointer;\n  display: flex;\n  flex-direction: column;\n}' in board_css
+              and '.round-box.active {\n  background: var(--accent-deep);\n}' in board_css
               and '.round-thumb-wrap { position: relative; display: block; margin-bottom: 0.25rem; }' in board_css
               and '.round-thumb { display: block; width: 100%; aspect-ratio: 736 / 347; object-fit: cover; }' in board_css
-              and '.round-class-thumb { position: absolute; top: 0.3rem; left: 0.3rem; width: 2.4rem; height: 2.4rem; object-fit: cover; background: var(--card); border: 2px solid var(--line); }' in board_css
+              and '.round-class-thumb {\n  position: absolute;\n  top: 0;\n  left: 0.3rem;\n  width: 6rem;\n}' in board_css
               and '.round-window { color: var(--muted); font-size: 0.8rem; }' in board_css
               and 'details.create-club .plus, .tyre-chip, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in board_css, '')
         # championship builder: create a fresh draft, render edit + preview
