@@ -347,8 +347,8 @@ def main() -> int:
               and '.round-thumb-wrap { position: relative; display: block; margin-bottom: 0.25rem; }' in board_css
               and '.round-thumb { display: block; width: 100%; aspect-ratio: 736 / 347; object-fit: cover; }' in board_css
               and '.round-class-thumb {\n  position: absolute;\n  top: 0;\n  left: .5rem;\n  width: min(4.5rem, 20%);\n}' in board_css
-              and '.round-loc {\n  font-weight: 700;\n  font-size: 0.95rem;\n  position: absolute;\n  top: 5rem;\n  left: .5rem;\n  color: var(--accent);\n}' in board_css
-              and '.round-window {\n  color: var(--muted);\n  font-size: 0.8rem;\n  position: absolute;\n  top: 6.5rem;\n  left: .5rem;\n}' in board_css
+              and '.round-loc {\n  font-weight: 700;\n  font-size: 0.95rem;\n  position: absolute;\n  top: min(5rem, 38%);\n  left: 0;\n  right: 0;\n  padding-left: .5rem;\n  color: var(--accent);\n  background: color-mix(in srgb, var(--accent-deep) 50%, transparent);\n}' in board_css
+              and '.round-window {\n  color: var(--muted);\n  font-size: 0.8rem;\n  position: absolute;\n  top: min(6.5rem, 49%);\n  left: 0;\n  right: 0;\n  padding-left: .5rem;\n  background: color-mix(in srgb, var(--accent-deep) 50%, transparent);\n}' in board_css
               and 'details.create-club .plus, .tyre-chip, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in board_css, '')
         # championship builder: create a fresh draft, render edit + preview
         r = client.post(f'/clubs/{club_id}/championship/new', data={'num_events': '2', 'num_stages': '3'}, follow_redirects=False)

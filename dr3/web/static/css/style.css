@@ -574,16 +574,22 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
   font-weight: 700;
   font-size: 0.95rem;
   position: absolute;
-  top: 5rem;
-  left: .5rem;
+  top: min(5rem, 38%);
+  left: 0;
+  right: 0;
+  padding-left: .5rem;
   color: var(--accent);
+  background: color-mix(in srgb, var(--accent-deep) 50%, transparent);
 }
 .round-window {
   color: var(--muted);
   font-size: 0.8rem;
   position: absolute;
-  top: 6.5rem;
-  left: .5rem;
+  top: min(6.5rem, 49%);
+  left: 0;
+  right: 0;
+  padding-left: .5rem;
+  background: color-mix(in srgb, var(--accent-deep) 50%, transparent);
 }
 
 .board-toggles { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
