@@ -550,7 +550,7 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
 .round-strip::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 .round-box {
   flex: none;
-  width: 33%;
+  width: 32.6%;
   text-align: left;
   background: var(--card);
   border: none;
@@ -574,16 +574,18 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
   font-weight: 900;
   font-size: 0.95rem;
   position: absolute;
-  bottom: 2.45rem;
+  bottom: 0;
   left: 0;
   right: 0;
-  padding-left: .5rem;
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent-deep) 50%, transparent);
-}
-.round-window {
+  height: 4.5rem;
   border-bottom-left-radius: .3rem;
   border-bottom-right-radius: .3rem;
+  padding-left: .5rem;
+  padding-top: .25rem;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent-deep) 45%, transparent);
+}
+.round-window {
   color: var(--accent);
   font-weight: 500;
   font-size: 0.8rem;
@@ -591,13 +593,12 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
   bottom: 0;
   left: 0;
   right: 0;
-  padding-left: .75rem;
-  background: color-mix(in srgb, var(--accent-deep) 50%, transparent);
+  padding: .25rem .75rem;
 }
 
 .board-toggles { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
 .mode-toggle { display: inline-flex; border: 2px solid var(--line); }
-.mode-btn { background: var(--card); border: none; border-right: 2px solid var(--line); padding: 0.4rem 1rem; cursor: pointer; color: var(--muted); font-weight: 700; }
+.mode-btn { background: var(--card); border: none; border-right: 2px solid var(--line); padding: 0.4rem 1rem; cursor: pointer; color: var(--accent); font-weight: 700; }
 .mode-btn:last-child { border-right: none; }
 .mode-btn.active { background: var(--accent); color: var(--bg); }
 .stage-bar { display: flex; gap: 0.35rem; flex-wrap: wrap; }
