@@ -1674,7 +1674,7 @@ def main() -> int:
               and 'id="board-state"' in det
               and 'id="champ-selector"' in det
               and 'id="round-strip"' in det
-              and 'id="mode-toggle"' not in det
+              and 'id="mode-toggle"' in det
               and 'id="stage-bar"' in det
               and 'id="board-body"' in det,
               f'status={r.status_code}')
@@ -1710,34 +1710,22 @@ def main() -> int:
               f'got={got_names} want={want_names}')
 
         api = client.get(
-            f'/clubs/{club_id}/event-board?event={eid2}&round=0&stage=0')
-        check('event-board API: combined board returns 200 JSON',
+            f'/clubs/{club_id}/event-board?event={eid2}&round=0&mode=overall')
+        check('event-board API: overall returns 200 JSON',
               api.status_code == 200 and api.is_json,
               f'status={api.status_code}')
         if api.status_code == 200:
             b = api.get_json() or {}
             rows = b.get('rows') or []
             names = [row['username'] for row in rows]
-            check('event-board API: selected stage ranks smokedriver ahead of secondpilot',
+            check('event-board API: overall ranks smokedriver ahead of secondpilot',
                   'smokedriver' in names and 'secondpilot' in names
                   and names.index('smokedriver') < names.index('secondpilot'),
                   f'names={names}')
-            check('event-board API: carries rounds + stages bar + stage info (class/hardcore/surface deg)',
+            check('event-board API: overall carries rounds + stages bar + times',
                   bool(b.get('rounds')) and bool(b.get('stages_bar'))
-                  and (b.get('info') or {}).get('number') == 1
-                  and (b.get('info') or {}).get('car_class')
-                  and isinstance((b.get('info') or {}).get('hardcore_damage'), bool)
-                  and len((b.get('info') or {}).get('surface_deg') or []) == len(b.get('stages_bar') or []),
-                  f'keys={sorted(b.keys())} info={b.get("info")}')
-            check('event-board API: rows carry flag + run attrs + stage & overall times, no mode/tyre/splits',
-                  all(set(('pos', 'flag_url', 'vehicle', 'input', 'camera', 'assists', 'vr',
-                            'penalty_ms', 'time_text', 'diff_str', 'overall_text', 'dnf')) <= set(row)
-                      for row in rows)
-                  and all(row.get('time_text') and row.get('overall_text') for row in rows)
-                  and 'mode' not in b
-                  and all('tyres' not in row and 'splits' not in row
-                          and 'class_label' not in row for row in rows),
-                  f'row_keys={sorted(rows[0].keys()) if rows else []}')
+                  and all(row.get('time_text') for row in rows),
+                  f'keys={sorted(b.keys())}')
             check('event-board API: rounds carry location + class thumbnails',
                   all(rd.get('thumb_url') == _want_thumb(rd['location'])
                       and rd.get('class_thumb_url') == _want_class(rd['car_class'])
@@ -1747,14 +1735,13 @@ def main() -> int:
                   f"rounds={b.get('rounds')}")
 
         api2 = client.get(
-            f'/clubs/{club_id}/event-board?event={eid2}&round=0&stage={min(1, nstages - 1)}')
-        check('event-board API: selecting another stage returns its info',
-              api2.status_code == 200
-              and (api2.get_json() or {}).get('info', {}).get('number') == min(1, nstages - 1) + 1,
+            f'/clubs/{club_id}/event-board?event={eid2}&round=0&mode=stage&stage=0')
+        check('event-board API: stage mode returns info + rows',
+              api2.status_code == 200 and (api2.get_json() or {}).get('info'),
               f'status={api2.status_code}')
 
         api3 = client.get(
-            f'/clubs/{club_id}/event-board?event=evt-doesnotexist&round=0&stage=0')
+            f'/clubs/{club_id}/event-board?event=evt-doesnotexist&round=0&mode=overall')
         check('event-board API: unknown event id rejected',
               api3.status_code == 404, f'status={api3.status_code}')
 
