@@ -433,13 +433,17 @@
       return;
     }
     el.innerHTML =
+      '<div class="board-info-row">' +
       '<span class="chip chip-accent">Stage: ' + esc(i.name || '') + '</span>' +
       (i.length_km ? '<span class="chip">Length: ' + Number(i.length_km).toFixed(2) + ' km</span>' : '') +
-      (i.weather ? '<span class="chip">Weather: ' + esc(i.weather) + '</span>' : '') +
-      (i.service ? '<span class="chip">Service: ' + esc(i.service) + '</span>' : '') +
-      (i.surface_deg ? '<span class="chip">Surface Degradation: ' + esc(i.surface_deg) + '</span>' : '') +
       (i.car_class ? '<span class="chip">Class: ' + esc(i.car_class) + '</span>' : '') +
-      '<span class="chip">Hardcore Damage: ' + (i.hardcore_damage ? 'On' : 'Off') + '</span>';
+      '</div>' +
+      '<div class="board-info-row">' +
+      (i.service ? '<span class="chip">Service: ' + esc(i.service) + '</span>' : '') +
+      (i.weather ? '<span class="chip">Weather: ' + esc(i.weather) + '</span>' : '') +
+      (i.surface_deg ? '<span class="chip">Surface Degradation: ' + esc(i.surface_deg) + '</span>' : '') +
+      '<span class="chip">Hardcore Damage: ' + (i.hardcore_damage ? 'On' : 'Off') + '</span>' +
+      '</div>';
   }
 
   function expandCell(row) {
