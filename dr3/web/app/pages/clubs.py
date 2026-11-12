@@ -515,7 +515,7 @@ def club_detail(club_id: str):
     if default_event_id is not None:
         default_event = get_event(default_event_id)
         if default_event is not None:
-            board = event_board(default_event, default_round_index, 'overall', now=now)
+            board = event_board(default_event, default_round_index, 0, now=now)
         for i, s in enumerate(champ_selectors):
             if s['event_id'] == default_event_id:
                 default_champ_index = i
@@ -548,8 +548,8 @@ def club_event_board(club_id: str):
     """JSON board for the events tab (no-reload toggles fetch this).
 
     Query args: ``event`` (championship id, must belong to the club),
-    ``round`` (0-based), ``mode`` ('overall'|'stage'), ``stage`` (0-based local
-    stage index, only in stage mode)."""
+    ``round`` (0-based), ``stage`` (0-based local stage index — the board is
+    always the selected stage's classification plus each driver's round total)."""
     club = _load_club(club_id)
     user_id = session.get('user_id')
     user = db.session.get(User, user_id) if user_id else None
@@ -565,17 +565,12 @@ def club_event_board(club_id: str):
         round_index = int(request.args.get('round', '0'))
     except ValueError:
         round_index = 0
-    mode = request.args.get('mode', 'overall')
-    if mode not in ('overall', 'stage'):
-        mode = 'overall'
-    stage_local_index = None
-    if mode == 'stage':
-        try:
-            stage_local_index = int(request.args.get('stage', '0'))
-        except ValueError:
-            stage_local_index = 0
+    try:
+        stage_local_index = int(request.args.get('stage', '0'))
+    except ValueError:
+        stage_local_index = 0
 
-    board = event_board(event, round_index, mode, stage_local_index)
+    board = event_board(event, round_index, stage_local_index)
     return jsonify(board if board is not None else {'rows': []})
 
 

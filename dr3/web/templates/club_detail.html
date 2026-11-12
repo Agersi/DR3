@@ -78,11 +78,7 @@
     <div class="round-strip" id="round-strip"></div>
 
     <div class="board-toggles">
-      <div class="mode-toggle" id="mode-toggle">
-        <button type="button" class="mode-btn" data-mode="overall">Overall</button>
-        <button type="button" class="mode-btn" data-mode="stage">Stage</button>
-      </div>
-      <div class="stage-bar" id="stage-bar" hidden></div>
+      <div class="stage-bar" id="stage-bar"></div>
     </div>
 
     <div class="board-info" id="board-info"></div>
@@ -91,18 +87,18 @@
       <table class="board" id="board-table">
         <thead>
           <tr>
-            <th>#</th><th>Driver</th><th>Vehicle</th><th>Class</th><th>Tyre</th>
-            <th>Input</th><th>VR</th><th>Camera</th><th>Assists</th><th>Penalty</th>
-            <th class="num">Time</th><th class="num">Diff 1st</th><th></th>
+            <th>#</th><th></th><th>Driver</th><th>Vehicle</th><th>Input</th>
+            <th>Camera</th><th>Assists</th><th>VR</th><th class="num">Penalty</th>
+            <th class="num">Stage</th><th class="num">Diff 1st</th><th class="num">Overall</th>
           </tr>
         </thead>
         <tbody id="board-body">
-          <tr class="board-empty"><td colspan="13">Loading…</td></tr>
+          <tr class="board-empty"><td colspan="12">Loading…</td></tr>
         </tbody>
       </table>
     </div>
 
-    <script type="application/json" id="board-state">{{ {'club_id': club.id, 'selectors': champ_selectors, 'champ_index': default_champ_index, 'event_id': default_event_id, 'round_index': default_round_index, 'mode': 'overall', 'stage': 0, 'script_root': request.script_root, 'board': board} | tojson }}</script>
+    <script type="application/json" id="board-state">{{ {'club_id': club.id, 'selectors': champ_selectors, 'champ_index': default_champ_index, 'event_id': default_event_id, 'round_index': default_round_index, 'stage': 0, 'script_root': request.script_root, 'board': board} | tojson }}</script>
     {% else %}
     <p>No events yet.</p>
     {% endif %}
@@ -345,16 +341,8 @@
     var p = new URLSearchParams();
     p.set('event', state.event_id);
     p.set('round', state.round_index);
-    p.set('mode', state.mode);
-    if (state.mode === 'stage') p.set('stage', state.stage);
+    p.set('stage', state.stage || 0);
     return root + '/clubs/' + state.club_id + '/event-board?' + p.toString();
-  }
-
-  function tyreCell(tyres) {
-    if (!tyres || !tyres.length) return '<span class="muted">—</span>';
-    return tyres.map(function (t) {
-      return '<span class="tyre-chip" title="Compound ' + esc(t) + '">' + esc(t) + '</span>';
-    }).join(' ');
   }
 
   function boolCell(v) {
@@ -406,77 +394,62 @@
     }).join('');
   }
 
-  function renderToggles(board) {
-    document.querySelectorAll('#mode-toggle .mode-btn').forEach(function (b) {
-      b.classList.toggle('active', b.getAttribute('data-mode') === state.mode);
-    });
+  function renderStageBar(board) {
     var bar = document.getElementById('stage-bar');
-    if (state.mode === 'stage') {
-      bar.hidden = false;
-      bar.innerHTML = (board.stages_bar || []).map(function (s) {
-        var cls = 'stage-btn' + (s.local_index === board.stage_local_index ? ' active' : '');
-        return '<button type="button" class="' + cls + '" data-stage="' + s.local_index + '" title="' + esc(s.name) + '">' + esc(s.label) + '</button>';
-      }).join('');
-    } else {
-      bar.hidden = true;
-      bar.innerHTML = '';
-    }
+    bar.innerHTML = (board.stages_bar || []).map(function (s) {
+      var cls = 'stage-btn' + (s.local_index === board.stage_local_index ? ' active' : '');
+      return '<button type="button" class="' + cls + '" data-stage="' + s.local_index + '" title="' + esc(s.name) + '">' + esc(s.label) + '</button>';
+    }).join('');
   }
 
   function renderInfo(board) {
     var el = document.getElementById('board-info');
-    if (state.mode === 'stage' && board.info) {
-      var i = board.info;
-      el.innerHTML =
-        '<span class="info-item"><span class="info-key">Stage</span> ' + esc(i.number) + '</span>' +
-        '<span class="info-item info-name">' + esc(i.name || '') + '</span>' +
-        (i.length_km ? '<span class="info-item"><span class="info-key">Length</span> ' + Number(i.length_km).toFixed(2) + ' km</span>' : '') +
-        (i.weather ? '<span class="info-item"><span class="info-key">Weather</span> ' + esc(i.weather) + '</span>' : '') +
-        (i.service ? '<span class="info-item"><span class="info-key">Service</span> ' + esc(i.service) + '</span>' : '');
-    } else {
-      var rnd = (board.rounds || [])[board.round_index] || {};
-      el.innerHTML = '<span class="info-item info-name">Round ' + (board.round_index + 1) +
-        ' — ' + esc(rnd.location || '') + (rnd.car_class ? ' (' + esc(rnd.car_class) + ')' : '') + '</span>';
+    if (!board.info) {
+      el.innerHTML = '';
+      return;
     }
+    var i = board.info;
+    var parts = [
+      '<span class="info-item"><span class="info-key">Stage</span> ' + esc(i.number) + '</span>',
+      '<span class="info-item info-name">' + esc(i.name || '') + '</span>',
+      i.length_km ? '<span class="info-item"><span class="info-key">Length</span> ' + Number(i.length_km).toFixed(2) + ' km</span>' : '',
+      i.weather ? '<span class="info-item"><span class="info-key">Weather</span> ' + esc(i.weather) + '</span>' : '',
+      i.service ? '<span class="info-item"><span class="info-key">Service</span> ' + esc(i.service) + '</span>' : '',
+      i.car_class ? '<span class="info-item"><span class="info-key">Vehicle Class</span> ' + esc(i.car_class) + '</span>' : '',
+      '<span class="info-item"><span class="info-key">Hardcore Damage</span> ' + (i.hardcore_damage ? 'On' : 'Off') + '</span>',
+    ];
+    (i.surface_deg || []).forEach(function (level, k) {
+      if (level) parts.push('<span class="info-item"><span class="info-key">S' + (k + 1) + ' Deg</span> ' + esc(level) + '</span>');
+    });
+    el.innerHTML = parts.filter(Boolean).join('');
   }
 
-  function expandCell(row) {
-    if (state.mode !== 'stage') return '';
-    if (row.splits && row.splits.length) {
-      return '<button type="button" class="expand-btn" data-pos="' + row.pos + '" aria-label="Show splits">&#9656;</button>';
-    }
-    return '<span class="muted small">configure telemetry</span>';
+  function flagCell(url) {
+    return url ? '<img class="flag" src="' + esc(url) + '" alt="" loading="lazy">' : '';
   }
 
   function renderRows(board) {
     var body = document.getElementById('board-body');
     var rows = board.rows || [];
     if (!rows.length) {
-      body.innerHTML = '<tr class="board-empty"><td colspan="13">No results yet.</td></tr>';
+      body.innerHTML = '<tr class="board-empty"><td colspan="12">No stage results yet.</td></tr>';
       return;
     }
     body.innerHTML = rows.map(function (r) {
-      var tr = '<tr class="board-row' + (r.dnf ? ' dnf' : '') + '" data-pos="' + r.pos + '">' +
+      return '<tr class="board-row' + (r.dnf ? ' dnf' : '') + '">' +
         '<td class="num">' + r.pos + '</td>' +
+        '<td>' + flagCell(r.flag_url) + '</td>' +
         '<td><a href="' + root + esc(r.driver_url) + '">' + esc(r.username) + '</a></td>' +
         '<td>' + esc(r.vehicle || '') + '</td>' +
-        '<td>' + esc(r.class_label || '') + '</td>' +
-        '<td class="tyre-cell">' + tyreCell(r.tyres) + '</td>' +
         '<td>' + inputCell(r.input) + '</td>' +
-        '<td>' + boolCell(r.vr) + '</td>' +
         '<td>' + camCell(r.camera) + '</td>' +
         '<td>' + boolCell(r.assists) + '</td>' +
+        '<td>' + boolCell(r.vr) + '</td>' +
         '<td class="num">' + penaltyCell(r.penalty_ms) + '</td>' +
-        '<td class="num">' + esc(r.time_text) + (r.dnf ? ' <span class="dnf-tag">DNF</span>' : '') + '</td>' +
-        '<td class="num">' + esc(r.diff_str) + '</td>' +
-        '<td class="expand-cell">' + expandCell(r) + '</td>' +
+        '<td class="num">' + esc(r.time_text || '') + (r.dnf ? ' <span class="dnf-tag">DNF</span>' : '') + '</td>' +
+        '<td class="num">' + esc(r.diff_str || '') + '</td>' +
+        '<td class="num">' + esc(r.overall_text || '') + '</td>' +
         '</tr>';
-      if (state.mode === 'stage' && r.splits && r.splits.length) {
-        tr += '<tr class="splits-row" data-splits-for="' + r.pos + '" hidden>' +
-          '<td colspan="13"><span class="info-key">Splits</span> ' +
-          r.splits.map(function (s) { return esc(Number(s).toFixed(2)); }).join('  ') + '</td></tr>';
-      }
-      return tr;
     }).join('');
   }
 
@@ -484,7 +457,7 @@
     var board = state.board;
     renderSelector();
     renderRounds(board);
-    renderToggles(board);
+    renderStageBar(board);
     renderInfo(board);
     renderRows(board);
   }
@@ -501,6 +474,7 @@
       state.champ_index += 1;
       state.event_id = state.selectors[state.champ_index].event_id;
       state.round_index = 0;
+      state.stage = 0;
       load();
     }
   });
@@ -509,6 +483,7 @@
       state.champ_index -= 1;
       state.event_id = state.selectors[state.champ_index].event_id;
       state.round_index = 0;
+      state.stage = 0;
       load();
     }
   });
@@ -517,14 +492,7 @@
     var btn = e.target.closest('.round-box');
     if (!btn) return;
     state.round_index = parseInt(btn.getAttribute('data-round'), 10);
-    load();
-  });
-
-  document.getElementById('mode-toggle').addEventListener('click', function (e) {
-    var btn = e.target.closest('.mode-btn');
-    if (!btn) return;
-    state.mode = btn.getAttribute('data-mode');
-    if (state.mode === 'stage' && !state.stage) state.stage = 0;
+    state.stage = 0;
     load();
   });
 
@@ -533,14 +501,6 @@
     if (!btn) return;
     state.stage = parseInt(btn.getAttribute('data-stage'), 10);
     load();
-  });
-
-  document.getElementById('board-body').addEventListener('click', function (e) {
-    var btn = e.target.closest('.expand-btn');
-    if (!btn) return;
-    var pos = btn.getAttribute('data-pos');
-    var row = document.querySelector('#board-body .splits-row[data-splits-for="' + pos + '"]');
-    if (row) row.hidden = !row.hidden;
   });
 
   renderAll();
