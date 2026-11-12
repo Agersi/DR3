@@ -155,8 +155,8 @@ class App:
             return {"blob_base64": base64.b64encode(obj).decode("ascii"), "size": len(obj)}
         raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
-    def capture(self, request: Dict[str, Any]) -> Path:
-        if not self.capturing:
+    def capture(self, request: Dict[str, Any], *, skip: bool = False) -> Path:
+        if not self.capturing or skip:
             # No file written; the placeholder keeps every call site (and the
             # capture_file metadata fields) working unchanged.
             return self.capture_root / "(captures-disabled)"
@@ -223,7 +223,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "body_text": raw_body.decode("utf-8", errors="replace"),
                 "body_base64": base64.b64encode(raw_body).decode("ascii"),
                 "decoded_body": parsed_body,
-            }
+            },
+            skip=egonet_function == "Login.Login",
         )
 
         if egonet_function:
@@ -338,15 +339,21 @@ class RequestHandler(BaseHTTPRequestHandler):
             fields: Dict[str, Any] = {}
             if isinstance(keys, list) and isinstance(values, list):
                 fields = dict(zip(keys, values))
-            if event == "StageEnded" and self.app.stage_detail is not None and fields:
+            flat: Dict[str, Any] = {
+                k: self._datamining_display(v) for k, v in fields.items()
+            }
+            if event == "StageEnded" and self.app.stage_detail is not None and flat:
                 try:
-                    flat = {k: self._datamining_display(v) for k, v in fields.items()}
                     self.app.stage_detail.feed_datamining(flat)
                 except Exception as exc:  # never let the feed break the proxy path
                     print(f"[DATA] StageEnded detail feed failed: {exc}")
-            interesting = {
-                key: self._datamining_display(fields[key])
-                for key in (
+            dispatcher = getattr(self.app, "dispatcher", None)
+            if dispatcher is not None and flat:
+                try:
+                    dispatcher.note_datamining_event(event, flat)
+                except Exception as exc:  # never let overlay state break the proxy path
+                    print(f"[DATA] DataEvent overlay feed failed: {exc}")
+            interesting = {key: flat[key] for key in (
                     "damage_type",
                     "stage_time_seconds",
                     "journey_event_id",
@@ -355,9 +362,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "vehicle_id",
                     "location_id",
                     "g_country_code",
-                )
-                if key in fields
-            }
+                ) if key in flat}
             print(f"[DATA] DataEvent {event} {interesting}")
         except Exception as exc:  # never let logging break the request path
             print(f"[DATA] DataEvent (unparseable payload: {exc})")

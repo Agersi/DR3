@@ -13,7 +13,7 @@ from .account_store import AccountStore
 from .api_client import UpstreamClient
 from .egonet import Int64, Timestamp, UInt16, UInt32, UInt8
 from .game_data import (
-    Location, Track, VEHICLES, CONFIRMED_VEHICLE_CLASS_IDS,
+    Location, Track, VehicleClass, VEHICLES, CONFIRMED_VEHICLE_CLASS_IDS,
     default_stage_conditions_for_location,
     STAGE_CONDITIONS_LABELS, surface_degrad_for_level, service_area_for_level,
     RX_DRYING_TIME, RX_GRID_ENTRANTS, RX_SVC_SETTINGS_ID,
@@ -230,6 +230,11 @@ class RpcDispatcher:
         self._current_stage_ordinal: Optional[int] = None
         self._current_total_stages: int = 0
         self._current_stage_name: Optional[str] = None
+        # Direct overlay labels populated from DataMining.DataEvent so official
+        # dailies and time trials (which have no club/event snapshot entry)
+        # still get Location / Car Class / Stage Name files.
+        self._current_location_name: Optional[str] = None
+        self._current_car_class_label: Optional[str] = None
         self._clubs_snapshot: Optional[Dict[str, Any]] = None
         self._clubs_snapshot_ts: float = 0.0
         self._handlers: Dict[str, Handler] = {
@@ -2844,8 +2849,90 @@ class RpcDispatcher:
             "stage_ordinal": self._current_stage_ordinal,
             "total_stages": self._current_total_stages,
             "stage_name": self._current_stage_name,
+            # Direct labels from DataMining.DataEvent — these are what make
+            # official dailies and time trials show up in the overlay files.
+            "location": self._current_location_name,
+            "car_class": self._current_car_class_label,
             "clubs_snapshot": self._clubs_snapshot,
         }
+
+    @staticmethod
+    def _datamining_int(value: Any) -> int:
+        try:
+            if value is None or value == "":
+                return 0
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    def note_datamining_event(self, event: str, fields: Dict[str, Any]) -> None:
+        """Feed the streaming overlay with race context from DataMining events.
+
+        Club races already get their labels from the club/event snapshot, but
+        official dailies and time trials are proxied upstream and have no such
+        entry. The game's own telemetry events carry the same ids for every
+        race type, so use them as a direct fallback for car / class / location /
+        stage name.
+        """
+        if event not in {"DriveStarted", "StageStarted", "StageEnded"}:
+            return
+
+        # Club stages are served locally and carry ChallengeType 2. Any other
+        # type (official dailies, time trials, free play) has no club/event
+        # snapshot entry — drop the stale club context so the overlay does not
+        # keep showing the previous club's leaderboard / progress.
+        if event in {"StageStarted", "StageEnded"} and "challenge_type" in fields:
+            if self._datamining_int(fields.get("challenge_type")) != 2:
+                self._current_event_id = None
+                self._current_club_id = None
+                stage_index = self._datamining_int(fields.get("stage_index"))
+                stage_count = self._datamining_int(fields.get("stage_count"))
+                self._current_stage_ordinal = stage_index
+                self._current_total_stages = stage_count
+
+        vehicle_id = self._datamining_int(fields.get("vehicle_id"))
+        if vehicle_id:
+            self._current_vehicle_id = vehicle_id
+
+        class_id = self._datamining_int(fields.get("vehicle_class_id"))
+        if class_id:
+            try:
+                self._current_car_class_label = VehicleClass(class_id).label
+            except ValueError:
+                pass
+
+        location_name: Optional[str] = None
+        stage_name: Optional[str] = None
+        track_model_id = self._datamining_int(fields.get("track_model_id"))
+        if track_model_id:
+            try:
+                track = Track(track_model_id)
+                stage_name = track.display_name
+                location_name = track.location.display_name
+            except ValueError:
+                pass
+
+        if not location_name:
+            location_id = self._datamining_int(fields.get("location_id"))
+            if location_id:
+                try:
+                    location_name = Location(location_id).display_name
+                except ValueError:
+                    pass
+
+        if location_name:
+            self._current_location_name = location_name
+        if stage_name:
+            self._current_stage_name = stage_name
+
+        if self.verbose_logging:
+            print(
+                f"[STREAM] dispatcher: datamining {event} set "
+                f"vehicle_id={self._current_vehicle_id!r} "
+                f"class={self._current_car_class_label!r} "
+                f"location={self._current_location_name!r} "
+                f"stage={self._current_stage_name!r}"
+            )
 
     def _champ_layout(self, event_id: str) -> List[int]:
         """Stage counts per sub-event for a championship; [] if unknown.
@@ -2929,8 +3016,19 @@ class RpcDispatcher:
     def note_official_stage_begin(self, payload: Dict[str, Any]) -> None:
         """Arm the telemetry run clock on a proxied (official) stage begin, so
         the PostTime that follows claims the UDP run just driven — never an
-        older one (e.g. from a DNF'd earlier stage)."""
+        older one (e.g. from a DNF'd earlier stage).
+
+        Also records the car for the streaming overlay: official stages are
+        proxied, so the local `_stage_begin` handler never sees them.
+        """
         self._telemetry_arm_wall = time.time()
+        raw_vehicle_id = _val(payload.get("VehicleId"))
+        try:
+            vehicle_id = int(raw_vehicle_id) if raw_vehicle_id not in (None, "") else 0
+        except (TypeError, ValueError):
+            vehicle_id = 0
+        if vehicle_id:
+            self._current_vehicle_id = vehicle_id
 
     def _subevent_range(self, event_id: str, event_index: int,
                         layout: Optional[List[int]] = None) -> tuple[int, Optional[int]]:

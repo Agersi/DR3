@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.68**
+- Streaming overlay text files now work for all race types, and telemetry setup is more reliable.
+
 **v0.1.67**
 - Fixed a "Sign up to Racenet" prompt that could appear on the clubs screen for players without an old RaceNet account.
 

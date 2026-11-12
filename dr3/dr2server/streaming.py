@@ -302,15 +302,10 @@ class StreamingWriter:
 
     def _tick(self, tick_n: int = 0) -> None:
         state = self._dispatcher.get_streaming_state()
-        snapshot = state.get("clubs_snapshot")
-        if not snapshot:
-            self._vlog(
-                f"[STREAM] tick {tick_n}: skip — no clubs_snapshot yet "
-                f"(event_id={state.get('event_id')!r} "
-                f"club_id={state.get('club_id')!r} "
-                f"vehicle_id={state.get('vehicle_id')!r})"
-            )
-            return
+        # Official dailies and time trials have no clubs_snapshot entry, so the
+        # snapshot is optional — direct DataMining labels still drive Location /
+        # Car Class / Stage Name / Car for those race types.
+        snapshot = state.get("clubs_snapshot") or {}
 
         enabled = self._current_enabled()
         if not enabled:
@@ -361,15 +356,17 @@ class StreamingWriter:
             if sname:
                 values["stage_name"] = str(sname)
 
-        if event:
-            if "location" in enabled:
-                location = event.get("location")
-                if location:
-                    values["location"] = str(location)
-            if "car_class" in enabled:
-                car_class = event.get("car_class")
-                if car_class:
-                    values["car_class"] = str(car_class)
+        # Club races take their labels from the event snapshot; direct
+        # DataMining labels are the fallback (and the only source for official
+        # dailies / time trials, which have no event entry).
+        if "location" in enabled:
+            location = (event.get("location") if event else None) or state.get("location")
+            if location:
+                values["location"] = str(location)
+        if "car_class" in enabled:
+            car_class = (event.get("car_class") if event else None) or state.get("car_class")
+            if car_class:
+                values["car_class"] = str(car_class)
 
         if "car" in enabled and isinstance(vehicle_id, int) and vehicle_id in VEHICLES:
             name = VEHICLES[vehicle_id].get("name")

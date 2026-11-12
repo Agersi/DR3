@@ -198,10 +198,11 @@ def ensure_game_udp_for_dr3(target_port: int, path: Optional[str] = None,
     or None when nothing changed / no file / no safe edit.
 
     Rules:
-      * no ``<udp>`` element          -> insert one, enabled, at target_port
-      * disabled                      -> set enabled="true" (port kept)
+      * no ``<udp>`` element          -> insert one, enabled, extradata="3", at target_port
+      * disabled                      -> set enabled="true" + extradata="3" (port kept)
       * enabled and port == 20777     -> leave untouched (SimHub default)
-      * enabled and other port        -> rewrite port to target_port
+      * enabled and other port        -> rewrite port to target_port + extradata="3"
+      * enabled and port == target    -> normalize extradata="3" when missing/wrong
     """
     p = path or game_config_path()
     if not os.path.isfile(p):
@@ -227,13 +228,23 @@ def ensure_game_udp_for_dr3(target_port: int, path: Optional[str] = None,
     else:
         enabled = attrs.get("enabled") == "true"
         port = int(attrs["port"]) if attrs.get("port", "").isdigit() else None
+        extradata = attrs.get("extradata")
         if not enabled:
             new_text = _set_attr_in_elem(text, "udp", "enabled", "true")
             action = f"game UDP was disabled — enabled it on :{port or '?'}"
+            if extradata != "3":
+                new_text = _set_attr_in_elem(new_text, "udp", "extradata", "3")
+                action += " + extradata=3"
         elif port is not None and port != SIMHUB_UDP_PORT and port != target_port:
             new_text = _set_attr_in_elem(text, "udp", "port", str(target_port))
             action = (f"game UDP was on :{port} — set it to DR3's port "
                       f":{target_port}")
+            if extradata != "3":
+                new_text = _set_attr_in_elem(new_text, "udp", "extradata", "3")
+                action += " + extradata=3"
+        elif port == target_port and extradata != "3":
+            new_text = _set_attr_in_elem(text, "udp", "extradata", "3")
+            action = f"game UDP was already on DR3's port :{target_port} — set extradata=3"
 
     if new_text is None or new_text == text:
         return None
