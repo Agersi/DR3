@@ -438,7 +438,11 @@ def event_board(event: dict, round_index: int, mode: str,
     stages of an Overall total take their bogey, exactly like the championship
     standings. The per-run columns come from the matching ``stage_runs`` rows —
     in Overall mode each is the value the driver used most across those
-    stages, and tyre lists every distinct compound they ran."""
+    stages, and tyre lists every distinct compound they ran. The car shown is
+    the one actually driven in the selected range (latest stage's run row
+    wins), NOT the Result-level vehicle — that column holds the driver's most
+    recent car anywhere in the championship, which is wrong on an earlier
+    round once a later leg has been driven."""
     from .events import entries_for_event
     from .models import User
 
@@ -523,6 +527,7 @@ def event_board(event: dict, round_index: int, mode: str,
             cams: list = []
             assist_flags: list = []
             user_runs = runs_by_user.get(e.get('username'), {})
+            vid = None
             for k in range(j + 1):
                 flat_k = offset + k
                 se = seg[flat_k] if flat_k < len(seg) else None
@@ -533,7 +538,11 @@ def event_board(event: dict, round_index: int, mode: str,
                 if t > 0 and rs == 0:
                     done += 1
                 penalty += _penalty_ms(se)
-                a = _run_attrs(user_runs.get(flat_k))
+                run_obj = user_runs.get(flat_k)
+                rv = getattr(run_obj, 'vehicle_id', None) if run_obj else None
+                if rv is not None:
+                    vid = rv
+                a = _run_attrs(run_obj)
                 if a['tyre'] is not None:
                     tyres.add(a['tyre'])
                 inputs.append(a['input'])
@@ -549,7 +558,7 @@ def event_board(event: dict, round_index: int, mode: str,
                 'penalty_ms': penalty,
                 'score': total,
                 'dnf': done < j + 1,
-                'vid': entries_by_user.get(e.get('username'), {}).get('vehicle_id'),
+                'vid': vid or entries_by_user.get(e.get('username'), {}).get('vehicle_id'),
                 'tyres': sorted(tyres),
                 'input': _most_common(inputs),
                 'vr': _most_common(vrs),

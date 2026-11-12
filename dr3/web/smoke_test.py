@@ -1652,7 +1652,7 @@ def main() -> int:
     # 19f. club/event detail pages: rounds table, standings with points,
     #      per-round classification and stage-by-stage results
     with app.app_context():
-        from app.models import Result as _Result
+        from app.models import Result as _Result, StageRun as _CumRun
         champ = (Event.query.filter_by(club_id=club_id)
                  .order_by(Event.start_time.asc()).first())
         eid2 = champ.id if champ else None
@@ -1736,11 +1736,19 @@ def main() -> int:
                     'stages': cum_stages,
                 }]),
                 active=True))
+            # The Result-level vehicle_id (532) simulates a later leg's car —
+            # the board must show the car actually driven in this round (565,
+            # from the stage_runs rows), not the Result column.
             for name, t in (('smokedriver', 150000), ('secondpilot', 200000)):
                 db.session.add(_Result(
                     event_id='evt-smoke-board-cum', username=name, car='Test Car',
-                    total_time_ms=t * 2,
+                    vehicle_id=532, total_time_ms=t * 2,
                     stages_json=json.dumps([{'time_ms': t, 'penalties_ms': 0}] * 2)))
+                for k in range(2):
+                    db.session.add(_CumRun(
+                        username=name, event_id='evt-smoke-board-cum',
+                        vehicle_id=565, flat_stage_index=k, time_ms=t,
+                        player_finished=True))
             db.session.commit()
 
         api = client.get(
@@ -1798,6 +1806,12 @@ def main() -> int:
               and by_name1.get('smokedriver', {}).get('time_text') == format_ms(300000)
               and by_name1.get('secondpilot', {}).get('time_text') == format_ms(400000),
               f"rows={[(n, r.get('time_text')) for n, r in by_name1.items()]}")
+        check('event-board API: overall shows the car driven in the round, not the Result-level one',
+              by_name0.get('smokedriver', {}).get('vehicle') == 'Porsche 911 RGT Rally Spec'
+              and by_name0.get('secondpilot', {}).get('vehicle') == 'Porsche 911 RGT Rally Spec'
+              and by_name1.get('smokedriver', {}).get('vehicle') == 'Porsche 911 RGT Rally Spec'
+              and all(r.get('vehicle') != 'Ford Fiesta R2' for r in list(by_name0.values()) + list(by_name1.values())),
+              f"cars={[(n, r.get('vehicle')) for n, r in {**by_name0, **by_name1}.items()]}")
 
         api2 = client.get(
             f'/clubs/{club_id}/event-board?event={eid2}&round=0&mode=stage&stage=0')
