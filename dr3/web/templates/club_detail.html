@@ -428,19 +428,18 @@
     var i = board.info;
     if (!i) {
       var rnd = (board.rounds || [])[board.round_index] || {};
-      el.innerHTML = '<span class="info-item info-name">Round ' + (board.round_index + 1) +
+      el.innerHTML = '<span class="chip">Round ' + (board.round_index + 1) +
         ' — ' + esc(rnd.location || '') + (rnd.car_class ? ' (' + esc(rnd.car_class) + ')' : '') + '</span>';
       return;
     }
     el.innerHTML =
-      '<span class="info-item"><span class="info-key">Stage</span> ' + esc(i.number) + '</span>' +
-      '<span class="info-item info-name">' + esc(i.name || '') + '</span>' +
-      (i.length_km ? '<span class="info-item"><span class="info-key">Length</span> ' + Number(i.length_km).toFixed(2) + ' km</span>' : '') +
-      (i.weather ? '<span class="info-item"><span class="info-key">Weather</span> ' + esc(i.weather) + '</span>' : '') +
-      (i.service ? '<span class="info-item"><span class="info-key">Service</span> ' + esc(i.service) + '</span>' : '') +
-      (i.surface_deg ? '<span class="info-item"><span class="info-key">Surface Degradation</span> ' + esc(i.surface_deg) + '</span>' : '') +
-      (i.car_class ? '<span class="info-item"><span class="info-key">Class</span> ' + esc(i.car_class) + '</span>' : '') +
-      '<span class="info-item"><span class="info-key">Hardcore Damage</span> ' + (i.hardcore_damage ? 'On' : 'Off') + '</span>';
+      '<span class="chip chip-accent">Stage: ' + esc(i.name || '') + '</span>' +
+      (i.length_km ? '<span class="chip">Length: ' + Number(i.length_km).toFixed(2) + ' km</span>' : '') +
+      (i.weather ? '<span class="chip">Weather: ' + esc(i.weather) + '</span>' : '') +
+      (i.service ? '<span class="chip">Service: ' + esc(i.service) + '</span>' : '') +
+      (i.surface_deg ? '<span class="chip">Surface Degradation: ' + esc(i.surface_deg) + '</span>' : '') +
+      (i.car_class ? '<span class="chip">Class: ' + esc(i.car_class) + '</span>' : '') +
+      '<span class="chip">Hardcore Damage: ' + (i.hardcore_damage ? 'On' : 'Off') + '</span>';
   }
 
   function expandCell(row) {

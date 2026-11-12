@@ -606,8 +606,7 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
 .stage-btn:hover { border-color: var(--accent); }
 .stage-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
 
-.board-info { display: flex; gap: 1rem; flex-wrap: wrap; align-items: baseline; padding: 0.4rem 0.2rem 0.6rem; }
-.board-info .info-name { font-weight: 700; }
+.board-info { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; padding: 0.4rem 0.2rem 0.6rem; }
 .info-key { text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.08em; color: var(--muted); font-family: var(--display); }
 
 table.board { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
