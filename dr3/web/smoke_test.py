@@ -1709,6 +1709,40 @@ def main() -> int:
               and next((s['name'] for s in sels if s['event_id'] == eid2), '') == 'Championship 0',
               f'got={got_names} want={want_names}')
 
+        from app.results_view import format_ms
+
+        # Cumulative-Overall fixture: one leg with two stages so stage=1's
+        # total can be checked against stage=0's.
+        cum_routes = routes[:2] if len(routes) >= 2 else (routes * 2)[:2] if routes else []
+        cum_conds = stage_conditions_for_location(qloc) if qloc else []
+        cum_stages = []
+        for i in range(2):
+            st = {'surface_deg': 'Medium', 'service_area': 'Medium'}
+            if cum_routes:
+                st['track_id'] = str(cum_routes[i % len(cum_routes)][0])
+            if cum_conds:
+                st['conditions_id'] = str(cum_conds[0])
+            cum_stages.append(st)
+        with app.app_context():
+            db.session.add(Event(
+                id='evt-smoke-board-cum', name='Smoke Crew', club_id=club_id,
+                start_time=utcnow() - timedelta(hours=1),
+                end_time=utcnow() + timedelta(days=4),
+                settings_json=json.dumps({'mode': 'multi'}),
+                legs_json=json.dumps([{
+                    'location': qloc or '', 'car_class': qclass or '',
+                    'surface': 'Gravel',
+                    'duration': {'days': 1, 'hours': 0, 'mins': 0},
+                    'stages': cum_stages,
+                }]),
+                active=True))
+            for name, t in (('smokedriver', 150000), ('secondpilot', 200000)):
+                db.session.add(_Result(
+                    event_id='evt-smoke-board-cum', username=name, car='Test Car',
+                    total_time_ms=t * 2,
+                    stages_json=json.dumps([{'time_ms': t, 'penalties_ms': 0}] * 2)))
+            db.session.commit()
+
         api = client.get(
             f'/clubs/{club_id}/event-board?event={eid2}&round=0&mode=overall')
         check('event-board API: overall returns 200 JSON',
@@ -1733,12 +1767,49 @@ def main() -> int:
                   and any(rd.get('thumb_url') for rd in b.get('rounds') or [])
                   and any(rd.get('class_thumb_url') for rd in b.get('rounds') or []),
                   f"rounds={b.get('rounds')}")
+            by_name = {row['username']: row for row in rows}
+            check('event-board API: rows carry flag urls, no class label',
+                  all('class_label' not in row for row in rows)
+                  and by_name.get('smokedriver', {}).get('flag_url') == '/static/flags/sweden-flag.png'
+                  and by_name.get('secondpilot', {}).get('flag_url') == '/static/flags/finland-flag.png',
+                  f"flags={[(n, r.get('flag_url')) for n, r in by_name.items()]}")
+            info = b.get('info') or {}
+            check('event-board API: overall info carries stage + surface deg + class + hardcore',
+                  info.get('number') == 1 and bool(info.get('surface_deg'))
+                  and bool(info.get('car_class'))
+                  and isinstance(info.get('hardcore_damage'), bool),
+                  f"info={info}")
+
+        api_cum0 = client.get(
+            f'/clubs/{club_id}/event-board?event=evt-smoke-board-cum&round=0&mode=overall')
+        bcum = api_cum0.get_json() or {}
+        by_name0 = {row['username']: row for row in bcum.get('rows') or []}
+        check('event-board API: overall stage 1 shows the first stage only',
+              api_cum0.status_code == 200
+              and by_name0.get('smokedriver', {}).get('time_text') == format_ms(150000)
+              and by_name0.get('secondpilot', {}).get('time_text') == format_ms(200000),
+              f"rows={[(n, r.get('time_text')) for n, r in by_name0.items()]}")
+        api_cum1 = client.get(
+            f'/clubs/{club_id}/event-board?event=evt-smoke-board-cum&round=0&mode=overall&stage=1')
+        bcum1 = api_cum1.get_json() or {}
+        by_name1 = {row['username']: row for row in bcum1.get('rows') or []}
+        check('event-board API: overall stage 2 is cumulative (stages 1+2)',
+              api_cum1.status_code == 200
+              and by_name1.get('smokedriver', {}).get('time_text') == format_ms(300000)
+              and by_name1.get('secondpilot', {}).get('time_text') == format_ms(400000),
+              f"rows={[(n, r.get('time_text')) for n, r in by_name1.items()]}")
 
         api2 = client.get(
             f'/clubs/{club_id}/event-board?event={eid2}&round=0&mode=stage&stage=0')
         check('event-board API: stage mode returns info + rows',
               api2.status_code == 200 and (api2.get_json() or {}).get('info'),
               f'status={api2.status_code}')
+        if api2.status_code == 200:
+            i2 = (api2.get_json() or {}).get('info') or {}
+            check('event-board API: stage info carries surface deg + class + hardcore',
+                  bool(i2.get('surface_deg')) and bool(i2.get('car_class'))
+                  and isinstance(i2.get('hardcore_damage'), bool),
+                  f"info={i2}")
 
         api3 = client.get(
             f'/clubs/{club_id}/event-board?event=evt-doesnotexist&round=0&mode=overall')

@@ -597,7 +597,7 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
 }
 
 .board-toggles { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
-.mode-toggle { display: inline-flex; border: 2px solid var(--line); }
+.mode-toggle { display: inline-flex; }
 .mode-btn { background: var(--card); border: none; border-right: 2px solid var(--line); padding: 0.4rem 1rem; cursor: pointer; color: var(--accent); font-weight: 700; }
 .mode-btn:last-child { border-right: none; }
 .mode-btn.active { background: var(--accent); color: var(--bg); }

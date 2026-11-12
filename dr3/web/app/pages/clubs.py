@@ -549,7 +549,8 @@ def club_event_board(club_id: str):
 
     Query args: ``event`` (championship id, must belong to the club),
     ``round`` (0-based), ``mode`` ('overall'|'stage'), ``stage`` (0-based local
-    stage index, only in stage mode)."""
+    stage index — used in both modes; Overall shows each driver's cumulative
+    time through that stage)."""
     club = _load_club(club_id)
     user_id = session.get('user_id')
     user = db.session.get(User, user_id) if user_id else None
@@ -568,12 +569,10 @@ def club_event_board(club_id: str):
     mode = request.args.get('mode', 'overall')
     if mode not in ('overall', 'stage'):
         mode = 'overall'
-    stage_local_index = None
-    if mode == 'stage':
-        try:
-            stage_local_index = int(request.args.get('stage', '0'))
-        except ValueError:
-            stage_local_index = 0
+    try:
+        stage_local_index = int(request.args.get('stage', '0'))
+    except ValueError:
+        stage_local_index = 0
 
     board = event_board(event, round_index, mode, stage_local_index)
     return jsonify(board if board is not None else {'rows': []})

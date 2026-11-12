@@ -91,7 +91,7 @@
       <table class="board" id="board-table">
         <thead>
           <tr>
-            <th>#</th><th>Driver</th><th>Vehicle</th><th>Class</th><th>Tyre</th>
+            <th>#</th><th></th><th>Driver</th><th>Vehicle</th><th>Tyre</th>
             <th>Input</th><th>VR</th><th>Camera</th><th>Assists</th><th>Penalty</th>
             <th class="num">Time</th><th class="num">Diff 1st</th><th></th>
           </tr>
@@ -346,7 +346,7 @@
     p.set('event', state.event_id);
     p.set('round', state.round_index);
     p.set('mode', state.mode);
-    if (state.mode === 'stage') p.set('stage', state.stage);
+    p.set('stage', state.stage);
     return root + '/clubs/' + state.club_id + '/event-board?' + p.toString();
   }
 
@@ -355,6 +355,11 @@
     return tyres.map(function (t) {
       return '<span class="tyre-chip" title="Compound ' + esc(t) + '">' + esc(t) + '</span>';
     }).join(' ');
+  }
+
+  function flagCell(url, name) {
+    if (!url) return '';
+    return '<img class="flag" src="' + esc(url) + '" alt="' + esc(name) + '">';
   }
 
   function boolCell(v) {
@@ -411,33 +416,31 @@
       b.classList.toggle('active', b.getAttribute('data-mode') === state.mode);
     });
     var bar = document.getElementById('stage-bar');
-    if (state.mode === 'stage') {
-      bar.hidden = false;
-      bar.innerHTML = (board.stages_bar || []).map(function (s) {
-        var cls = 'stage-btn' + (s.local_index === board.stage_local_index ? ' active' : '');
-        return '<button type="button" class="' + cls + '" data-stage="' + s.local_index + '" title="' + esc(s.name) + '">' + esc(s.label) + '</button>';
-      }).join('');
-    } else {
-      bar.hidden = true;
-      bar.innerHTML = '';
-    }
+    bar.hidden = false;
+    bar.innerHTML = (board.stages_bar || []).map(function (s) {
+      var cls = 'stage-btn' + (s.local_index === board.stage_local_index ? ' active' : '');
+      return '<button type="button" class="' + cls + '" data-stage="' + s.local_index + '" title="' + esc(s.name) + '">' + esc(s.label) + '</button>';
+    }).join('');
   }
 
   function renderInfo(board) {
     var el = document.getElementById('board-info');
-    if (state.mode === 'stage' && board.info) {
-      var i = board.info;
-      el.innerHTML =
-        '<span class="info-item"><span class="info-key">Stage</span> ' + esc(i.number) + '</span>' +
-        '<span class="info-item info-name">' + esc(i.name || '') + '</span>' +
-        (i.length_km ? '<span class="info-item"><span class="info-key">Length</span> ' + Number(i.length_km).toFixed(2) + ' km</span>' : '') +
-        (i.weather ? '<span class="info-item"><span class="info-key">Weather</span> ' + esc(i.weather) + '</span>' : '') +
-        (i.service ? '<span class="info-item"><span class="info-key">Service</span> ' + esc(i.service) + '</span>' : '');
-    } else {
+    var i = board.info;
+    if (!i) {
       var rnd = (board.rounds || [])[board.round_index] || {};
       el.innerHTML = '<span class="info-item info-name">Round ' + (board.round_index + 1) +
         ' — ' + esc(rnd.location || '') + (rnd.car_class ? ' (' + esc(rnd.car_class) + ')' : '') + '</span>';
+      return;
     }
+    el.innerHTML =
+      '<span class="info-item"><span class="info-key">Stage</span> ' + esc(i.number) + '</span>' +
+      '<span class="info-item info-name">' + esc(i.name || '') + '</span>' +
+      (i.length_km ? '<span class="info-item"><span class="info-key">Length</span> ' + Number(i.length_km).toFixed(2) + ' km</span>' : '') +
+      (i.weather ? '<span class="info-item"><span class="info-key">Weather</span> ' + esc(i.weather) + '</span>' : '') +
+      (i.service ? '<span class="info-item"><span class="info-key">Service</span> ' + esc(i.service) + '</span>' : '') +
+      (i.surface_deg ? '<span class="info-item"><span class="info-key">Surface Degradation</span> ' + esc(i.surface_deg) + '</span>' : '') +
+      (i.car_class ? '<span class="info-item"><span class="info-key">Class</span> ' + esc(i.car_class) + '</span>' : '') +
+      '<span class="info-item"><span class="info-key">Hardcore Damage</span> ' + (i.hardcore_damage ? 'On' : 'Off') + '</span>';
   }
 
   function expandCell(row) {
@@ -458,9 +461,9 @@
     body.innerHTML = rows.map(function (r) {
       var tr = '<tr class="board-row' + (r.dnf ? ' dnf' : '') + '" data-pos="' + r.pos + '">' +
         '<td class="num">' + r.pos + '</td>' +
+        '<td class="flag-cell">' + flagCell(r.flag_url, r.username) + '</td>' +
         '<td><a href="' + root + esc(r.driver_url) + '">' + esc(r.username) + '</a></td>' +
         '<td>' + esc(r.vehicle || '') + '</td>' +
-        '<td>' + esc(r.class_label || '') + '</td>' +
         '<td class="tyre-cell">' + tyreCell(r.tyres) + '</td>' +
         '<td>' + inputCell(r.input) + '</td>' +
         '<td>' + boolCell(r.vr) + '</td>' +
@@ -524,7 +527,6 @@
     var btn = e.target.closest('.mode-btn');
     if (!btn) return;
     state.mode = btn.getAttribute('data-mode');
-    if (state.mode === 'stage' && !state.stage) state.stage = 0;
     load();
   });
 
