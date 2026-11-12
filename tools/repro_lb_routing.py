@@ -182,6 +182,18 @@ def main():
     assert handler._should_proxy(
         "RaceNetChallenges.StageBegin", {"ChallengeId": Int64(bases["evt-32aceb25"])}) is False
 
+    # RaceNet.CheckAccountLinked is always local (never proxied) so players
+    # without an old RaceNet account aren't bounced to "Sign up to Racenet".
+    assert handler._should_proxy("RaceNet.CheckAccountLinked", {}) is False
+    linked = app.dispatcher.dispatch("RaceNet.CheckAccountLinked", {})
+    assert linked.get("IsLinked") is True and linked.get("UpdatedTerms") is False
+    # Local response must be byte-identical to EGO's for a linked account.
+    import base64
+    from dr2server.egonet import encode_stream
+    body = {k: v for k, v in linked.items() if k != "ok"}
+    encoded = base64.b64encode(encode_stream(body)).decode("ascii")
+    assert encoded == "dmRpYwIAAAAISXNMaW5rZWRib29sAQxVcGRhdGVkVGVybXNib29sAA==", encoded
+
     print(f"\n{'ALL PASS' if fails == 0 else f'{fails} FAILURES'}")
     return 1 if fails else 0
 

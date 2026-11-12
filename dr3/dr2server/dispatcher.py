@@ -467,7 +467,10 @@ class RpcDispatcher:
 
     @staticmethod
     def _account_linked(params: Dict[str, Any]) -> Dict[str, Any]:
-        return {"ok": True, "IsLinked": True}
+        # Always answer linked so players without an old RaceNet account can
+        # reach the Clubs screen (routed locally via ALWAYS_LOCAL_METHODS in
+        # httpd.py).  Body matches EGO's response for a linked account exactly.
+        return {"ok": True, "IsLinked": True, "UpdatedTerms": False}
 
     def _clubs(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Return club challenges.

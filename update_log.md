@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.67**
+- Fixed a "Sign up to Racenet" prompt that could appear on the clubs screen for players without an old RaceNet account.
+
 **v0.1.66**
 - The telemetry status line now wraps instead of getting cut off, and the window is slightly taller so the Overlay page fits without a scrollbar.
 

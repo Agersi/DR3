@@ -98,6 +98,13 @@ LEADERBOARD_ROUTED_METHODS = frozenset({
     "RaceNetLeaderboard.GetLeaderboardEntries",
     "RaceNetLeaderboard.GetFriendsEntries",
 })
+# Methods answered locally and NEVER proxied upstream — even in default proxy
+# mode.  RaceNet.CheckAccountLinked asks whether the player's account is linked
+# to (the long-dead) RaceNet service; players who never signed up get
+# IsLinked=false back from EGO and the game shows "Sign up to Racenet" on the
+# Clubs screen.  We have no such service, so answer IsLinked=true ourselves —
+# byte-identical to EGO's response for a linked account (see captures).
+ALWAYS_LOCAL_METHODS = frozenset({"RaceNet.CheckAccountLinked"})
 
 
 class App:
@@ -304,6 +311,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             return False
         if self.app.proxy_default_except_clubs:
             if method.startswith(CLUB_LOCAL_PREFIX):
+                return False
+            if method in ALWAYS_LOCAL_METHODS:
                 return False
             if method in CHALLENGE_ROUTED_METHODS:
                 return not self.app.dispatcher.is_local_challenge(payload)
