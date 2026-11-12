@@ -340,16 +340,40 @@ def club_podium_counts(items: list[tuple[dict, list[dict]]]) -> dict[str, dict]:
     """Per-member podium tallies across a club's events.
 
     ``items`` is one ``(event, entries)`` pair per championship the club has run.
-    For every round (rally) of every event, the drivers who finished that round
-    cleanly — no DNF stage — are ranked by round time and the top three earn
-    gold / silver / bronze. Counts accumulate across all rounds of all events,
-    so each member's totals reflect their whole history with the club."""
+    Multi-Location rallies (and legacy events) award ONE set of medals for the
+    whole event: drivers who finished every stage of every leg cleanly (a real
+    time and no DNF race_status on each flat stage) are ranked by bogey-adjusted
+    total across the whole championship, top three earn gold / silver / bronze.
+    Rally Seasons keep one set per round — the drivers who finished that round
+    cleanly are ranked by round time. Counts accumulate across all events, so
+    each member's totals reflect their whole history with the club."""
     counts: dict[str, dict] = {}
     medals = ('gold', 'silver', 'bronze')
     for event, entries in items:
         if not entries:
             continue
-        for rally in championship_view(event):
+        rallies = championship_view(event)
+        if mode_of(event) != CHAMP_MODE_SEASON:
+            total = sum(r['count'] for r in rallies)
+            if not total:
+                continue
+            bogeys = flat_stage_bogeys_ms(event)
+            finishers = []
+            for e in entries:
+                seg = (e.get('stages') or [])[:total]
+                clean = len(seg) == total and all(
+                    s and int(s.get('time_ms', 0) or 0) > 0
+                    and int(s.get('race_status', 0) or 0) == 0
+                    for s in seg)
+                if not clean:
+                    continue
+                finishers.append((adjusted_total_ms(e, bogeys), e.get('username') or ''))
+            finishers.sort()
+            for i, (_t, name) in enumerate(finishers[:3]):
+                bucket = counts.setdefault(name, {'gold': 0, 'silver': 0, 'bronze': 0})
+                bucket[medals[i]] += 1
+            continue
+        for rally in rallies:
             finishers = [r for r in rally_standings(entries, rally)
                          if _ran_any_stage(r) and r['dnf_stages'] == 0]
             for i, row in enumerate(finishers[:3]):
@@ -429,7 +453,12 @@ def _penalty_ms(stage_entry) -> int:
 def event_board(event: dict, round_index: int, mode: str,
                 stage_local_index: int | None = None,
                 now: datetime | None = None) -> dict | None:
-    """The events-tab leaderboard for one championship round.
+    """The events-tab leaderboard for a championship.
+
+    Rally Seasons show one round at a time; Multi-Location rallies (and legacy
+    events) combine the whole event into ONE board — every leg's stages in a
+    single flat bar, Overall accumulating across legs (payload carries
+    ``combined`` so the client can hide the round strip).
 
     ``mode`` is ``'overall'`` (each driver's cumulative time through the
     selected stage — stage 1 alone is just the first stage) or ``'stage'``
@@ -450,17 +479,29 @@ def event_board(event: dict, round_index: int, mode: str,
     rounds = championship_rounds(event, now)
     if not rounds:
         return None
-    try:
-        round_index = int(round_index)
-    except (TypeError, ValueError):
+    # Multi-Location rallies run as ONE championship: the board spans every
+    # leg (flat stage bar, Overall accumulates across legs). Rally Seasons
+    # stay per-round.
+    combined = mode_of(event) != CHAMP_MODE_SEASON
+    if combined:
         round_index = 0
-    round_index = max(0, min(round_index, len(rounds) - 1))
-    rnd = rounds[round_index]
-    offset, count = rnd['offset'], rnd['count']
-    stages_bar = [
-        {'local_index': k, 'label': f'S{k + 1}', 'name': (s.get('name') or '')}
-        for k, s in enumerate(rnd['stages'])
-    ]
+        offset, count = 0, sum(r['count'] for r in rounds)
+        flat_stages = [(r, s) for r in rounds for s in r['stages']]
+    else:
+        try:
+            round_index = int(round_index)
+        except (TypeError, ValueError):
+            round_index = 0
+        round_index = max(0, min(round_index, len(rounds) - 1))
+        rnd = rounds[round_index]
+        offset, count = rnd['offset'], rnd['count']
+        flat_stages = [(rnd, s) for s in rnd['stages']]
+    stages_bar = []
+    for k, (r, s) in enumerate(flat_stages):
+        item = {'local_index': k, 'label': f'S{k + 1}', 'name': (s.get('name') or '')}
+        if combined:
+            item['location'] = r['location']
+        stages_bar.append(item)
 
     try:
         j = int(stage_local_index) if stage_local_index is not None else 0
@@ -468,7 +509,7 @@ def event_board(event: dict, round_index: int, mode: str,
         j = 0
     j = max(0, min(j, count - 1)) if count > 0 else 0
 
-    st_meta = rnd['stages'][j] if count > 0 else {}
+    st_rnd, st_meta = flat_stages[j] if count > 0 else ({}, {})
     settings = normalize_championship(event).get('settings') or {}
     info: dict | None = None
     if count > 0:
@@ -479,7 +520,8 @@ def event_board(event: dict, round_index: int, mode: str,
             'weather': st_meta.get('conditions') or '',
             'service': st_meta.get('service_area') or '',
             'surface_deg': st_meta.get('surface_deg') or 'Medium',
-            'car_class': rnd.get('car_class') or '',
+            'car_class': st_rnd.get('car_class') or '',
+            'location': st_rnd.get('location') or '',
             'hardcore_damage': bool(settings.get('hardcore_damage')),
         }
 
@@ -514,7 +556,7 @@ def event_board(event: dict, round_index: int, mode: str,
         # Overall: cumulative through the selected stage. Finished stages
         # score their real time + penalties, unfinished ones take the stage's
         # bogey — the site's standard championship-total semantics, sliced to
-        # this round's first j+1 stages.
+        # the board's first j+1 flat stages (whole event in combined mode).
         bogeys = flat_stage_bogeys_ms(event)[offset:offset + j + 1]
         for e in entries:
             seg = e.get('stages') or []
@@ -608,6 +650,7 @@ def event_board(event: dict, round_index: int, mode: str,
     return {
         'event_id': event['id'],
         'round_index': round_index,
+        'combined': combined,
         'mode': mode,
         'stage_local_index': j,
         'info': info,

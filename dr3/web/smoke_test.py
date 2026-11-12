@@ -1811,7 +1811,55 @@ def main() -> int:
               and by_name0.get('secondpilot', {}).get('vehicle') == 'Porsche 911 RGT Rally Spec'
               and by_name1.get('smokedriver', {}).get('vehicle') == 'Porsche 911 RGT Rally Spec'
               and all(r.get('vehicle') != 'Ford Fiesta R2' for r in list(by_name0.values()) + list(by_name1.values())),
-              f"cars={[(n, r.get('vehicle')) for n, r in {**by_name0, **by_name1}.items()]}")
+               f"cars={[(n, r.get('vehicle')) for n, r in {**by_name0, **by_name1}.items()]}")
+
+        # Combined-multi fixture: two legs x two stages so the board must span
+        # the whole event — a flat S1..S4 bar, Overall accumulating across
+        # legs, and ONE set of medals for the whole event (not per leg).
+        m_routes = routes if len(routes) >= 2 else (routes * 2)[:2] if routes else []
+        m_conds = stage_conditions_for_location(qloc) if qloc else []
+        m_legs = []
+        for li in range(2):
+            leg_stages = []
+            for i in range(2):
+                st = {'surface_deg': 'Medium', 'service_area': 'Medium'}
+                if m_routes:
+                    st['track_id'] = str(m_routes[(i + li) % len(m_routes)][0])
+                if m_conds:
+                    st['conditions_id'] = str(m_conds[0])
+                leg_stages.append(st)
+            m_legs.append({
+                'location': qloc or '', 'car_class': qclass or '',
+                'surface': 'Gravel',
+                'duration': {'days': 1, 'hours': 0, 'mins': 0},
+                'stages': leg_stages,
+            })
+        with app.app_context():
+            db.session.add(Event(
+                id='evt-smoke-board-multi', name='Smoke Crew', club_id=club_id,
+                start_time=utcnow() - timedelta(hours=1),
+                end_time=utcnow() + timedelta(days=4),
+                settings_json=json.dumps({'mode': 'multi'}),
+                legs_json=json.dumps(m_legs),
+                active=True))
+            # smokedriver finished all four stages cleanly (whole-event finisher).
+            db.session.add(_Result(
+                event_id='evt-smoke-board-multi', username='smokedriver', car='Test Car',
+                total_time_ms=420000,
+                stages_json=json.dumps([{'time_ms': t, 'penalties_ms': 0}
+                                        for t in (100000, 100000, 110000, 110000)])))
+            # secondpilot only finished leg 1; stage 3 wrecked at its limit
+            # (DNF close-out), stage 4 never run — not a clean whole-event finisher.
+            db.session.add(_Result(
+                event_id='evt-smoke-board-multi', username='secondpilot', car='Test Car',
+                total_time_ms=180000,
+                stages_json=json.dumps([
+                    {'time_ms': 90000, 'penalties_ms': 0},
+                    {'time_ms': 90000, 'penalties_ms': 0},
+                    {'time_ms': 900000, 'penalties_ms': 0, 'race_status': 5},
+                    {},
+                ])))
+            db.session.commit()
 
         api2 = client.get(
             f'/clubs/{club_id}/event-board?event={eid2}&round=0&mode=stage&stage=0')
@@ -1825,10 +1873,67 @@ def main() -> int:
                   and isinstance(i2.get('hardcore_damage'), bool),
                   f"info={i2}")
 
+        api_m0 = client.get(
+            f'/clubs/{club_id}/event-board?event=evt-smoke-board-multi&round=0&mode=overall')
+        bm0 = api_m0.get_json() or {}
+        check('event-board API: multi board is combined with a flat 4-stage bar',
+              api_m0.status_code == 200 and bm0.get('combined') is True
+              and [s['label'] for s in bm0.get('stages_bar') or []] == ['S1', 'S2', 'S3', 'S4'],
+              f"bar={bm0.get('stages_bar')}")
+        by_name_m0 = {row['username']: row for row in bm0.get('rows') or []}
+        check('event-board API: combined overall stage 1 shows the first stage only',
+              by_name_m0.get('smokedriver', {}).get('time_text') == format_ms(100000)
+              and by_name_m0.get('secondpilot', {}).get('time_text') == format_ms(90000),
+              f"rows={[(n, r.get('time_text')) for n, r in by_name_m0.items()]}")
+        api_m3 = client.get(
+            f'/clubs/{club_id}/event-board?event=evt-smoke-board-multi&round=0&mode=overall&stage=3')
+        bm3 = api_m3.get_json() or {}
+        by_name_m3 = {row['username']: row for row in bm3.get('rows') or []}
+        check('event-board API: combined overall accumulates across legs (stages 1-4)',
+              api_m3.status_code == 200
+              and by_name_m3.get('smokedriver', {}).get('time_text') == format_ms(420000)
+              and by_name_m3.get('smokedriver', {}).get('dnf') is False,
+              f"rows={[(n, r.get('time_text'), r.get('dnf')) for n, r in by_name_m3.items()]}")
+        check('event-board API: combined info shows the selected stage + its leg location',
+              (bm3.get('info') or {}).get('number') == 4
+              and (bm3.get('info') or {}).get('location') == (qloc or ''),
+              f"info={bm3.get('info')}")
+        api_m2 = client.get(
+            f'/clubs/{club_id}/event-board?event=evt-smoke-board-multi&round=0&mode=stage&stage=2')
+        bm2 = api_m2.get_json() or {}
+        rows_m2 = {r['username']: r for r in bm2.get('rows') or []}
+        check('event-board API: combined stage mode shows the selected leg stage (flat 2)',
+              api_m2.status_code == 200 and (bm2.get('info') or {}).get('number') == 3
+              and rows_m2.get('smokedriver', {}).get('time_text') == format_ms(110000)
+              and rows_m2.get('smokedriver', {}).get('dnf') is False,
+              f"info={bm2.get('info')} rows={[(r.get('username'), r.get('time_text')) for r in bm2.get('rows') or []]}")
+
         api3 = client.get(
             f'/clubs/{club_id}/event-board?event=evt-doesnotexist&round=0&mode=overall')
         check('event-board API: unknown event id rejected',
               api3.status_code == 404, f'status={api3.status_code}')
+
+        # Season boards stay per-round (not combined).
+        if season is not None:
+            api_s = client.get(
+                f'/clubs/{club_id}/event-board?event={season.id}&round=0&mode=overall')
+            bs = api_s.get_json() or {}
+            check('event-board API: season board stays per-round (not combined)',
+                  api_s.status_code == 200 and bs.get('combined') is False
+                  and [s['label'] for s in bs.get('stages_bar') or []] == ['S1'],
+                  f"bar={bs.get('stages_bar')}")
+
+        # Whole-event medals: one set per multi event, clean finishers only.
+        from app.results_view import club_podium_counts
+        from app.events import get_event as _get_ev, entries_for_event as _entries_for
+        with app.app_context():
+            m_ev = _get_ev('evt-smoke-board-multi')
+            med = club_podium_counts([(m_ev, _entries_for('evt-smoke-board-multi'))]) \
+                if m_ev else {}
+        check('club medals: multi event awards one whole-event set (clean finishers only)',
+              med.get('smokedriver') == {'gold': 1, 'silver': 0, 'bronze': 0}
+              and 'secondpilot' not in med,
+              f"medals={med}")
 
         mem = det[det.index('id="tab-members"'):]
         check('members tab: Gold/Silver/Bronze columns populated from clean finishes',
