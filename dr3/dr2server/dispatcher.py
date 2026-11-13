@@ -13,7 +13,8 @@ from .account_store import AccountStore
 from .api_client import UpstreamClient
 from .egonet import Int64, Timestamp, UInt16, UInt32, UInt8
 from .game_data import (
-    Location, Track, VehicleClass, VEHICLES, CONFIRMED_VEHICLE_CLASS_IDS,
+    Location, Track, Vehicle, VehicleClass, VEHICLES,
+    CONFIRMED_VEHICLE_CLASS_IDS,
     default_stage_conditions_for_location,
     STAGE_CONDITIONS_LABELS, surface_degrad_for_level, service_area_for_level,
     RX_DRYING_TIME, RX_GRID_ENTRANTS, RX_SVC_SETTINGS_ID,
@@ -118,6 +119,18 @@ _LIVERY_FOR_VEHICLE: Dict[int, int] = {
     582: 3722, 585: 3765, 586: 3767, 587: 3770, 588: 3763, 589: 3772,
     590: 3764, 593: 3774, 597: 3779, 600: 3874,
 }
+
+# The game's internal rallycross tyre representation starts at compound 13
+# (observed on RX stages; rally compounds stay below it).  Such values are
+# invalid on rally cars: restoring them into a Progress entry makes the client
+# crash when loading the next stage or opening the Tires UI.
+_RX_TYRE_COMPOUND_MIN = 13
+
+_RX_VEHICLE_CLASSES = frozenset({
+    VehicleClass.RX_SUPER_1600, VehicleClass.CROSS_KART,
+    VehicleClass.GROUP_B_RX, VehicleClass.RX2,
+    VehicleClass.RX_SUPERCARS, VehicleClass.RX_SUPERCARS_2019,
+})
 
 
 # Official-challenge (Events page) values observed in the real upstream
@@ -1105,6 +1118,14 @@ class RpcDispatcher:
         return club_egonet, challenge_egonet, progress_egonet
 
     @staticmethod
+    def _vehicle_is_rx(vehicle_id: int) -> bool:
+        """True when the vehicle belongs to a rallycross class."""
+        try:
+            return Vehicle(vehicle_id).vehicle_class in _RX_VEHICLE_CLASSES
+        except (ValueError, KeyError):
+            return False
+
+    @staticmethod
     def _carry_vehicle(
         completed: List[Dict[str, Any]],
     ) -> tuple[int, int]:
@@ -1189,12 +1210,13 @@ class RpcDispatcher:
         game resumes into that car instead of showing the car-select screen
         again.  Rally Season legs are independent and never carry over.
 
-        Tyres are an exception: they are only carried over on rally→rally
-        transitions (``prev_was_rx=False``).  An RX stage reports tyre values
-        that are invalid on rally tracks (e.g. compound 13), and resuming a
-        rally leg with them makes the game's Tires button crash.  After an RX
-        leg the seed falls back to the same defaults upstream RaceNet seeds
-        multi-rally entries with (TyreCompound 7 / TyresRemaining 2).
+        Tyres are an exception: values reported by an RX stage (compound >=
+        13) are invalid on rally cars and crash the game when restored — in
+        the Tires button after an RX leg, or on stage load when resuming a
+        mid-leg RX stage in a rally car.  In both cases the seed falls back
+        to the same defaults upstream RaceNet seeds multi-rally entries with
+        (TyreCompound 7 / TyresRemaining 2); the game converts to its own RX
+        representation itself when an RX stage loads.
 
         With ``championship_time`` (Multi-Location Rally), ChampTimeMs is the
         running championship total instead of this leg's own stages (backlog
@@ -1249,6 +1271,15 @@ class RpcDispatcher:
         last = completed[completed_count - 1] if completed else {}
         state_entry = self._last_state_entry(completed)
         vehicle_id, livery_id = self._carry_vehicle(completed)
+        tyre_compound = int(state_entry.get("tyre_compound", 0) or 7)
+        tyres_remaining = int(state_entry.get("tyres_remaining", 0) or 2)
+        if (tyre_compound >= _RX_TYRE_COMPOUND_MIN
+                and not self._vehicle_is_rx(vehicle_id)):
+            # Mid-leg resume of an RX stage in a rally car: the persisted
+            # state carries the game's internal RX tyre values, which crash
+            # the client on load.  Seed the upstream defaults instead — the
+            # game converts to its own RX representation when the stage loads.
+            tyre_compound, tyres_remaining = 7, 2
         return self._build_progress_dict(
             challenge_id=challenge_id,
             target_stage_index=target_stage_index,
@@ -1263,8 +1294,8 @@ class RpcDispatcher:
             has_repaired=bool(last.get("has_repaired", False)),
             repair_penalty_ms=int(last.get("repair_penalty_ms", 0) or 0),
             vehicle_damage=self._damage_from_dict(last.get("vehicle_damage")),
-            tyre_compound=int(state_entry.get("tyre_compound", 0) or 7),
-            tyres_remaining=int(state_entry.get("tyres_remaining", 0) or 2),
+            tyre_compound=tyre_compound,
+            tyres_remaining=tyres_remaining,
             tuning_bytes=self._decode_tuning_b64(
                 state_entry.get("tuning_setup_b64", "") or ""),
             attempts_left=self._attempts_left_for(ep, completed=(state == 2)),
@@ -1694,6 +1725,13 @@ class RpcDispatcher:
                 state_out = 1
 
             vehicle_id, livery_id = self._carry_vehicle(completed_stages)
+            tyre_compound = int(state_entry.get("tyre_compound", 0) or 7)
+            tyres_remaining = int(state_entry.get("tyres_remaining", 0) or 2)
+            if (tyre_compound >= _RX_TYRE_COMPOUND_MIN
+                    and not self._vehicle_is_rx(vehicle_id)):
+                # Same guard as _multi_event_progress: internal RX tyre
+                # values crash a rally car on stage load / Tires UI.
+                tyre_compound, tyres_remaining = 7, 2
 
             progress.append(self._build_progress_dict(
                 challenge_id=chal_id,
@@ -1706,8 +1744,8 @@ class RpcDispatcher:
                 has_repaired=bool(last_stage.get("has_repaired", False)),
                 repair_penalty_ms=int(last_stage.get("repair_penalty_ms", 0) or 0),
                 vehicle_damage=self._damage_from_dict(last_stage.get("vehicle_damage")),
-                tyre_compound=int(state_entry.get("tyre_compound", 0) or 7),
-                tyres_remaining=int(state_entry.get("tyres_remaining", 0) or 2),
+                tyre_compound=tyre_compound,
+                tyres_remaining=tyres_remaining,
                 tuning_bytes=self._decode_tuning_b64(
                     state_entry.get("tuning_setup_b64", "") or ""),
                 attempts_left=self._attempts_left_for(ep, completed=all_done),

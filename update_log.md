@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.69**
+- Fixed a crash that could happen when rejoining a club event at a rallycross stage you had already started.
+
 **v0.1.68**
 - Streaming overlay text files now work for all race types, and telemetry setup is more reliable.
 
