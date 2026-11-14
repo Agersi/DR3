@@ -34,6 +34,9 @@ from .tables import (
     normalize_championship,
 )
 
+from dr2server.game_data import rallycross_stage_plan  # noqa: E402
+from dr2server.stage_limits import split_count_for_limit, stage_limit_ms  # noqa: E402
+
 SCORING_LABELS = {'wrc': 'WRC', 'groupb': 'Group B', 'codemasters': 'Codemasters'}
 MODE_LABELS = {'multi': 'Multi-Location Rally', 'season': 'Rally Season'}
 
@@ -525,6 +528,24 @@ def event_board(event: dict, round_index: int, mode: str,
             'hardcore_damage': bool(settings.get('hardcore_damage')),
         }
 
+    # Split columns for the selected stage: rally stages follow the game's
+    # max-time limit (15 min -> 4 sectors, 30 min -> 8), rallycross shows one
+    # column per lap of the leg's stage plan.
+    is_rx = bool(count > 0 and st_rnd.get('location') in RX_LOCATIONS)
+    split_count: int | None = None
+    if count > 0:
+        if is_rx:
+            legs = normalize_championship(event).get('events') or []
+            leg = legs[st_rnd['index']] if st_rnd['index'] < len(legs) else {}
+            plan = rallycross_stage_plan(len(st_rnd.get('stages') or []),
+                                         laps=leg.get('rx_laps'))
+            local_idx = j - (st_rnd['offset'] if combined else 0)
+            split_count = plan[local_idx][1] if 0 <= local_idx < len(plan) else None
+        else:
+            tid = st_meta.get('track_id')
+            limit = stage_limit_ms(tid) if tid else 0
+            split_count = split_count_for_limit(limit) if limit else None
+
     entries = entries_for_event(event['id'])
     entries_by_user = {e.get('username'): e for e in entries}
     runs_by_user = _stage_runs_by_user(event['id'])
@@ -647,11 +668,19 @@ def event_board(event: dict, round_index: int, mode: str,
             'splits': r.get('splits'),
         })
 
+    if count > 0 and not split_count:
+        # Unknown rally limit (legacy stage without a track id): mirror the
+        # longest splits actually recorded on this stage, defaulting to the
+        # common 4-sector shape.
+        split_count = max((len(r['splits']) for r in raw if r.get('splits')), default=4)
+
     return {
         'event_id': event['id'],
         'round_index': round_index,
         'combined': combined,
         'mode': mode,
+        'is_rx': is_rx,
+        'split_count': split_count,
         'stage_local_index': j,
         'info': info,
         'stages_bar': stages_bar,

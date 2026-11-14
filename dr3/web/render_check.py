@@ -99,7 +99,7 @@ def main() -> int:
           'border-radius: 0.3rem;' in css
           and '.panel, .club-card, .stat-card, .btn, button, input, select, textarea,' in css
           and '.opt, .num-tile, .table-wrap, .chip, .flash' in css
-            and '.tyre-img::after, .input-tip::after, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in css, '')
+            and '.tyre-img::after, .input-tip::after, .dash-tip::after, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in css, '')
 
     # home recent-times box (backlog #42): server-rendered first page +
     # infinite-scroll JS wired to the public endpoint
@@ -358,7 +358,16 @@ def main() -> int:
               and '.round-box:hover .round-class-thumb, .round-box.hovered .round-class-thumb, .round-box.active .round-class-thumb { filter: none; }' in board_css
               and '.round-loc {\n  font-weight: 900;\n  font-size: 0.95rem;\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  height: 4.5rem;\n  border-bottom-left-radius: .3rem;\n  border-bottom-right-radius: .3rem;\n  padding-left: .5rem;\n  padding-top: .25rem;\n  color: var(--accent);\n  background: color-mix(in srgb, var(--accent-deep) 45%, transparent);\n}' in board_css
               and '.round-window {\n  color: var(--accent);\n  font-weight: 500;\n  font-size: 0.8rem;\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  padding: .25rem .75rem;\n}' in board_css
-                and 'details.create-club .plus, .tyre-img::after, .input-tip::after, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in board_css, '')
+                and 'details.create-club .plus, .tyre-img::after, .input-tip::after, .dash-tip::after, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in board_css, '')
+        check('club detail: splits toggle in thead reveals per-split/lap columns',
+              '<thead id="board-head"></thead>' in det
+              and "return { n: board.split_count || 0, word: board.is_rx ? 'Lap' : 'Split' };" in det
+              and "'<th class=\"num split-col\">' + spec.word + ' #' + i" in det
+              and "data-tip=\"Configure Telemetry\">-</span>" in det
+              and '"splits-toggle"' in det
+              and '.expand-head, .expand-cell { text-align: center; white-space: nowrap; }' in board_css
+              and '.expand-btn.open { transform: rotate(90deg); }' in board_css
+              and '.dash-tip:hover::after { opacity: 1; }' in board_css, '')
         check('club detail: active round box uses card-mixed location bar',
               '.round-box.active .round-loc { background: color-mix(in srgb, var(--card) 65%, transparent); }' in board_css, '')
         m = re.search(r'id="board-state">(.*?)</script>', det, re.S)
@@ -376,7 +385,9 @@ def main() -> int:
               and "if (assists === true) {\n      parts.push('<img class=\"input-icon\" src=\"' + STATIC + 'icons/assist.png\"" in det
               and '.input-cell { white-space: nowrap; }' in board_css
               and '.input-icon { height: 1.1em; width: auto; vertical-align: -0.2em; }' in board_css
-              and '.tyre-img { position: relative; display: inline-block; line-height: 0; }' in board_css, '')
+              and '.tyre-img { position: relative; display: inline-block; line-height: 0; }' in board_css
+              and 'split_count' in (board_state.get('board') or {})
+              and 'is_rx' in (board_state.get('board') or {}), '')
         check('club detail: tyre column renders compound images with hover name tooltip',
               "var TYRE_FILE = {" in det
               and "1: '1_soft_gravel'" in det

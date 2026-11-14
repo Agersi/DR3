@@ -89,13 +89,7 @@
 
     <div class="table-wrap board-wrap">
       <table class="board" id="board-table">
-        <thead>
-          <tr>
-            <th>#</th><th>Driver</th><th>Vehicle</th><th>Tyre</th>
-            <th>Input</th><th>Camera</th><th>Penalty</th>
-            <th class="num">Time</th><th class="num">Diff 1st</th><th></th>
-          </tr>
-        </thead>
+        <thead id="board-head"></thead>
         <tbody id="board-body">
           <tr class="board-empty"><td colspan="10">Loading…</td></tr>
         </tbody>
@@ -331,6 +325,7 @@
   var state;
   try { state = JSON.parse(stateEl.textContent); } catch (e) { return; }
   if (!state || !state.board) return;
+  state.splits_open = false;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -482,23 +477,39 @@
       '</div>';
   }
 
-  function expandCell(row) {
-    if (state.mode !== 'stage') return '';
-    if (row.splits && row.splits.length) {
-      return '<button type="button" class="expand-btn" data-pos="' + row.pos + '" aria-label="Show splits">&#9656;</button>';
+  function splitSpec(board) {
+    if (state.mode !== 'stage') return { n: 0, word: 'Split' };
+    return { n: board.split_count || 0, word: board.is_rx ? 'Lap' : 'Split' };
+  }
+
+  function renderHead(board) {
+    var spec = splitSpec(board);
+    var open = state.splits_open && spec.n > 0;
+    var ths = '<th>#</th><th>Driver</th><th>Vehicle</th><th>Tyre</th>' +
+      '<th>Input</th><th>Camera</th><th>Penalty</th>' +
+      '<th class="num">Time</th><th class="num">Diff 1st</th>' +
+      '<th class="expand-head">' + (spec.n ?
+        '<button type="button" class="expand-btn' + (open ? ' open' : '') + '" id="splits-toggle" aria-label="Toggle splits">&#9656;</button>' : '') + '</th>';
+    if (open) {
+      for (var i = 1; i <= spec.n; i++) {
+        ths += '<th class="num split-col">' + spec.word + ' #' + i + '</th>';
+      }
     }
-    return '<span class="muted small">configure telemetry</span>';
+    document.getElementById('board-head').innerHTML = '<tr>' + ths + '</tr>';
   }
 
   function renderRows(board) {
     var body = document.getElementById('board-body');
     var rows = board.rows || [];
+    var spec = splitSpec(board);
+    var open = state.splits_open && spec.n > 0;
+    var span = 10 + (open ? spec.n : 0);
     if (!rows.length) {
-      body.innerHTML = '<tr class="board-empty"><td colspan="10">No results yet.</td></tr>';
+      body.innerHTML = '<tr class="board-empty"><td colspan="' + span + '">No results yet.</td></tr>';
       return;
     }
     body.innerHTML = rows.map(function (r) {
-      var tr = '<tr class="board-row' + (r.dnf ? ' dnf' : '') + '" data-pos="' + r.pos + '">' +
+      var cells =
         '<td class="num">' + r.pos + '</td>' +
         '<td>' + flagCell(r.flag_url, r.username) + '<a href="' + root + esc(r.driver_url) + '">' + esc(r.username) + '</a></td>' +
         '<td>' + esc(r.vehicle || '') + '</td>' +
@@ -508,14 +519,14 @@
         '<td class="num">' + penaltyCell(r.penalty_ms) + '</td>' +
         '<td class="num">' + esc(r.time_text) + (r.dnf ? ' <span class="dnf-tag">DNF</span>' : '') + '</td>' +
         '<td class="num">' + esc(r.diff_str) + '</td>' +
-        '<td class="expand-cell">' + expandCell(r) + '</td>' +
-        '</tr>';
-      if (state.mode === 'stage' && r.splits && r.splits.length) {
-        tr += '<tr class="splits-row" data-splits-for="' + r.pos + '" hidden>' +
-          '<td colspan="10"><span class="info-key">Splits</span> ' +
-          r.splits.map(function (s) { return esc(Number(s).toFixed(2)); }).join('  ') + '</td></tr>';
+        '<td class="expand-cell"></td>';
+      if (open) {
+        for (var i = 0; i < spec.n; i++) {
+          var v = (r.splits && r.splits[i] != null) ? Number(r.splits[i]).toFixed(2) : null;
+          cells += '<td class="num split-col">' + (v != null ? v : '<span class="dash-tip" data-tip="Configure Telemetry">-</span>') + '</td>';
+        }
       }
-      return tr;
+      return '<tr class="board-row' + (r.dnf ? ' dnf' : '') + '" data-pos="' + r.pos + '">' + cells + '</tr>';
     }).join('');
   }
 
@@ -525,13 +536,14 @@
     renderRounds(board);
     renderToggles(board);
     renderInfo(board);
+    renderHead(board);
     renderRows(board);
   }
 
   function load() {
     fetch(boardUrl(), { headers: { 'Accept': 'application/json' } })
       .then(function (res) { if (!res.ok) throw new Error(res.status); return res.json(); })
-      .then(function (board) { state.board = board; renderAll(); })
+      .then(function (board) { state.board = board; state.splits_open = false; renderAll(); })
       .catch(function () {});
   }
 
@@ -592,12 +604,12 @@
     load();
   });
 
-  document.getElementById('board-body').addEventListener('click', function (e) {
-    var btn = e.target.closest('.expand-btn');
+  document.getElementById('board-table').addEventListener('click', function (e) {
+    var btn = e.target.closest('#splits-toggle');
     if (!btn) return;
-    var pos = btn.getAttribute('data-pos');
-    var row = document.querySelector('#board-body .splits-row[data-splits-for="' + pos + '"]');
-    if (row) row.hidden = !row.hidden;
+    state.splits_open = !state.splits_open;
+    renderHead(state.board);
+    renderRows(state.board);
   });
 
   renderAll();
