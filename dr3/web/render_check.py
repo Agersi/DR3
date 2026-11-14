@@ -387,6 +387,10 @@ def main() -> int:
               and "'<td class=\"flag-cell\">'" not in det
               and "'<td>' + flagCell(r.flag_url, r.username) + '<a href=\"' + root + esc(r.driver_url) + '\">'" in det
               and '.flag { height: .95em; width: auto; vertical-align: -0.18em; margin-right: 0.3em; }' in board_css, '')
+        check('club detail: tight board padding, centered tyre/input columns (incl. header), left-aligned penalty',
+              'table.board th, table.board td { padding: 0.15rem 0.15rem; text-align: left; vertical-align: middle; }' in board_css
+              and 'table.board th:nth-child(4), table.board td:nth-child(4), table.board th:nth-child(5), table.board td:nth-child(5) { text-align: center; }' in board_css
+              and "'<td>' + penaltyCell(r.penalty_ms) + '</td>'" in det, '')
         # championship builder: create a fresh draft, render edit + preview
         r = client.post(f'/clubs/{club_id}/championship/new', data={'num_events': '2', 'num_stages': '3'}, follow_redirects=False)
         check('champ new -> redirect to edit', r.status_code == 302, f'status={r.status_code}')
