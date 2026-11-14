@@ -407,6 +407,8 @@ def test_posttime_splits_e2e():
         api_url=f"http://127.0.0.1:{port}", api_token="df_test")
 
     class _Run:
+        track_length_m = 48210.0
+
         def segment_times(self, n):
             return [30.0] * (n or 0)
 

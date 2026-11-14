@@ -217,6 +217,10 @@ class RpcDispatcher:
         # their only on-ramp to stage_runs). vehicle_id -> (wall_ts, splits);
         # entries expire after _POSTTIME_SPLITS_TTL_S.
         self._pending_posttime_splits: Dict[int, tuple] = {}
+        # Measured per-run distance (int metres) from the same PostTime UDP
+        # claim — time trials send no StageComplete RPC, so without this their
+        # stage_runs row has no distance channel at all. Same key/TTL as splits.
+        self._pending_posttime_distance: Dict[int, tuple] = {}
         # Challenge ids served as ONE challenge carrying ALL legs of the
         # championship in Events[] (#39 experiment, gated by the event setting
         # ``single_challenge``).  For these ids the game addresses stages with
@@ -2396,11 +2400,18 @@ class RpcDispatcher:
         # Rally tracks resolve a split count from their max-time limit; rallycross
         # circuits (no laps in PostTime) stay unmapped -> no splits, time only.
         tt_splits: Optional[List[float]] = None
+        tt_distance: Optional[int] = None
         if not club_stage and self.telemetry is not None and stage_time_ms > 0:
             n_tt = split_count_for_limit(stage_limit_ms(track))
             if n_tt:
                 run = self.telemetry.take_run_since(self._telemetry_arm_wall)
                 if run is not None:
+                    # Measured per-run distance for the stage_runs row: TTs send
+                    # no StageComplete RPC, so without this the web would fall
+                    # back to the snapshot's cumulative camera counters.
+                    measured = run.max_distance() or run.track_length_m
+                    if measured > 0:
+                        tt_distance = int(round(measured))
                     segs = run.segment_times(n_tt)
                     if segs:
                         tt_splits = scale_segments_to_total(
@@ -2408,10 +2419,13 @@ class RpcDispatcher:
                 else:
                     self._warn_no_telemetry()
 
-        # Stash the splits for the StageComplete that follows (official/TT runs
-        # are proxied — their merge feed is the only on-ramp to stage_runs).
+        # Stash the splits + distance for the StageComplete that follows
+        # (official/TT runs are proxied — their merge feed is the only on-ramp
+        # to stage_runs).
         if not club_stage and vehicle_id:
             self._stash_posttime_splits(vehicle_id, tt_splits)
+            if tt_distance is not None:
+                self._stash_posttime_distance(vehicle_id, tt_distance)
 
         if self.api_client is not None and stage_time_ms > 0:
             try:
@@ -2467,6 +2481,27 @@ class RpcDispatcher:
         if time.time() - ts > _POSTTIME_SPLITS_TTL_S:
             return None
         return splits
+
+    def _stash_posttime_distance(self, vehicle_id: int, distance_m: int) -> None:
+        """Remember the PostTime run's measured distance (see
+        _stash_posttime_splits) for the stage-detail merge that follows."""
+        now = time.time()
+        stale = [vid for vid, (ts, _) in self._pending_posttime_distance.items()
+                 if now - ts > _POSTTIME_SPLITS_TTL_S]
+        for vid in stale:
+            del self._pending_posttime_distance[vid]
+        self._pending_posttime_distance[vehicle_id] = (now, distance_m)
+
+    def take_posttime_distance(self, vehicle_id: int) -> Optional[int]:
+        """Pop the stashed PostTime run distance for this car (None when absent
+        or expired)."""
+        entry = self._pending_posttime_distance.pop(vehicle_id, None)
+        if entry is None:
+            return None
+        ts, distance_m = entry
+        if time.time() - ts > _POSTTIME_SPLITS_TTL_S:
+            return None
+        return distance_m
 
     def record_proxied_time_trial(self, params: Dict[str, Any]) -> None:
         """Listen-in recording of a TimeTrial.PostTime that is ALSO proxied to

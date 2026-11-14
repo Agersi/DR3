@@ -77,6 +77,8 @@ class FakeApi:
 
 
 class FakeRun:
+    track_length_m = 4015.4
+
     def __init__(self, segs):
         self._segs = segs
 

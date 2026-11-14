@@ -11,7 +11,7 @@ import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from threading import Thread
+from threading import Lock, Thread
 from typing import Any, Dict, Optional, Set
 from urllib.parse import parse_qs, urlparse
 
@@ -130,8 +130,15 @@ class App:
         # posts the merged record to the web API. None when there is no web
         # API connection (standalone capture-only usage).
         self.stage_detail: Optional[StageDetailBuffer] = None
+        # Camera-counter baselines for stage-detail correction, keyed by the
+        # game's "counter epoch" (g_session_id, track_model_id,
+        # stage_conditions_id) — the per-camera metres counters accumulate
+        # across same-setup time-trial repeats and reset whenever the stage is
+        # reloaded. value = raw metres_cam_* of the previous StageEnded.
+        self._cam_prev: Dict[tuple, Dict[str, float]] = {}
+        self._cam_lock = Lock()
         if api_client is not None:
-            self.stage_detail = StageDetailBuffer(api_client.record_stage_detail)
+            self.stage_detail = StageDetailBuffer(self._emit_stage_detail)
             self.dispatcher.stage_detail = self.stage_detail
         self.capture_root = capture_root
         # Request-capture saving — driven by the GUI's "Verbose logging"
@@ -173,6 +180,112 @@ class App:
             return
         existing["response"] = response
         capture_path.write_text(json.dumps(existing, indent=2, default=self._json_default), encoding="utf-8")
+
+    # Fields of the StageEnded snapshot that hold the game's per-camera
+    # distance counters (cumulative across same-setup TT repeats — see
+    # _fix_stage_detail_cameras).
+    _CAM_FIELDS = ("metres_cam_bonnet", "metres_cam_bumper",
+                   "metres_cam_chase_close", "metres_cam_chase_far",
+                   "metres_cam_dash", "metres_cam_head")
+
+    def _emit_stage_detail(self, record: Dict[str, Any]) -> None:
+        """StageDetailBuffer send callback: correct the two fields the game
+        only reports as session-cumulative counters, then post the merged
+        record to the web API (fire-and-forget thread owned by the buffer)."""
+        api_client = self.dispatcher.api_client
+        if api_client is None:
+            return
+        try:
+            self._fix_stage_detail_distance(record)
+            self._fix_stage_detail_cameras(record)
+        except Exception as exc:  # correction must never drop the record
+            print(f"[DATA] stage-detail correction failed: {exc}")
+        api_client.record_stage_detail(record)
+
+    def _fix_stage_detail_distance(self, record: Dict[str, Any]) -> None:
+        """Fill distance_driven from the PostTime run's measured distance when
+        the merged record carries none — only time-trial rows are like that
+        (they send no StageComplete RPC); club/official rows already carry the
+        RPC's exact per-stage distance and pass through untouched."""
+        if record.get("distance_driven"):
+            return
+        vehicle_id = record.get("vehicle_id")
+        if not vehicle_id:
+            return
+        try:
+            vid = int(vehicle_id)
+        except (TypeError, ValueError):
+            return
+        distance_m = self.dispatcher.take_posttime_distance(vid)
+        if distance_m:
+            record["distance_driven"] = distance_m
+
+    def _fix_stage_detail_cameras(self, record: Dict[str, Any]) -> None:
+        """Turn the snapshot's cumulative per-camera counters into per-stage
+        values. The game accumulates metres_cam_* across repeats of the same
+        time trial (same session + track + conditions) and resets them
+        whenever the stage is reloaded, so the raw value is right for a fresh
+        counter but inflated for a repeat. The record's per-run distance D
+        (exact for clean finishes — RPC value or measured from telemetry)
+        anchors the correction:
+
+        - raw sum ~= D                 -> counter was fresh, keep the raw values;
+        - else the previous StageEnded on this exact run-sequence exists and
+          its delta sum ~= D           -> use the per-camera deltas;
+        - otherwise                     -> scale the raw values proportionally to D.
+
+        Club/official rows always carry a fresh counter (their stage was loaded
+        from elsewhere) and pass through the first branch unchanged. The
+        baseline is updated on every StageEnded, finished or not — the counters
+        advance either way; DNF rows keep their raw values (the web stores NULL
+        distance for them)."""
+        raw: Dict[str, float] = {}
+        for k in self._CAM_FIELDS:
+            try:
+                v = record.get(k)
+                raw[k] = max(0.0, float(v)) if v is not None else 0.0
+            except (TypeError, ValueError):
+                raw[k] = 0.0
+        raw_sum = sum(raw.values())
+        if raw_sum <= 0:
+            return
+
+        key = (str(record.get("g_session_id")),
+               str(record.get("track_model_id")),
+               str(record.get("stage_conditions_id")))
+        with self._cam_lock:
+            prev = self._cam_prev.get(key)
+            self._cam_prev[key] = {k: raw[k] for k in self._CAM_FIELDS}
+            if len(self._cam_prev) > 64:  # a few sessions' worth at most
+                self._cam_prev.pop(next(iter(self._cam_prev)))
+
+        end_status = record.get("player_end_status") or 0
+        race_status = record.get("race_status")
+        is_dnf = (end_status != 0
+                  or (race_status is not None and race_status != 0)
+                  or bool(record.get("recov_to_service")))
+        if is_dnf:
+            return
+
+        try:
+            d = float(record.get("distance_driven") or 0)
+        except (TypeError, ValueError):
+            d = 0.0
+        if d <= 0:
+            return  # no anchor (telemetry off / no RPC) — keep the raw values
+
+        tol = 0.35 * d
+        if abs(raw_sum - d) <= tol:
+            return  # fresh counter — the raw values ARE the per-stage values
+        if prev is not None:
+            delta = {k: max(0.0, raw[k] - prev.get(k, 0.0)) for k in self._CAM_FIELDS}
+            if abs(sum(delta.values()) - d) <= tol:
+                for k in self._CAM_FIELDS:
+                    record[k] = round(delta[k], 1)
+                return
+        scale = d / raw_sum
+        for k in self._CAM_FIELDS:
+            record[k] = round(raw[k] * scale, 1)
 
 
 class RequestHandler(BaseHTTPRequestHandler):

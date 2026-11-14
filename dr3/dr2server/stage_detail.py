@@ -51,6 +51,9 @@ STAGE_ENDED_FIELDS: Tuple[str, ...] = (
     # driver's global play counters (lifetime, from the game itself)
     "g_separate_days_played_count", "g_total_seconds_played",
     "g_session_count",
+    # per-game-launch id — keys the client-side camera-counter correction
+    # (the web ignores it; stage_runs has no column for it)
+    "g_session_id",
 )
 
 # Fields the RPC half contributes. The dispatcher/proxy paths extract these
