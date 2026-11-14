@@ -378,14 +378,24 @@
 
   function inputCell(v, vr, assists) {
     var parts = [];
+    var tips = [];
     if (v && INPUT_ICON[v]) {
       parts.push('<img class="input-icon" src="' + STATIC + 'icons/' + INPUT_ICON[v] + '" alt="' + esc(v) + '">');
+      tips.push(v.charAt(0).toUpperCase() + v.slice(1));
     } else if (v) {
       parts.push(esc(v));
     }
-    if (vr === true) parts.push('<img class="input-icon" src="' + STATIC + 'icons/vr.png" alt="VR">');
-    if (assists === true) parts.push('<img class="input-icon" src="' + STATIC + 'icons/assist.png" alt="Assists on">');
-    return parts.length ? parts.join(' ') : '<span class="muted">—</span>';
+    if (vr === true) {
+      parts.push('<img class="input-icon" src="' + STATIC + 'icons/vr.png" alt="VR">');
+      tips.push('VR');
+    }
+    if (assists === true) {
+      parts.push('<img class="input-icon" src="' + STATIC + 'icons/assist.png" alt="Assists on">');
+      tips.push('Assists');
+    }
+    if (!parts.length) return '<span class="muted">—</span>';
+    if (!tips.length) return parts.join(' ');
+    return '<span class="input-tip" data-tip="' + esc(tips.join('\n')) + '">' + parts.join(' ') + '</span>';
   }
 
   function camCell(v) {

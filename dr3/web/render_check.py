@@ -99,7 +99,7 @@ def main() -> int:
           'border-radius: 0.3rem;' in css
           and '.panel, .club-card, .stat-card, .btn, button, input, select, textarea,' in css
           and '.opt, .num-tile, .table-wrap, .chip, .flash' in css
-           and '.tyre-img::after, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in css, '')
+            and '.tyre-img::after, .input-tip::after, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in css, '')
 
     # home recent-times box (backlog #42): server-rendered first page +
     # infinite-scroll JS wired to the public endpoint
@@ -357,7 +357,7 @@ def main() -> int:
               and '.round-class-thumb {\n  position: absolute;\n  top: 0;\n  left: .5rem;\n  width: min(4.5rem, 20%);\n}' in board_css
               and '.round-loc {\n  font-weight: 900;\n  font-size: 0.95rem;\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  height: 4.5rem;\n  border-bottom-left-radius: .3rem;\n  border-bottom-right-radius: .3rem;\n  padding-left: .5rem;\n  padding-top: .25rem;\n  color: var(--accent);\n  background: color-mix(in srgb, var(--accent-deep) 45%, transparent);\n}' in board_css
               and '.round-window {\n  color: var(--accent);\n  font-weight: 500;\n  font-size: 0.8rem;\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  padding: .25rem .75rem;\n}' in board_css
-               and 'details.create-club .plus, .tyre-img::after, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in board_css, '')
+                and 'details.create-club .plus, .tyre-img::after, .input-tip::after, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in board_css, '')
         check('club detail: active round box uses card-mixed location bar',
               '.round-box.active .round-loc { background: color-mix(in srgb, var(--card) 65%, transparent); }' in board_css, '')
         m = re.search(r'id="board-state">(.*?)</script>', det, re.S)
@@ -371,8 +371,8 @@ def main() -> int:
               and 'colspan="13"' not in det
               and "inputCell(r.input, r.vr, r.assists)" in det
               and "INPUT_ICON = { wheel: 'wheel.png', controller: 'controller.png', keyboard: 'keyboard.png' };" in det
-              and "if (vr === true) parts.push('<img class=\"input-icon\" src=\"' + STATIC + 'icons/vr.png\"" in det
-              and "if (assists === true) parts.push('<img class=\"input-icon\" src=\"' + STATIC + 'icons/assist.png\"" in det
+              and "if (vr === true) {\n      parts.push('<img class=\"input-icon\" src=\"' + STATIC + 'icons/vr.png\"" in det
+              and "if (assists === true) {\n      parts.push('<img class=\"input-icon\" src=\"' + STATIC + 'icons/assist.png\"" in det
               and '.input-cell { white-space: nowrap; }' in board_css
               and '.input-icon { height: 1.1em; width: auto; vertical-align: -0.2em; }' in board_css
               and '.tyre-img { position: relative; display: inline-block; line-height: 0; }' in board_css, '')
@@ -390,6 +390,13 @@ def main() -> int:
               and "'<td class=\"flag-cell\">'" not in det
               and "'<td>' + flagCell(r.flag_url, r.username) + '<a href=\"' + root + esc(r.driver_url) + '\">'" in det
               and '.flag { height: .95em; width: auto; vertical-align: -0.18em; margin-right: 0.3em; }' in board_css, '')
+        check('club detail: input column tooltip lists each shown icon on its own row',
+              "tips.push(v.charAt(0).toUpperCase() + v.slice(1));" in det
+              and "tips.push('VR');" in det
+              and "tips.push('Assists');" in det
+              and "data-tip=\"' + esc(tips.join('\\n'))" in det
+              and '.input-tip { position: relative; display: inline-block; }' in board_css
+              and '.input-tip:hover::after { opacity: 1; }' in board_css, '')
         check('club detail: tight board padding, centered tyre/input columns (incl. header), right-aligned penalty',
               'table.board th, table.board td { padding: 0.15rem 0.15rem; text-align: left; vertical-align: middle; }' in board_css
               and 'table.board th:nth-child(4), table.board td:nth-child(4), table.board th:nth-child(5), table.board td:nth-child(5) { text-align: center; }' in board_css
