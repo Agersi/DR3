@@ -17,61 +17,38 @@ main { max-width: var(--page-max); width: 100%; margin: 0 auto; padding: 0 1.25r
 
 .table-wrap { overflow-x: auto; background: var(--card); border: 2px solid var(--line); box-shadow: 4px 4px 0 var(--shadow); margin: 1rem 0; }
 table.table, .table-wrap table { width: 100%; border-collapse: collapse; background: var(--card); margin: 0; }
-.table th, .table-wrap th { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 2px solid var(--line); }
-.table-wrap td { padding: 0.5rem 0.7rem; vertical-align: middle; }
 
 table.board { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 table.board th, table.board td { padding: 0.15rem 0.15rem; text-align: left; vertical-align: middle; }
-table.board th:nth-child(4), table.board td:nth-child(4), table.board th:nth-child(5), table.board td:nth-child(5) { text-align: center; }
 table.board thead th { border-bottom: 2px solid var(--line); color: var(--muted); font-size: 0.78rem; letter-spacing: 0.0em; text-transform: uppercase; }
 table.board .board-row:nth-child(even) td { background: rgba(24, 28, 20, 0.25); }
 table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 
-.board-wrap { overflow-x: auto; padding-top: 1.6rem; }
-.board-wrap.no-scroll { overflow: visible; }
+/* production board CSS (must mirror dr3/web/static/css/style.css) */
+.input-cell { white-space: nowrap; }
+.tyre-img { position: relative; display: inline-block; }
+.input-tip { position: relative; display: inline-block; }
+.board-wrap { overflow-x: auto; }
 #board-table th, #board-table td { white-space: nowrap; }
 .expand-head, .expand-cell { text-align: center; white-space: nowrap; }
 .expand-btn { position: relative; background: none; border: none; cursor: pointer; color: var(--accent); font-size: 1rem; padding: 0 0.3rem; margin: .2em; }
-.expand-btn::after {
-  content: none;
-  position: absolute;
-  bottom: calc(100% + 0.3rem);
-  left: 50%;
-  transform: translateX(-50%);
-  background: #000;
-  border: 1px solid var(--line);
-  color: var(--text);
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.2rem 0.5rem;
-  white-space: nowrap;
-  text-transform: none;
-  opacity: 0;
-  pointer-events: none;
-  z-index: 20;
-}
-.expand-btn.force-tip::after { content: 'Show Splits'; opacity: 1; }
-.dash-tip { position: relative; display: inline-block; cursor: help; color: var(--muted); }
-.dash-tip.tip-fixed::after { content: none; }
-.dash-tip.tip-fixed:hover::after { content: attr(data-tip); opacity: 1; }
-.dash-tip::after {
-  content: attr(data-tip);
-  position: absolute;
-  bottom: calc(100% + 0.3rem);
-  left: 50%;
-  transform: translateX(-50%);
-  background: #000;
-  border: 1px solid var(--line);
-  color: var(--text);
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.2rem 0.5rem;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  z-index: 20;
-}
 .split-col { white-space: nowrap; }
+.dash-tip { position: relative; display: inline-block; cursor: help; color: var(--muted); }
+.hover-tip {
+  position: fixed;
+  background: #000;
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  z-index: 50;
+}
+.hover-tip.show { opacity: 1; }
 
 h2 { font-size: 1rem; color: var(--muted); }
 #out { font-family: ui-monospace, Consolas, monospace; font-size: 14px; white-space: pre-wrap; background: #000; padding: 1rem; }
@@ -79,11 +56,11 @@ h2 { font-size: 1rem; color: var(--muted); }
 </head>
 <body>
 <main>
-  <h2>A: collapsed, wrap overflow-x:auto (production)</h2>
+  <h2>A: collapsed — JS tooltip hovering the toggle (worst case for overflow)</h2>
   <div class="table-wrap board-wrap" id="wrapA">
     <table class="board" id="board-table">
       <thead><tr>
-        <th>#</th><th>Driver</th><th>Vehicle</th><th>Tyre</th><th>Input</th><th>Camera</th><th>Penalty</th>        <th class="num">Time</th><th class="num">Diff 1st</th><th class="expand-head"><button type="button" class="expand-btn">&#9654;</button></th>
+        <th>#</th><th>Driver</th><th>Vehicle</th><th>Tyre</th><th>Input</th><th>Camera</th><th>Penalty</th><th class="num">Time</th><th class="num">Diff 1st</th><th class="expand-head"><button type="button" class="expand-btn" id="splits-toggle" data-tip="Show Splits">&#9654;</button></th>
       </tr></thead>
       <tbody>
         <tr class="board-row"><td>1</td><td>ag3rsi</td><td>Skoda Fabia S2000</td><td>M</td><td>&#128466;</td><td>Ext A</td><td></td><td class="num">9:42.113</td><td class="num">&mdash;</td><td class="expand-cell"></td></tr>
@@ -94,62 +71,17 @@ h2 { font-size: 1rem; color: var(--muted); }
     </table>
   </div>
 
-  <h2>A2: collapsed, tooltip right-aligned (proposed fix)</h2>
-  <div class="table-wrap board-wrap" id="wrapA2">
-    <table class="board" id="board-table-a2">
-      <thead><tr>
-        <th>#</th><th>Driver</th><th>Vehicle</th><th>Tyre</th><th>Input</th><th>Camera</th><th>Penalty</th>        <th class="num">Time</th><th class="num">Diff 1st</th><th class="expand-head"><button type="button" class="expand-btn force-tip" data-tip="Show Splits">&#9654;</button></th>
-      </tr></thead>
-      <tbody>
-        <tr class="board-row"><td>1</td><td>ag3rsi</td><td>Skoda Fabia S2000</td><td>M</td><td>&#128466;</td><td>Ext A</td><td></td><td class="num">9:42.113</td><td class="num">&mdash;</td><td class="expand-cell"></td></tr>
-        <tr class="board-row"><td>2</td><td>RallyMaster_X</td><td>Subaru Impreza S2000 4-Door WRC</td><td>S</td><td>&#128466;</td><td>Ext B</td><td>+5s</td><td class="num">9:45.872</td><td class="num">+3.759</td><td class="expand-cell"></td></tr>
-        <tr class="board-row"><td>3</td><td>KonijcaFan123</td><td>Peugeot 208 T16 R5</td><td>M</td><td>&#9000;</td><td>In-car</td><td></td><td class="num">9:51.004</td><td class="num">+8.891</td><td class="expand-cell"></td></tr>
-        <tr class="board-row"><td>4</td><td>stagesetter</td><td>Ford Fiesta R5</td><td>H</td><td>&#9000;</td><td>Ext A</td><td>+10s</td><td class="num">9:58.447</td><td class="num">+16.334</td><td class="expand-cell"></td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <h2>B: collapsed, wrap overflow visible (user's local fix)</h2>
-  <div class="table-wrap board-wrap no-scroll" id="wrapB">
+  <h2>B: splits open — JS tooltip hovering a dash in the LAST split column</h2>
+  <div class="table-wrap board-wrap" id="wrapB">
     <table class="board" id="board-table-b">
-      <thead><tr>
-        <th>#</th><th>Driver</th><th>Vehicle</th><th>Tyre</th><th>Input</th><th>Camera</th><th>Penalty</th><th class="num">Time</th><th class="num">Diff 1st</th><th class="expand-head"><button type="button" class="expand-btn">&#9654;</button></th>
-      </tr></thead>
-      <tbody>
-        <tr class="board-row"><td>1</td><td>ag3rsi</td><td>Skoda Fabia S2000</td><td>M</td><td>&#128466;</td><td>Ext A</td><td></td><td class="num">9:42.113</td><td class="num">&mdash;</td><td class="expand-cell"></td></tr>
-        <tr class="board-row"><td>2</td><td>RallyMaster_X</td><td>Subaru Impreza S2000 4-Door WRC</td><td>S</td><td>&#128466;</td><td>Ext B</td><td>+5s</td><td class="num">9:45.872</td><td class="num">+3.759</td><td class="expand-cell"></td></tr>
-        <tr class="board-row"><td>3</td><td>KonijcaFan123</td><td>Peugeot 208 T16 R5</td><td>M</td><td>&#9000;</td><td>In-car</td><td></td><td class="num">9:51.004</td><td class="num">+8.891</td><td class="expand-cell"></td></tr>
-        <tr class="board-row"><td>4</td><td>stagesetter</td><td>Ford Fiesta R5</td><td>H</td><td>&#9000;</td><td>Ext A</td><td>+10s</td><td class="num">9:58.447</td><td class="num">+16.334</td><td class="expand-cell"></td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <h2>C: splits open (8 cols), wrap overflow-x:auto</h2>
-  <div class="table-wrap board-wrap" id="wrapC">
-    <table class="board" id="board-table-c">
       <thead><tr>
         <th>#</th><th>Driver</th><th>Vehicle</th><th>Tyre</th><th>Input</th><th>Camera</th><th>Penalty</th><th class="num">Time</th><th class="num">Diff 1st</th>
         <th class="num split-col">Split #1</th><th class="num split-col">Split #2</th><th class="num split-col">Split #3</th><th class="num split-col">Split #4</th><th class="num split-col">Split #5</th><th class="num split-col">Split #6</th><th class="num split-col">Split #7</th><th class="num split-col">Split #8</th>
-        <th class="expand-head"><button type="button" class="expand-btn open">&#9660;</button></th>
-      </tr></thead>
-      <tbody>
-        <tr class="board-row"><td>1</td><td>ag3rsi</td><td>Skoda Fabia S2000</td><td>M</td><td>&#128466;</td><td>Ext A</td><td></td><td class="num">9:42.113</td><td class="num">&mdash;</td><td class="num split-col">2:11.4</td><td class="num split-col">4:05.9</td><td class="num split-col">6:12.2</td><td class="num split-col">7:58.7</td><td class="num split-col">8:44.1</td><td class="num split-col">9:02.3</td><td class="num split-col">9:21.8</td><td class="num split-col"><span class="dash-tip" data-tip="Configure Telemetry">-</span></td><td class="expand-cell"></td></tr>
-        <tr class="board-row"><td>2</td><td>RallyMaster_X</td><td>Subaru Impreza S2000 4-Door WRC</td><td>S</td><td>&#128466;</td><td>Ext B</td><td>+5s</td><td class="num">9:45.872</td><td class="num">+3.759</td><td class="num split-col">2:12.0</td><td class="num split-col">4:07.1</td><td class="num split-col">6:14.8</td><td class="num split-col">8:01.2</td><td class="num split-col">8:47.5</td><td class="num split-col">9:05.0</td><td class="num split-col">9:24.9</td><td class="num split-col"><span class="dash-tip" data-tip="Configure Telemetry">-</span></td><td class="expand-cell"></td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <h2>D: splits open, dash-tips content:none + tooltip right-aligned &amp; pointing down (proposed fix)</h2>
-  <div class="table-wrap board-wrap" id="wrapD">
-    <table class="board" id="board-table-d">
-      <thead><tr>
-        <th>#</th><th>Driver</th><th>Vehicle</th><th>Tyre</th><th>Input</th><th>Camera</th><th>Penalty</th><th class="num">Time</th><th class="num">Diff 1st</th>
-        <th class="num split-col">Split #1</th><th class="num split-col">Split #2</th><th class="num split-col">Split #3</th><th class="num split-col">Split #4</th><th class="num split-col">Split #5</th><th class="num split-col">Split #6</th>        <th class="num split-col">Split #7</th><th class="num split-col">Split #8</th>
         <th class="expand-head"><button type="button" class="expand-btn open" data-tip="Hide Splits">&#9660;</button></th>
       </tr></thead>
       <tbody>
-        <tr class="board-row"><td>1</td><td>ag3rsi</td><td>Skoda Fabia S2000</td><td>M</td><td>&#128466;</td><td>Ext A</td><td></td><td class="num">9:42.113</td><td class="num">&mdash;</td><td class="num split-col">2:11.4</td><td class="num split-col">4:05.9</td><td class="num split-col">6:12.2</td><td class="num split-col">7:58.7</td><td class="num split-col">8:44.1</td><td class="num split-col">9:02.3</td><td class="num split-col">9:21.8</td><td class="num split-col"><span class="dash-tip tip-fixed" data-tip="Configure Telemetry">-</span></td><td class="expand-cell"></td></tr>
-        <tr class="board-row"><td>2</td><td>RallyMaster_X</td><td>Subaru Impreza S2000 4-Door WRC</td><td>S</td><td>&#128466;</td><td>Ext B</td><td>+5s</td><td class="num">9:45.872</td><td class="num">+3.759</td><td class="num split-col">2:12.0</td><td class="num split-col">4:07.1</td><td class="num split-col">6:14.8</td><td class="num split-col">8:01.2</td><td class="num split-col">8:47.5</td><td class="num split-col">9:05.0</td><td class="num split-col">9:24.9</td><td class="num split-col"><span class="dash-tip tip-fixed" data-tip="Configure Telemetry">-</span></td><td class="expand-cell"></td></tr>
+        <tr class="board-row"><td>1</td><td>ag3rsi</td><td>Skoda Fabia S2000</td><td>M</td><td>&#128466;</td><td>Ext A</td><td></td><td class="num">9:42.113</td><td class="num">&mdash;</td><td class="num split-col">2:11.4</td><td class="num split-col">4:05.9</td><td class="num split-col">6:12.2</td><td class="num split-col">7:58.7</td><td class="num split-col">8:44.1</td><td class="num split-col">9:02.3</td><td class="num split-col">9:21.8</td><td class="num split-col"><span class="dash-tip" id="last-dash" data-tip="Configure Telemetry">-</span></td><td class="expand-cell"></td></tr>
+        <tr class="board-row"><td>2</td><td>RallyMaster_X</td><td>Subaru Impreza S2000 4-Door WRC</td><td>S</td><td>&#128466;</td><td>Ext B</td><td>+5s</td><td class="num">9:45.872</td><td class="num">+3.759</td><td class="num split-col">2:12.0</td><td class="num split-col">4:07.1</td><td class="num split-col">6:14.8</td><td class="num split-col">8:01.2</td><td class="num split-col">8:47.5</td><td class="num split-col">9:05.0</td><td class="num split-col">9:24.9</td><td class="num split-col"><span class="dash-tip" data-tip="Configure Telemetry">-</span></td><td class="expand-cell"></td></tr>
       </tbody>
     </table>
   </div>
@@ -157,6 +89,23 @@ h2 { font-size: 1rem; color: var(--muted); }
   <pre id="out">measuring…</pre>
 </main>
 <script>
+// same tooltip algorithm as club_detail.html
+var tip = document.createElement('div');
+tip.className = 'hover-tip';
+document.body.appendChild(tip);
+function showTip(el) {
+  var text = el.getAttribute('data-tip') || '';
+  tip.textContent = text;
+  tip.style.whiteSpace = text.indexOf('\n') >= 0 ? 'pre-line' : 'nowrap';
+  tip.classList.add('show');
+  var r = el.getBoundingClientRect();
+  var rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+  var left = Math.min(Math.max(8, r.left + r.width / 2 - tip.offsetWidth / 2), window.innerWidth - tip.offsetWidth - 8);
+  var top = r.top - 0.3 * rem - tip.offsetHeight;
+  if (top < 4) top = r.bottom + 0.3 * rem;
+  tip.style.left = left + 'px';
+  tip.style.top = top + 'px';
+}
 function measure(id, tableId) {
   var w = document.getElementById(id);
   var t = document.getElementById(tableId);
@@ -164,43 +113,21 @@ function measure(id, tableId) {
   var tr = t.getBoundingClientRect();
   return {
     wrap_client_width: Math.round(w.clientWidth),
-    wrap_border_box: Math.round(w.offsetWidth),
     table_width: Math.round(tr.width),
     gap_right_px: Math.round((wr.right - 2) - tr.right),
     overflow_px: w.scrollWidth - w.clientWidth,
-    phantom_px: w.scrollWidth - Math.round(tr.width),
-    has_h_scrollbar: w.scrollWidth > w.clientWidth
-  };
-}
-function tooltipMetrics(btn, text) {
-  var probe = document.createElement('div');
-  probe.style.cssText = 'position:absolute;visibility:hidden;left:-9999px;top:0;background:#000;border:1px solid var(--line);color:var(--text);font-size:0.72rem;font-weight:600;padding:0.2rem 0.5rem;white-space:nowrap;text-transform:none;';
-  probe.textContent = text;
-  document.body.appendChild(probe);
-  var h = probe.offsetHeight, wpx = probe.offsetWidth;
-  probe.remove();
-  var br = btn.getBoundingClientRect();
-  var wr = btn.closest('.board-wrap').getBoundingClientRect();
-  var rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-  var tipTop = br.top - 0.3 * rem - h;
-  var clipLine = wr.top + 2;
-  return {
-    tooltip_height: h,
-    tooltip_top: Math.round(tipTop),
-    wrap_content_top: Math.round(clipLine),
-    clipped_px: Math.max(0, Math.round(clipLine - tipTop)),
-    hover_right_overflow_px: Math.round((br.left + br.width / 2 + wpx / 2) - (wr.right - 2))
+    phantom_px: w.scrollWidth - Math.round(tr.width)
   };
 }
 window.addEventListener('load', function () {
+  // simulate hover on the toggle (case A) and on the last-split-column dash (case B)
+  showTip(document.getElementById('splits-toggle'));
+  showTip(document.getElementById('last-dash'));
   var out = JSON.stringify({
     viewport: window.innerWidth,
-    A_collapsed_auto: measure('wrapA', 'board-table'),
-    A2_collapsed_fixed: measure('wrapA2', 'board-table-a2'),
-    B_collapsed_visible: measure('wrapB', 'board-table-b'),
-    C_splits_open_auto: measure('wrapC', 'board-table-c'),
-    D_splits_open_fixed: measure('wrapD', 'board-table-d'),
-    A2_tooltip: tooltipMetrics(document.querySelector('#wrapA2 .expand-btn'), 'Show Splits')
+    tip_top: Math.round(parseFloat(tip.style.top)),
+    A_collapsed_toggle_hover: measure('wrapA', 'board-table'),
+    B_splits_open_dash_hover: measure('wrapB', 'board-table-b')
   }, null, 1);
   document.getElementById('out').textContent = out;
   document.title = 'done';

@@ -99,7 +99,7 @@ def main() -> int:
           'border-radius: 0.3rem;' in css
           and '.panel, .club-card, .stat-card, .btn, button, input, select, textarea,' in css
           and '.opt, .num-tile, .table-wrap, .chip, .flash' in css
-            and '.tyre-img::after, .input-tip::after, .dash-tip::after, .expand-btn::after, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in css, '')
+             and 'details.create-club .plus, .hover-tip, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in css, '')
 
     # home recent-times box (backlog #42): server-rendered first page +
     # infinite-scroll JS wired to the public endpoint
@@ -358,7 +358,7 @@ def main() -> int:
               and '.round-box:hover .round-class-thumb, .round-box.hovered .round-class-thumb, .round-box.active .round-class-thumb { filter: none; }' in board_css
               and '.round-loc {\n  font-weight: 900;\n  font-size: 0.95rem;\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  height: 4.5rem;\n  border-bottom-left-radius: .3rem;\n  border-bottom-right-radius: .3rem;\n  padding-left: .5rem;\n  padding-top: .25rem;\n  color: var(--accent);\n  background: color-mix(in srgb, var(--accent-deep) 45%, transparent);\n}' in board_css
               and '.round-window {\n  color: var(--accent);\n  font-weight: 500;\n  font-size: 0.8rem;\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  padding: .25rem .75rem;\n}' in board_css
-                and 'details.create-club .plus, .tyre-img::after, .input-tip::after, .dash-tip::after, .expand-btn::after, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in board_css, '')
+                and 'details.create-club .plus, .hover-tip, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in board_css, '')
         check('club detail: splits toggle in thead reveals per-split/lap columns',
               '<thead id="board-head"></thead>' in det
               and "return { n: board.split_count || 0, word: board.is_rx ? 'Lap' : 'Split' };" in det
@@ -368,14 +368,17 @@ def main() -> int:
               and det.find("'<th class=\"num split-col\">'") < det.find("'<th class=\"expand-head\">'")
               and "data-tip=\"' + (open ? 'Hide Splits' : 'Show Splits') + '\"" in det
               and '.expand-head, .expand-cell { text-align: center; white-space: nowrap; }' in board_css
-              and '.expand-btn:hover::after { content: attr(data-tip); opacity: 1; }' in board_css
               and 'margin: .2em;' in board_css.split('.expand-btn {', 1)[1].split('}', 1)[0]
-              and all(s in board_css.split('.expand-btn::after {', 1)[1].split('}', 1)[0]
-                      for s in ('content: none;', 'bottom: calc(100% + 0.3rem);', 'left: 50%;', 'text-transform: none;'))
-              and '.dash-tip:hover::after { content: attr(data-tip); opacity: 1; }' in board_css
-              and 'content: none;' in board_css.split('.dash-tip::after {', 1)[1].split('}', 1)[0], '')
+              and '.hover-tip.show { opacity: 1; }' in board_css
+              and "tip.className = 'hover-tip';" in det
+              and "document.body.appendChild(tip);" in det
+              and "e.target.closest('[data-tip]')" in det, '')
+        check('club detail: board tooltips flow out of the scroll wrapper (body-level fixed element)',
+              '.board-wrap { overflow-x: auto; }' in board_css
+              and 'position: fixed;' in board_css.split('.hover-tip {', 1)[1].split('}', 1)[0]
+              and '::after' not in board_css, '')
         check('club detail: board table fills wrapper collapsed, grows to fit split columns when open',
-              '.board-wrap { overflow-x: auto; padding-top: 1.6rem; }' in board_css
+              '.board-wrap { overflow-x: auto; }' in board_css
               and 'width: max-content' not in board_css
               and 'table.board { width: 100%; border-collapse: collapse; font-size: 0.9rem; }' in board_css, '')
         check('club detail: board rows are single-line (no cell wrapping)',
@@ -405,9 +408,8 @@ def main() -> int:
               and "1: '1_soft_gravel'" in det
               and "13: '13_dry_rx'" in det
               and "TYRE_FILE[t] || '#_unknown'" in det
-              and '<span class="tyre-img" data-tip="' in det
-              and ".tyre-img::after {\n  content: attr(data-tip);" in board_css
-              and '.tyre-img:hover::after { opacity: 1; }' in board_css, '')
+               and '<span class="tyre-img" data-tip="' in det
+               and ".hover-tip {\n  position: fixed;" in board_css, '')
         check('club detail: driver flag merged into the driver cell (no own column)',
               '<th>#</th><th>Driver</th>' in det
               and 'colspan="12"' not in det
@@ -418,9 +420,9 @@ def main() -> int:
               "tips.push(v.charAt(0).toUpperCase() + v.slice(1));" in det
               and "tips.push('VR');" in det
               and "tips.push('Assists');" in det
-              and "data-tip=\"' + esc(tips.join('\\n'))" in det
-              and '.input-tip { position: relative; display: inline-block; }' in board_css
-              and '.input-tip:hover::after { opacity: 1; }' in board_css, '')
+               and "data-tip=\"' + esc(tips.join('\\n'))" in det
+               and "tip.style.whiteSpace = text.indexOf('\\n') >= 0 ? 'pre-line' : 'nowrap';" in det
+               and '.input-tip { position: relative; display: inline-block; }' in board_css, '')
         check('club detail: tight board padding, centered tyre/input columns (incl. header), right-aligned penalty',
               'table.board th, table.board td { padding: 0.15rem 0.15rem; text-align: left; vertical-align: middle; }' in board_css
               and 'table.board th:nth-child(4), table.board td:nth-child(4), table.board th:nth-child(5), table.board td:nth-child(5) { text-align: center; }' in board_css

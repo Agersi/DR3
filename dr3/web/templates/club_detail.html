@@ -612,6 +612,38 @@
     renderRows(state.board);
   });
 
+  // Board tooltips flow OUT of the scroll wrapper: one fixed-position element on
+  // <body>, so nothing inside .board-wrap can clip it or grow its scroll area.
+  var tip = document.createElement('div');
+  tip.className = 'hover-tip';
+  document.body.appendChild(tip);
+  var tipTarget = null;
+  function showTip(el) {
+    var text = el.getAttribute('data-tip') || '';
+    tip.textContent = text;
+    tip.style.whiteSpace = text.indexOf('\n') >= 0 ? 'pre-line' : 'nowrap';
+    tip.classList.add('show');
+    var r = el.getBoundingClientRect();
+    var rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    var left = Math.min(Math.max(8, r.left + r.width / 2 - tip.offsetWidth / 2), window.innerWidth - tip.offsetWidth - 8);
+    var top = r.top - 0.3 * rem - tip.offsetHeight;
+    if (top < 4) top = r.bottom + 0.3 * rem;
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  }
+  function hideTip() {
+    tipTarget = null;
+    tip.classList.remove('show');
+  }
+  document.getElementById('board-table').addEventListener('mouseover', function (e) {
+    var el = e.target.closest('[data-tip]');
+    if (el === tipTarget) return;
+    tipTarget = el;
+    if (el) showTip(el); else hideTip();
+  });
+  document.getElementById('board-table').addEventListener('mouseleave', hideTip);
+  window.addEventListener('scroll', hideTip, { passive: true });
+
   renderAll();
 })();
 </script>
