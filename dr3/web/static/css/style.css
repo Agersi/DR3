@@ -676,8 +676,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
   content: attr(data-tip);
   position: absolute;
   bottom: calc(100% + 0.3rem);
-  left: 50%;
-  transform: translateX(-50%);
+  right: 0;
   background: var(--bg);
   border: 1px solid var(--line);
   color: var(--text);

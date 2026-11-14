@@ -369,6 +369,7 @@ def main() -> int:
               and "data-tip=\"' + (open ? 'Hide Splits' : 'Show Splits') + '\"" in det
               and '.expand-head, .expand-cell { text-align: center; white-space: nowrap; }' in board_css
               and '.expand-btn:hover::after { opacity: 1; }' in board_css
+              and 'right: 0;' in board_css.split('.expand-btn::after {', 1)[1].split('}', 1)[0]
               and '.dash-tip:hover::after { opacity: 1; }' in board_css, '')
         check('club detail: board table fills wrapper collapsed, grows to fit split columns when open',
               '.board-wrap { overflow-x: auto; }' in board_css
