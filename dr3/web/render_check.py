@@ -348,7 +348,7 @@ def main() -> int:
               and '.round-strip::-webkit-scrollbar-track { background: rgba(24, 28, 20, 0.5); }' in board_css
               and '.round-strip::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--card); }' in board_css
               and '.round-strip::-webkit-scrollbar-thumb:hover { background: var(--muted); }' in board_css
-              and '.round-thumb-wrap { position: relative; display: block; margin-bottom: 0.25rem; }' in board_css
+              and '.round-thumb-wrap { position: relative; display: block; }' in board_css
               and '.round-thumb { display: block; width: 100%; aspect-ratio: 736 / 347; object-fit: cover; filter: brightness(0.5) blur(3px); transition: filter 0.15s ease; }' in board_css
               and '.round-box:hover .round-thumb, .round-box.hovered .round-thumb, .round-box.active .round-thumb { filter: none; }' in board_css
               and "document.getElementById('round-strip').addEventListener('wheel', function (e) {" in det
