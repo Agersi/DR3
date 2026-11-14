@@ -368,13 +368,14 @@ def main() -> int:
               and det.find("'<th class=\"num split-col\">'") < det.find("'<th class=\"expand-head\">'")
               and "data-tip=\"' + (open ? 'Hide Splits' : 'Show Splits') + '\"" in det
               and '.expand-head, .expand-cell { text-align: center; white-space: nowrap; }' in board_css
-              and '.expand-btn:hover::after { opacity: 1; }' in board_css
-              and 'right: 0;' in board_css.split('.expand-btn::after {', 1)[1].split('}', 1)[0]
-              and 'top: calc(100% + 0.3rem);' in board_css.split('.expand-btn::after {', 1)[1].split('}', 1)[0]
+              and '.expand-btn:hover::after { content: attr(data-tip); opacity: 1; }' in board_css
+              and 'margin: .2em;' in board_css.split('.expand-btn {', 1)[1].split('}', 1)[0]
+              and all(s in board_css.split('.expand-btn::after {', 1)[1].split('}', 1)[0]
+                      for s in ('content: none;', 'bottom: calc(100% + 0.3rem);', 'left: 50%;', 'text-transform: none;'))
               and '.dash-tip:hover::after { content: attr(data-tip); opacity: 1; }' in board_css
               and 'content: none;' in board_css.split('.dash-tip::after {', 1)[1].split('}', 1)[0], '')
         check('club detail: board table fills wrapper collapsed, grows to fit split columns when open',
-              '.board-wrap { overflow-x: auto; }' in board_css
+              '.board-wrap { overflow-x: auto; padding-top: 1.6rem; }' in board_css
               and 'width: max-content' not in board_css
               and 'table.board { width: 100%; border-collapse: collapse; font-size: 0.9rem; }' in board_css, '')
         check('club detail: board rows are single-line (no cell wrapping)',
@@ -396,7 +397,7 @@ def main() -> int:
               and "if (assists === true) {\n      parts.push('<img class=\"input-icon\" src=\"' + STATIC + 'icons/assist.png\"" in det
               and '.input-cell { white-space: nowrap; }' in board_css
               and '.input-icon { height: 1.1em; width: auto; vertical-align: -0.2em; }' in board_css
-              and '.tyre-img { position: relative; display: inline-block; line-height: 0; }' in board_css
+              and '.tyre-img { position: relative; display: inline-block; }' in board_css
               and 'split_count' in (board_state.get('board') or {})
               and 'is_rx' in (board_state.get('board') or {}), '')
         check('club detail: tyre column renders compound images with hover name tooltip',

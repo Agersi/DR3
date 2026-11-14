@@ -626,7 +626,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .tyre-cell { white-space: nowrap; }
 .input-cell { white-space: nowrap; }
 .input-icon { height: 1.1em; width: auto; vertical-align: -0.2em; }
-.tyre-img { position: relative; display: inline-block; line-height: 0; }
+.tyre-img { position: relative; display: inline-block; }
 .tyre-img img { height: 1.5em; width: auto; vertical-align: middle; }
 .tyre-img::after {
   content: attr(data-tip);
@@ -668,15 +668,16 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
   z-index: 20;
 }
 .input-tip:hover::after { opacity: 1; }
-.board-wrap { overflow-x: auto; }
+.board-wrap { overflow-x: auto; padding-top: 1.6rem; }
 #board-table th, #board-table td { white-space: nowrap; }
 .expand-head, .expand-cell { text-align: center; white-space: nowrap; }
-.expand-btn { position: relative; background: none; border: none; cursor: pointer; color: var(--accent); font-size: 1rem; padding: 0 0.3rem; }
+.expand-btn { position: relative; background: none; border: none; cursor: pointer; color: var(--accent); font-size: 1rem; padding: 0 0.3rem; margin: .2em; }
 .expand-btn::after {
-  content: attr(data-tip);
+  content: none;
   position: absolute;
-  top: calc(100% + 0.3rem);
-  right: 0;
+  bottom: calc(100% + 0.3rem);
+  left: 50%;
+  transform: translateX(-50%);
   background: var(--bg);
   border: 1px solid var(--line);
   color: var(--text);
@@ -684,12 +685,13 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
   font-weight: 600;
   padding: 0.2rem 0.5rem;
   white-space: nowrap;
+  text-transform: none;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.12s ease;
   z-index: 20;
 }
-.expand-btn:hover::after { opacity: 1; }
+.expand-btn:hover::after { content: attr(data-tip); opacity: 1; }
 .split-col { white-space: nowrap; }
 .dash-tip { position: relative; display: inline-block; cursor: help; color: var(--muted); }
 .dash-tip::after {
