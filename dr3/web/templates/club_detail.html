@@ -543,7 +543,7 @@
   function load() {
     fetch(boardUrl(), { headers: { 'Accept': 'application/json' } })
       .then(function (res) { if (!res.ok) throw new Error(res.status); return res.json(); })
-      .then(function (board) { state.board = board; state.splits_open = false; renderAll(); })
+      .then(function (board) { state.board = board; renderAll(); })
       .catch(function () {});
   }
 
@@ -610,6 +610,10 @@
     state.splits_open = !state.splits_open;
     renderHead(state.board);
     renderRows(state.board);
+    if (state.splits_open) {
+      var wrap = document.getElementById('board-table').closest('.board-wrap');
+      wrap.scrollLeft = wrap.scrollWidth;
+    }
   });
 
   // Board tooltips flow OUT of the scroll wrapper: one fixed-position element on

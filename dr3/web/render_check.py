@@ -374,13 +374,20 @@ def main() -> int:
               and "document.body.appendChild(tip);" in det
               and "e.target.closest('[data-tip]')" in det, '')
         check('club detail: board tooltips flow out of the scroll wrapper (body-level fixed element)',
-              '.board-wrap { overflow-x: auto; }' in board_css
+              '.board-wrap { overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }' in board_css
               and 'position: fixed;' in board_css.split('.hover-tip {', 1)[1].split('}', 1)[0]
               and '::after' not in board_css, '')
         check('club detail: board table fills wrapper collapsed, grows to fit split columns when open',
-              '.board-wrap { overflow-x: auto; }' in board_css
+              '.board-wrap::-webkit-scrollbar { height: 10px; }' in board_css
+              and '.board-wrap::-webkit-scrollbar-track { background: rgba(24, 28, 20, 0.5); }' in board_css
+              and '.board-wrap::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--card); }' in board_css
+              and '.board-wrap::-webkit-scrollbar-thumb:hover { background: var(--muted); }' in board_css
               and 'width: max-content' not in board_css
               and 'table.board { width: 100%; border-collapse: collapse; font-size: 0.9rem; table-layout: fixed; }' in board_css, '')
+        check('club detail: splits state survives stage/round reloads and opening scrolls to the right',
+              ".then(function (board) { state.board = board; renderAll(); })" in det
+              and "state.splits_open = false; renderAll()" not in det
+              and 'wrap.scrollLeft = wrap.scrollWidth;' in det, '')
         check('club detail: board rows are single-line (no cell wrapping)',
               '#board-table th, #board-table td { white-space: nowrap; }' in board_css, '')
         check('club detail: active round box uses card-mixed location bar',

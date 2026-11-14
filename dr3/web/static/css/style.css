@@ -639,7 +639,11 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .tyre-img { position: relative; display: inline-block; }
 .tyre-img img { height: 1.5em; width: auto; vertical-align: middle; }
 .input-tip { position: relative; display: inline-block; }
-.board-wrap { overflow-x: auto; }
+.board-wrap { overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }
+.board-wrap::-webkit-scrollbar { height: 10px; }
+.board-wrap::-webkit-scrollbar-track { background: rgba(24, 28, 20, 0.5); }
+.board-wrap::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--card); }
+.board-wrap::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 #board-table th, #board-table td { white-space: nowrap; }
 .expand-head, .expand-cell { width: 3rem; text-align: center; white-space: nowrap; }
 .expand-btn { position: relative; background: none; border: none; cursor: pointer; color: var(--accent); font-size: 1rem; padding: 0 0.3rem; margin: .2em; }
