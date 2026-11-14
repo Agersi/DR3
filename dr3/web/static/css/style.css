@@ -668,8 +668,8 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
   z-index: 20;
 }
 .input-tip:hover::after { opacity: 1; }
-.board-wrap { overflow: visible; }
-#board-table { display: block; width: max-content; min-width: 100%; max-width: 100%; overflow-x: auto; }
+.board-wrap { overflow-x: auto; }
+#board-table { width: max-content; min-width: 100%; }
 #board-table th, #board-table td { white-space: nowrap; }
 .expand-head, .expand-cell { text-align: center; white-space: nowrap; }
 .expand-btn { position: relative; background: none; border: none; cursor: pointer; color: var(--accent); font-size: 1rem; padding: 0 0.3rem; }

@@ -370,9 +370,9 @@ def main() -> int:
               and '.expand-head, .expand-cell { text-align: center; white-space: nowrap; }' in board_css
               and '.expand-btn:hover::after { opacity: 1; }' in board_css
               and '.dash-tip:hover::after { opacity: 1; }' in board_css, '')
-        check('club detail: board table scrolls horizontally on the table element',
-              '.board-wrap { overflow: visible; }' in board_css
-              and '#board-table { display: block; width: max-content; min-width: 100%; max-width: 100%; overflow-x: auto; }' in board_css, '')
+        check('club detail: board table fills wrapper collapsed, grows to fit split columns when open',
+              '.board-wrap { overflow-x: auto; }' in board_css
+              and '#board-table { width: max-content; min-width: 100%; }' in board_css, '')
         check('club detail: board rows are single-line (no cell wrapping)',
               '#board-table th, #board-table td { white-space: nowrap; }' in board_css, '')
         check('club detail: active round box uses card-mixed location bar',
