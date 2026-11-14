@@ -350,7 +350,7 @@ def main() -> int:
               and '.round-strip::-webkit-scrollbar-thumb:hover { background: var(--muted); }' in board_css
               and '.round-thumb-wrap { position: relative; display: block; margin-bottom: 0.25rem; }' in board_css
               and '.round-thumb { display: block; width: 100%; aspect-ratio: 736 / 347; object-fit: cover; filter: brightness(0.5) blur(3px); }' in board_css
-              and '.round-box.active .round-thumb { filter: none; }' in board_css
+              and '.round-box:hover .round-thumb, .round-box.active .round-thumb { filter: none; }' in board_css
               and '.round-class-thumb {\n  position: absolute;\n  top: 0;\n  left: .5rem;\n  width: min(4.5rem, 20%);\n}' in board_css
               and '.round-loc {\n  font-weight: 900;\n  font-size: 0.95rem;\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  height: 4.5rem;\n  border-bottom-left-radius: .3rem;\n  border-bottom-right-radius: .3rem;\n  padding-left: .5rem;\n  padding-top: .25rem;\n  color: var(--accent);\n  background: color-mix(in srgb, var(--accent-deep) 45%, transparent);\n}' in board_css
               and '.round-window {\n  color: var(--accent);\n  font-weight: 500;\n  font-size: 0.8rem;\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  padding: .25rem .75rem;\n}' in board_css
