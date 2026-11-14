@@ -570,7 +570,10 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
   top: 0;
   left: .5rem;
   width: min(4.5rem, 20%);
+  filter: brightness(0.5) blur(3px);
+  transition: filter 0.15s ease;
 }
+.round-box:hover .round-class-thumb, .round-box.hovered .round-class-thumb, .round-box.active .round-class-thumb { filter: none; }
 .round-loc {
   font-weight: 900;
   font-size: 0.95rem;
