@@ -619,6 +619,8 @@ table.board { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 table.board th, table.board td { padding: 0.15rem 0.15rem; text-align: left; vertical-align: middle; }
 table.board th:nth-child(4), table.board td:nth-child(4), table.board th:nth-child(5), table.board td:nth-child(5) { text-align: center; }
 table.board thead th { border-bottom: 2px solid var(--line); color: var(--muted); font-size: 0.78rem; letter-spacing: 0.0em; text-transform: uppercase; }
+table.board thead th:nth-child(1) { text-align: center; }
+table.board thead th:nth-child(2) { padding-left: 40px; }
 table.board .board-row:nth-child(even) td { background: rgba(24, 28, 20, 0.25); }
 table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .board-row.dnf td { color: var(--muted); }
