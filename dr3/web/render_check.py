@@ -372,7 +372,9 @@ def main() -> int:
               and '.dash-tip:hover::after { opacity: 1; }' in board_css, '')
         check('club detail: board table scrolls horizontally on the table element',
               '.board-wrap { overflow: visible; }' in board_css
-              and '#board-table { display: block; max-width: 100%; overflow-x: auto; }' in board_css, '')
+              and '#board-table { display: block; width: max-content; min-width: 100%; max-width: 100%; overflow-x: auto; }' in board_css, '')
+        check('club detail: board rows are single-line (no cell wrapping)',
+              '#board-table th, #board-table td { white-space: nowrap; }' in board_css, '')
         check('club detail: active round box uses card-mixed location bar',
               '.round-box.active .round-loc { background: color-mix(in srgb, var(--card) 65%, transparent); }' in board_css, '')
         m = re.search(r'id="board-state">(.*?)</script>', det, re.S)
