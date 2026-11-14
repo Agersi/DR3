@@ -487,14 +487,14 @@
     var open = state.splits_open && spec.n > 0;
     var ths = '<th>#</th><th>Driver</th><th>Vehicle</th><th>Tyre</th>' +
       '<th>Input</th><th>Camera</th><th>Penalty</th>' +
-      '<th class="num">Time</th><th class="num">Diff 1st</th>' +
-      '<th class="expand-head">' + (spec.n ?
-        '<button type="button" class="expand-btn' + (open ? ' open' : '') + '" id="splits-toggle" aria-label="Toggle splits">&#9656;</button>' : '') + '</th>';
+      '<th class="num">Time</th><th class="num">Diff 1st</th>';
     if (open) {
       for (var i = 1; i <= spec.n; i++) {
         ths += '<th class="num split-col">' + spec.word + ' #' + i + '</th>';
       }
     }
+    ths += '<th class="expand-head">' + (spec.n ?
+      '<button type="button" class="expand-btn' + (open ? ' open' : '') + '" id="splits-toggle" data-tip="' + (open ? 'Hide Splits' : 'Show Splits') + '" aria-label="Toggle splits">' + (open ? '&#9660;' : '&#9654;') + '</button>' : '') + '</th>';
     document.getElementById('board-head').innerHTML = '<tr>' + ths + '</tr>';
   }
 
@@ -518,14 +518,14 @@
         '<td>' + camCell(r.camera) + '</td>' +
         '<td class="num">' + penaltyCell(r.penalty_ms) + '</td>' +
         '<td class="num">' + esc(r.time_text) + (r.dnf ? ' <span class="dnf-tag">DNF</span>' : '') + '</td>' +
-        '<td class="num">' + esc(r.diff_str) + '</td>' +
-        '<td class="expand-cell"></td>';
+        '<td class="num">' + esc(r.diff_str) + '</td>';
       if (open) {
         for (var i = 0; i < spec.n; i++) {
           var v = (r.splits && r.splits[i] != null) ? Number(r.splits[i]).toFixed(2) : null;
           cells += '<td class="num split-col">' + (v != null ? v : '<span class="dash-tip" data-tip="Configure Telemetry">-</span>') + '</td>';
         }
       }
+      cells += '<td class="expand-cell"></td>';
       return '<tr class="board-row' + (r.dnf ? ' dnf' : '') + '" data-pos="' + r.pos + '">' + cells + '</tr>';
     }).join('');
   }

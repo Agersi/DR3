@@ -668,9 +668,29 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
   z-index: 20;
 }
 .input-tip:hover::after { opacity: 1; }
+.board-wrap { overflow: visible; }
+#board-table { display: block; max-width: 100%; overflow-x: auto; }
 .expand-head, .expand-cell { text-align: center; white-space: nowrap; }
-.expand-btn { background: none; border: none; cursor: pointer; color: var(--accent); font-size: 1rem; padding: 0 0.3rem; transition: transform 0.15s ease; }
-.expand-btn.open { transform: rotate(90deg); }
+.expand-btn { position: relative; background: none; border: none; cursor: pointer; color: var(--accent); font-size: 1rem; padding: 0 0.3rem; }
+.expand-btn::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 0.3rem);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  z-index: 20;
+}
+.expand-btn:hover::after { opacity: 1; }
 .split-col { white-space: nowrap; }
 .dash-tip { position: relative; display: inline-block; cursor: help; color: var(--muted); }
 .dash-tip::after {
@@ -699,7 +719,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .panel, .club-card, .stat-card, .btn, button, input, select, textarea,
 .opt, .num-tile, .table-wrap, .chip, .flash, code, pre, .codeblock,
 .steps li, .steps li::before, .big404 .num-plate, .token-box code,
-details.create-club .plus, .tyre-img::after, .input-tip::after, .dash-tip::after, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }
+details.create-club .plus, .tyre-img::after, .input-tip::after, .dash-tip::after, .expand-btn::after, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }
 
 @media (max-width: 900px) {
   .grid-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
