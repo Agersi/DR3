@@ -60,12 +60,14 @@ FLAG_SLUGS = {
 
 
 def flag_url(country: str) -> str:
-    """Static URL of the flag image for a country name; '' when unknown/empty.
+    """Static URL of the flag image for a country name.
 
-    Only called from templates or request-scoped helpers (uses ``url_for``)."""
+    Falls back to ``default-flag.png`` when the country is empty or has no
+    shipped image, so the UI always has a flag to render. Only called from
+    templates or request-scoped helpers (uses ``url_for``)."""
     from flask import url_for
 
     slug = _slug(country)
     if slug and slug in FLAG_SLUGS:
         return url_for('static', filename=f'flags/{slug}-flag.png')
-    return ''
+    return url_for('static', filename='flags/default-flag.png')

@@ -585,6 +585,7 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
   color: var(--accent);
   background: color-mix(in srgb, var(--accent-deep) 45%, transparent);
 }
+.round-box.active .round-loc { background: color-mix(in srgb, var(--card) 65%, transparent); }
 .round-window {
   color: var(--accent);
   font-weight: 500;
@@ -618,7 +619,29 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .board-row.dnf td { color: var(--muted); }
 .dnf-tag { font-size: 0.7rem; color: var(--text); border: 1px solid var(--line); padding: 0 0.25rem; margin-left: 0.3rem; white-space: nowrap; }
 .tyre-cell { white-space: nowrap; }
-.tyre-chip { display: inline-block; min-width: 1.1rem; text-align: center; background: var(--bg); border: 1px solid var(--line); color: var(--text); font-size: 0.75rem; padding: 0.05rem 0.3rem; margin-right: 0.2rem; }
+.input-cell { white-space: nowrap; }
+.input-icon { height: 1.1em; width: auto; vertical-align: -0.2em; margin-right: 0.3rem; }
+.tyre-img { position: relative; display: inline-block; margin-right: 0.25rem; line-height: 0; }
+.tyre-img img { height: 1.5em; width: auto; vertical-align: middle; }
+.tyre-img::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 0.3rem);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  z-index: 20;
+}
+.tyre-img:hover::after { opacity: 1; }
 .expand-cell { text-align: right; white-space: nowrap; }
 .expand-btn { background: none; border: none; cursor: pointer; color: var(--accent); font-size: 1rem; padding: 0 0.3rem; }
 .splits-row td { background: var(--bg); color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
@@ -628,7 +651,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .panel, .club-card, .stat-card, .btn, button, input, select, textarea,
 .opt, .num-tile, .table-wrap, .chip, .flash, code, pre, .codeblock,
 .steps li, .steps li::before, .big404 .num-plate, .token-box code,
-details.create-club .plus, .tyre-chip, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }
+details.create-club .plus, .tyre-img::after, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }
 
 @media (max-width: 900px) {
   .grid-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }

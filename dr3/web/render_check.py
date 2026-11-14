@@ -6,7 +6,9 @@ Run AFTER smoke_test.py (it reuses smoke.db and the smokedriver account it creat
 """
 from __future__ import annotations
 
+import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -97,7 +99,7 @@ def main() -> int:
           'border-radius: 0.3rem;' in css
           and '.panel, .club-card, .stat-card, .btn, button, input, select, textarea,' in css
           and '.opt, .num-tile, .table-wrap, .chip, .flash' in css
-          and '.tyre-chip, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in css, '')
+           and '.tyre-img::after, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in css, '')
 
     # home recent-times box (backlog #42): server-rendered first page +
     # infinite-scroll JS wired to the public endpoint
@@ -351,7 +353,30 @@ def main() -> int:
               and '.round-class-thumb {\n  position: absolute;\n  top: 0;\n  left: .5rem;\n  width: min(4.5rem, 20%);\n}' in board_css
               and '.round-loc {\n  font-weight: 900;\n  font-size: 0.95rem;\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  height: 4.5rem;\n  border-bottom-left-radius: .3rem;\n  border-bottom-right-radius: .3rem;\n  padding-left: .5rem;\n  padding-top: .25rem;\n  color: var(--accent);\n  background: color-mix(in srgb, var(--accent-deep) 45%, transparent);\n}' in board_css
               and '.round-window {\n  color: var(--accent);\n  font-weight: 500;\n  font-size: 0.8rem;\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  padding: .25rem .75rem;\n}' in board_css
-              and 'details.create-club .plus, .tyre-chip, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in board_css, '')
+               and 'details.create-club .plus, .tyre-img::after, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in board_css, '')
+        check('club detail: active round box uses card-mixed location bar',
+              '.round-box.active .round-loc { background: color-mix(in srgb, var(--card) 65%, transparent); }' in board_css, '')
+        m = re.search(r'id="board-state">(.*?)</script>', det, re.S)
+        board_state = json.loads(m.group(1)) if m else {}
+        check('club detail: mode toggle is Stage-first with Stage the default mode (VR column merged into Input)',
+              det.find('data-mode="stage"') > -1
+              and det.find('data-mode="stage"') < det.find('data-mode="overall"')
+              and board_state.get('mode') == 'stage'
+              and '<th>VR</th>' not in det
+              and 'colspan="13"' not in det
+              and "inputCell(r.input, r.vr)" in det
+              and "INPUT_ICON = { wheel: 'wheel.png', controller: 'controller.png', keyboard: 'keyboard.png' };" in det
+              and "if (vr === true) parts.push('<img class=\"input-icon\" src=\"' + STATIC + 'icons/vr.png\"" in det
+              and '.input-cell { white-space: nowrap; }' in board_css
+              and '.input-icon { height: 1.1em; width: auto; vertical-align: -0.2em; margin-right: 0.3rem; }' in board_css, '')
+        check('club detail: tyre column renders compound images with hover name tooltip',
+              "var TYRE_FILE = {" in det
+              and "1: '1_soft_gravel'" in det
+              and "13: '13_dry_rx'" in det
+              and "TYRE_FILE[t] || '#_unknown'" in det
+              and '<span class="tyre-img" data-tip="' in det
+              and ".tyre-img::after {\n  content: attr(data-tip);" in board_css
+              and '.tyre-img:hover::after { opacity: 1; }' in board_css, '')
         # championship builder: create a fresh draft, render edit + preview
         r = client.post(f'/clubs/{club_id}/championship/new', data={'num_events': '2', 'num_stages': '3'}, follow_redirects=False)
         check('champ new -> redirect to edit', r.status_code == 302, f'status={r.status_code}')

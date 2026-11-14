@@ -79,8 +79,8 @@
 
     <div class="board-toggles">
       <div class="mode-toggle" id="mode-toggle">
-        <button type="button" class="mode-btn" data-mode="overall">Overall</button>
         <button type="button" class="mode-btn" data-mode="stage">Stage</button>
+        <button type="button" class="mode-btn" data-mode="overall">Overall</button>
       </div>
       <div class="stage-bar" id="stage-bar" hidden></div>
     </div>
@@ -92,17 +92,17 @@
         <thead>
           <tr>
             <th>#</th><th></th><th>Driver</th><th>Vehicle</th><th>Tyre</th>
-            <th>Input</th><th>VR</th><th>Camera</th><th>Assists</th><th>Penalty</th>
+            <th>Input</th><th>Camera</th><th>Assists</th><th>Penalty</th>
             <th class="num">Time</th><th class="num">Diff 1st</th><th></th>
           </tr>
         </thead>
         <tbody id="board-body">
-          <tr class="board-empty"><td colspan="13">Loading…</td></tr>
+          <tr class="board-empty"><td colspan="12">Loading…</td></tr>
         </tbody>
       </table>
     </div>
 
-    <script type="application/json" id="board-state">{{ {'club_id': club.id, 'selectors': champ_selectors, 'champ_index': default_champ_index, 'event_id': default_event_id, 'round_index': default_round_index, 'mode': 'overall', 'stage': 0, 'script_root': request.script_root, 'board': board} | tojson }}</script>
+    <script type="application/json" id="board-state">{{ {'club_id': club.id, 'selectors': champ_selectors, 'champ_index': default_champ_index, 'event_id': default_event_id, 'round_index': default_round_index, 'mode': 'stage', 'stage': 0, 'script_root': request.script_root, 'board': board} | tojson }}</script>
     {% else %}
     <p>No events yet.</p>
     {% endif %}
@@ -339,7 +339,13 @@
   }
 
   var root = state.script_root || '';
-  var INPUT_LABEL = { wheel: 'Wheel', controller: 'Controller', keyboard: 'Keyboard' };
+  var STATIC = root + '/static/';
+  var INPUT_ICON = { wheel: 'wheel.png', controller: 'controller.png', keyboard: 'keyboard.png' };
+  var TYRE_FILE = {
+    1: '1_soft_gravel', 2: '2_medium_gravel', 3: '3_hard_gravel', 4: '4_wet_tarmac',
+    6: '6_soft_tarmac', 7: '7_medium_tarmac', 8: '8_hard_tarmac', 9: '9_winter',
+    10: '10_snow', 11: '11_wet_rx', 13: '13_dry_rx'
+  };
 
   function boardUrl() {
     var p = new URLSearchParams();
@@ -350,10 +356,18 @@
     return root + '/clubs/' + state.club_id + '/event-board?' + p.toString();
   }
 
+  function tyreName(slug) {
+    if (slug === '#_unknown') return 'Unknown';
+    var s = slug.replace(/^\d+_/, '').replace(/_/g, ' ');
+    return s.replace(/\b\w/g, function (c) { return c.toUpperCase(); }).replace(/\bRx\b/g, 'RX');
+  }
+
   function tyreCell(tyres) {
     if (!tyres || !tyres.length) return '<span class="muted">—</span>';
     return tyres.map(function (t) {
-      return '<span class="tyre-chip" title="Compound ' + esc(t) + '">' + esc(t) + '</span>';
+      var slug = TYRE_FILE[t] || '#_unknown';
+      var name = esc(tyreName(slug));
+      return '<span class="tyre-img" data-tip="' + name + '"><img src="' + STATIC + 'tyres/' + slug + '.png" alt="" aria-label="' + name + '"></span>';
     }).join(' ');
   }
 
@@ -367,8 +381,15 @@
     return v ? '✓' : '✗';
   }
 
-  function inputCell(v) {
-    return INPUT_LABEL[v] || (v ? esc(v) : '<span class="muted">—</span>');
+  function inputCell(v, vr) {
+    var parts = [];
+    if (v && INPUT_ICON[v]) {
+      parts.push('<img class="input-icon" src="' + STATIC + 'icons/' + INPUT_ICON[v] + '" alt="' + esc(v) + '">');
+    } else if (v) {
+      parts.push(esc(v));
+    }
+    if (vr === true) parts.push('<img class="input-icon" src="' + STATIC + 'icons/vr.png" alt="VR">');
+    return parts.length ? parts.join(' ') : '<span class="muted">—</span>';
   }
 
   function camCell(v) {
@@ -467,7 +488,7 @@
     var body = document.getElementById('board-body');
     var rows = board.rows || [];
     if (!rows.length) {
-      body.innerHTML = '<tr class="board-empty"><td colspan="13">No results yet.</td></tr>';
+      body.innerHTML = '<tr class="board-empty"><td colspan="12">No results yet.</td></tr>';
       return;
     }
     body.innerHTML = rows.map(function (r) {
@@ -477,8 +498,7 @@
         '<td><a href="' + root + esc(r.driver_url) + '">' + esc(r.username) + '</a></td>' +
         '<td>' + esc(r.vehicle || '') + '</td>' +
         '<td class="tyre-cell">' + tyreCell(r.tyres) + '</td>' +
-        '<td>' + inputCell(r.input) + '</td>' +
-        '<td>' + boolCell(r.vr) + '</td>' +
+        '<td class="input-cell">' + inputCell(r.input, r.vr) + '</td>' +
         '<td>' + camCell(r.camera) + '</td>' +
         '<td>' + boolCell(r.assists) + '</td>' +
         '<td class="num">' + penaltyCell(r.penalty_ms) + '</td>' +
@@ -488,7 +508,7 @@
         '</tr>';
       if (state.mode === 'stage' && r.splits && r.splits.length) {
         tr += '<tr class="splits-row" data-splits-for="' + r.pos + '" hidden>' +
-          '<td colspan="13"><span class="info-key">Splits</span> ' +
+          '<td colspan="12"><span class="info-key">Splits</span> ' +
           r.splits.map(function (s) { return esc(Number(s).toFixed(2)); }).join('  ') + '</td></tr>';
       }
       return tr;

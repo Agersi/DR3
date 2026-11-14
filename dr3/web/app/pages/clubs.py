@@ -515,7 +515,7 @@ def club_detail(club_id: str):
     if default_event_id is not None:
         default_event = get_event(default_event_id)
         if default_event is not None:
-            board = event_board(default_event, default_round_index, 'overall', now=now)
+            board = event_board(default_event, default_round_index, 'stage', now=now)
         for i, s in enumerate(champ_selectors):
             if s['event_id'] == default_event_id:
                 default_champ_index = i

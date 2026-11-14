@@ -107,7 +107,7 @@ def create_app() -> Flask:
         def flag_for(username: str) -> str:
             name = (username or '').strip()
             if not name:
-                return ''
+                return flag_url('')
             cache = getattr(g, '_flag_cache', None)
             if cache is None:
                 cache = g._flag_cache = {}
@@ -117,7 +117,7 @@ def create_app() -> Flask:
             user = User.query.filter(
                 db.func.lower(User.username) == name.lower()
             ).first()
-            url = flag_url(user.country) if user is not None else ''
+            url = flag_url(user.country) if user is not None else flag_url('')
             cache[name] = url
             return url
 
