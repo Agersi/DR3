@@ -362,17 +362,20 @@ def main() -> int:
               '.round-box.active .round-loc { background: color-mix(in srgb, var(--card) 65%, transparent); }' in board_css, '')
         m = re.search(r'id="board-state">(.*?)</script>', det, re.S)
         board_state = json.loads(m.group(1)) if m else {}
-        check('club detail: mode toggle is Stage-first with Stage the default mode (VR column merged into Input)',
+        check('club detail: mode toggle is Stage-first with Stage the default mode (VR + Assists merged into Input)',
               det.find('data-mode="stage"') > -1
               and det.find('data-mode="stage"') < det.find('data-mode="overall"')
               and board_state.get('mode') == 'stage'
               and '<th>VR</th>' not in det
+              and '<th>Assists</th>' not in det
               and 'colspan="13"' not in det
-              and "inputCell(r.input, r.vr)" in det
+              and "inputCell(r.input, r.vr, r.assists)" in det
               and "INPUT_ICON = { wheel: 'wheel.png', controller: 'controller.png', keyboard: 'keyboard.png' };" in det
               and "if (vr === true) parts.push('<img class=\"input-icon\" src=\"' + STATIC + 'icons/vr.png\"" in det
+              and "if (assists === true) parts.push('<img class=\"input-icon\" src=\"' + STATIC + 'icons/assist.png\"" in det
               and '.input-cell { white-space: nowrap; }' in board_css
-              and '.input-icon { height: 1.1em; width: auto; vertical-align: -0.2em; margin-right: 0.3rem; }' in board_css, '')
+              and '.input-icon { height: 1.1em; width: auto; vertical-align: -0.2em; }' in board_css
+              and '.tyre-img { position: relative; display: inline-block; line-height: 0; }' in board_css, '')
         check('club detail: tyre column renders compound images with hover name tooltip',
               "var TYRE_FILE = {" in det
               and "1: '1_soft_gravel'" in det
@@ -387,10 +390,11 @@ def main() -> int:
               and "'<td class=\"flag-cell\">'" not in det
               and "'<td>' + flagCell(r.flag_url, r.username) + '<a href=\"' + root + esc(r.driver_url) + '\">'" in det
               and '.flag { height: .95em; width: auto; vertical-align: -0.18em; margin-right: 0.3em; }' in board_css, '')
-        check('club detail: tight board padding, centered tyre/input columns (incl. header), left-aligned penalty',
+        check('club detail: tight board padding, centered tyre/input columns (incl. header), right-aligned penalty',
               'table.board th, table.board td { padding: 0.15rem 0.15rem; text-align: left; vertical-align: middle; }' in board_css
               and 'table.board th:nth-child(4), table.board td:nth-child(4), table.board th:nth-child(5), table.board td:nth-child(5) { text-align: center; }' in board_css
-              and "'<td>' + penaltyCell(r.penalty_ms) + '</td>'" in det, '')
+              and 'letter-spacing: 0.0em; text-transform: uppercase; }' in board_css
+              and "'<td class=\"num\">' + penaltyCell(r.penalty_ms) + '</td>'" in det, '')
         # championship builder: create a fresh draft, render edit + preview
         r = client.post(f'/clubs/{club_id}/championship/new', data={'num_events': '2', 'num_stages': '3'}, follow_redirects=False)
         check('champ new -> redirect to edit', r.status_code == 302, f'status={r.status_code}')

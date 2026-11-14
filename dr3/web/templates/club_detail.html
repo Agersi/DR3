@@ -92,12 +92,12 @@
         <thead>
           <tr>
             <th>#</th><th>Driver</th><th>Vehicle</th><th>Tyre</th>
-            <th>Input</th><th>Camera</th><th>Assists</th><th>Penalty</th>
+            <th>Input</th><th>Camera</th><th>Penalty</th>
             <th class="num">Time</th><th class="num">Diff 1st</th><th></th>
           </tr>
         </thead>
         <tbody id="board-body">
-          <tr class="board-empty"><td colspan="11">Loading…</td></tr>
+          <tr class="board-empty"><td colspan="10">Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -376,12 +376,7 @@
     return '<img class="flag" src="' + esc(url) + '" alt="' + esc(name) + '">';
   }
 
-  function boolCell(v) {
-    if (v === null || v === undefined) return '<span class="muted">—</span>';
-    return v ? '✓' : '✗';
-  }
-
-  function inputCell(v, vr) {
+  function inputCell(v, vr, assists) {
     var parts = [];
     if (v && INPUT_ICON[v]) {
       parts.push('<img class="input-icon" src="' + STATIC + 'icons/' + INPUT_ICON[v] + '" alt="' + esc(v) + '">');
@@ -389,6 +384,7 @@
       parts.push(esc(v));
     }
     if (vr === true) parts.push('<img class="input-icon" src="' + STATIC + 'icons/vr.png" alt="VR">');
+    if (assists === true) parts.push('<img class="input-icon" src="' + STATIC + 'icons/assist.png" alt="Assists on">');
     return parts.length ? parts.join(' ') : '<span class="muted">—</span>';
   }
 
@@ -488,7 +484,7 @@
     var body = document.getElementById('board-body');
     var rows = board.rows || [];
     if (!rows.length) {
-      body.innerHTML = '<tr class="board-empty"><td colspan="11">No results yet.</td></tr>';
+      body.innerHTML = '<tr class="board-empty"><td colspan="10">No results yet.</td></tr>';
       return;
     }
     body.innerHTML = rows.map(function (r) {
@@ -497,17 +493,16 @@
         '<td>' + flagCell(r.flag_url, r.username) + '<a href="' + root + esc(r.driver_url) + '">' + esc(r.username) + '</a></td>' +
         '<td>' + esc(r.vehicle || '') + '</td>' +
         '<td class="tyre-cell">' + tyreCell(r.tyres) + '</td>' +
-        '<td class="input-cell">' + inputCell(r.input, r.vr) + '</td>' +
+        '<td class="input-cell">' + inputCell(r.input, r.vr, r.assists) + '</td>' +
         '<td>' + camCell(r.camera) + '</td>' +
-        '<td>' + boolCell(r.assists) + '</td>' +
-        '<td>' + penaltyCell(r.penalty_ms) + '</td>' +
+        '<td class="num">' + penaltyCell(r.penalty_ms) + '</td>' +
         '<td class="num">' + esc(r.time_text) + (r.dnf ? ' <span class="dnf-tag">DNF</span>' : '') + '</td>' +
         '<td class="num">' + esc(r.diff_str) + '</td>' +
         '<td class="expand-cell">' + expandCell(r) + '</td>' +
         '</tr>';
       if (state.mode === 'stage' && r.splits && r.splits.length) {
         tr += '<tr class="splits-row" data-splits-for="' + r.pos + '" hidden>' +
-          '<td colspan="11"><span class="info-key">Splits</span> ' +
+          '<td colspan="10"><span class="info-key">Splits</span> ' +
           r.splits.map(function (s) { return esc(Number(s).toFixed(2)); }).join('  ') + '</td></tr>';
       }
       return tr;
