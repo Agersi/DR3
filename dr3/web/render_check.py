@@ -372,7 +372,8 @@ def main() -> int:
               and '.dash-tip:hover::after { opacity: 1; }' in board_css, '')
         check('club detail: board table fills wrapper collapsed, grows to fit split columns when open',
               '.board-wrap { overflow-x: auto; }' in board_css
-              and '#board-table { width: max-content; min-width: 100%; }' in board_css, '')
+              and 'width: max-content' not in board_css
+              and 'table.board { width: 100%; border-collapse: collapse; font-size: 0.9rem; }' in board_css, '')
         check('club detail: board rows are single-line (no cell wrapping)',
               '#board-table th, #board-table td { white-space: nowrap; }' in board_css, '')
         check('club detail: active round box uses card-mixed location bar',
