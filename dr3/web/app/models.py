@@ -3,6 +3,8 @@ from __future__ import annotations
 import secrets
 from datetime import datetime, timezone
 
+from sqlalchemy.dialects import mysql
+
 from .db import db
 
 
@@ -213,7 +215,10 @@ class TimeTrialEntry(db.Model):
     nationality_id: int | None = db.Column(db.Integer)
     using_wheel: bool | None = db.Column(db.Boolean)
     using_assists: bool | None = db.Column(db.Boolean)
-    ghost_data_b64: str | None = db.Column(db.Text)
+    # MEDIUMTEXT on MySQL (16 MiB): a long stage's base64 ghost can exceed the
+    # 65,535-byte TEXT cap and would otherwise 500 the whole submit (error 1406).
+    ghost_data_b64: str | None = db.Column(
+        db.Text().with_variant(mysql.MEDIUMTEXT, 'mysql'))
     splits_json: str | None = db.Column(db.Text)
     submitted_at: datetime | None = db.Column(db.DateTime, default=utcnow)
 

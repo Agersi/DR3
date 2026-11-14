@@ -185,6 +185,7 @@ def _create_schema(db) -> None:
     _ensure_user_stat_columns(db)
     _ensure_user_profile_columns(db)
     _ensure_tt_splits_column(db)
+    _ensure_tt_ghost_column(db)
     _ensure_tt_vehicle_key(db)
     _ensure_best_times_key(db)
     _ensure_stage_run_columns(db)
@@ -311,6 +312,33 @@ def _ensure_tt_splits_column(db) -> None:
         # Lost the boot race to another worker adding the same column.
         if '1060' not in str(e) and 'duplicate column' not in str(e):
             raise
+
+
+def _ensure_tt_ghost_column(db) -> None:
+    """Widen best_times.ghost_data_b64 from TEXT (65,535-byte cap) to MEDIUMTEXT.
+
+    A long stage's base64 ghost can exceed the TEXT cap; inserting it raised
+    MySQL error 1406 and 500'd the whole time-trial-submit, so only the
+    splits-only channel landed and the best was stored with a NULL ghost.
+    Additive migration for databases created before the column was widened:
+    create_all only creates missing tables, so pre-existing best_times need the
+    type changed explicitly. No-op on fresh DBs (already MEDIUMTEXT) and on
+    SQLite (its TEXT is unbounded)."""
+    if db.engine.dialect.name != 'mysql':
+        return
+    from sqlalchemy import text
+
+    with db.engine.connect() as conn:
+        row = conn.execute(text(
+            "SELECT COLUMN_TYPE FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='best_times' "
+            "AND COLUMN_NAME='ghost_data_b64'")).fetchone()
+    if not row or 'mediumtext' in str(row[0]).lower():
+        return
+    with db.engine.begin() as conn:
+        conn.execute(text('SET SESSION lock_wait_timeout = 30'))
+        conn.execute(text(
+            'ALTER TABLE best_times MODIFY ghost_data_b64 MEDIUMTEXT NULL'))
 
 
 def _ensure_tt_vehicle_key(db) -> None:
