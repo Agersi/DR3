@@ -370,7 +370,9 @@ def main() -> int:
               and '.expand-head, .expand-cell { text-align: center; white-space: nowrap; }' in board_css
               and '.expand-btn:hover::after { opacity: 1; }' in board_css
               and 'right: 0;' in board_css.split('.expand-btn::after {', 1)[1].split('}', 1)[0]
-              and '.dash-tip:hover::after { opacity: 1; }' in board_css, '')
+              and 'top: calc(100% + 0.3rem);' in board_css.split('.expand-btn::after {', 1)[1].split('}', 1)[0]
+              and '.dash-tip:hover::after { content: attr(data-tip); opacity: 1; }' in board_css
+              and 'content: none;' in board_css.split('.dash-tip::after {', 1)[1].split('}', 1)[0], '')
         check('club detail: board table fills wrapper collapsed, grows to fit split columns when open',
               '.board-wrap { overflow-x: auto; }' in board_css
               and 'width: max-content' not in board_css

@@ -675,7 +675,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .expand-btn::after {
   content: attr(data-tip);
   position: absolute;
-  bottom: calc(100% + 0.3rem);
+  top: calc(100% + 0.3rem);
   right: 0;
   background: var(--bg);
   border: 1px solid var(--line);
@@ -693,7 +693,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .split-col { white-space: nowrap; }
 .dash-tip { position: relative; display: inline-block; cursor: help; color: var(--muted); }
 .dash-tip::after {
-  content: attr(data-tip);
+  content: none;
   position: absolute;
   bottom: calc(100% + 0.3rem);
   left: 50%;
@@ -710,7 +710,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
   transition: opacity 0.12s ease;
   z-index: 20;
 }
-.dash-tip:hover::after { opacity: 1; }
+.dash-tip:hover::after { content: attr(data-tip); opacity: 1; }
 .splits-row td { background: var(--bg); color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .board-empty td { text-align: center; color: var(--muted); padding: 1rem; }
 

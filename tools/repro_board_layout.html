@@ -50,6 +50,27 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
   z-index: 20;
 }
 .btn-fixed::after { left: auto; right: 0; transform: none; }
+.btn-down::after { bottom: auto; top: calc(100% + 0.3rem); }
+.dash-tip { position: relative; display: inline-block; cursor: help; color: var(--muted); }
+.dash-tip.tip-fixed::after { content: none; }
+.dash-tip.tip-fixed:hover::after { content: attr(data-tip); opacity: 1; }
+.dash-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 0.3rem);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #000;
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 20;
+}
 .split-col { white-space: nowrap; }
 
 h2 { font-size: 1rem; color: var(--muted); }
@@ -112,8 +133,23 @@ h2 { font-size: 1rem; color: var(--muted); }
         <th class="expand-head"><button type="button" class="expand-btn open">&#9660;</button></th>
       </tr></thead>
       <tbody>
-        <tr class="board-row"><td>1</td><td>ag3rsi</td><td>Skoda Fabia S2000</td><td>M</td><td>&#128466;</td><td>Ext A</td><td></td><td class="num">9:42.113</td><td class="num">&mdash;</td><td class="num split-col">2:11.4</td><td class="num split-col">4:05.9</td><td class="num split-col">6:12.2</td><td class="num split-col">7:58.7</td><td class="num split-col">8:44.1</td><td class="num split-col">9:02.3</td><td class="num split-col">9:21.8</td><td class="num split-col">9:42.1</td><td class="expand-cell"></td></tr>
-        <tr class="board-row"><td>2</td><td>RallyMaster_X</td><td>Subaru Impreza S2000 4-Door WRC</td><td>S</td><td>&#128466;</td><td>Ext B</td><td>+5s</td><td class="num">9:45.872</td><td class="num">+3.759</td><td class="num split-col">2:12.0</td><td class="num split-col">4:07.1</td><td class="num split-col">6:14.8</td><td class="num split-col">8:01.2</td><td class="num split-col">8:47.5</td><td class="num split-col">9:05.0</td><td class="num split-col">9:24.9</td><td class="num split-col">9:45.9</td><td class="expand-cell"></td></tr>
+        <tr class="board-row"><td>1</td><td>ag3rsi</td><td>Skoda Fabia S2000</td><td>M</td><td>&#128466;</td><td>Ext A</td><td></td><td class="num">9:42.113</td><td class="num">&mdash;</td><td class="num split-col">2:11.4</td><td class="num split-col">4:05.9</td><td class="num split-col">6:12.2</td><td class="num split-col">7:58.7</td><td class="num split-col">8:44.1</td><td class="num split-col">9:02.3</td><td class="num split-col">9:21.8</td><td class="num split-col"><span class="dash-tip" data-tip="Configure Telemetry">-</span></td><td class="expand-cell"></td></tr>
+        <tr class="board-row"><td>2</td><td>RallyMaster_X</td><td>Subaru Impreza S2000 4-Door WRC</td><td>S</td><td>&#128466;</td><td>Ext B</td><td>+5s</td><td class="num">9:45.872</td><td class="num">+3.759</td><td class="num split-col">2:12.0</td><td class="num split-col">4:07.1</td><td class="num split-col">6:14.8</td><td class="num split-col">8:01.2</td><td class="num split-col">8:47.5</td><td class="num split-col">9:05.0</td><td class="num split-col">9:24.9</td><td class="num split-col"><span class="dash-tip" data-tip="Configure Telemetry">-</span></td><td class="expand-cell"></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>D: splits open, dash-tips content:none + tooltip right-aligned &amp; pointing down (proposed fix)</h2>
+  <div class="table-wrap board-wrap" id="wrapD">
+    <table class="board" id="board-table-d">
+      <thead><tr>
+        <th>#</th><th>Driver</th><th>Vehicle</th><th>Tyre</th><th>Input</th><th>Camera</th><th>Penalty</th><th class="num">Time</th><th class="num">Diff 1st</th>
+        <th class="num split-col">Split #1</th><th class="num split-col">Split #2</th><th class="num split-col">Split #3</th><th class="num split-col">Split #4</th><th class="num split-col">Split #5</th><th class="num split-col">Split #6</th><th class="num split-col">Split #7</th><th class="num split-col">Split #8</th>
+        <th class="expand-head"><button type="button" class="expand-btn open btn-fixed btn-down">&#9660;</button></th>
+      </tr></thead>
+      <tbody>
+        <tr class="board-row"><td>1</td><td>ag3rsi</td><td>Skoda Fabia S2000</td><td>M</td><td>&#128466;</td><td>Ext A</td><td></td><td class="num">9:42.113</td><td class="num">&mdash;</td><td class="num split-col">2:11.4</td><td class="num split-col">4:05.9</td><td class="num split-col">6:12.2</td><td class="num split-col">7:58.7</td><td class="num split-col">8:44.1</td><td class="num split-col">9:02.3</td><td class="num split-col">9:21.8</td><td class="num split-col"><span class="dash-tip tip-fixed" data-tip="Configure Telemetry">-</span></td><td class="expand-cell"></td></tr>
+        <tr class="board-row"><td>2</td><td>RallyMaster_X</td><td>Subaru Impreza S2000 4-Door WRC</td><td>S</td><td>&#128466;</td><td>Ext B</td><td>+5s</td><td class="num">9:45.872</td><td class="num">+3.759</td><td class="num split-col">2:12.0</td><td class="num split-col">4:07.1</td><td class="num split-col">6:14.8</td><td class="num split-col">8:01.2</td><td class="num split-col">8:47.5</td><td class="num split-col">9:05.0</td><td class="num split-col">9:24.9</td><td class="num split-col"><span class="dash-tip tip-fixed" data-tip="Configure Telemetry">-</span></td><td class="expand-cell"></td></tr>
       </tbody>
     </table>
   </div>
@@ -132,6 +168,7 @@ function measure(id, tableId) {
     table_width: Math.round(tr.width),
     gap_right_px: Math.round((wr.right - 2) - tr.right),
     overflow_px: w.scrollWidth - w.clientWidth,
+    phantom_px: w.scrollWidth - Math.round(tr.width),
     has_h_scrollbar: w.scrollWidth > w.clientWidth
   };
 }
@@ -141,7 +178,8 @@ window.addEventListener('load', function () {
     A_collapsed_auto: measure('wrapA', 'board-table'),
     A2_collapsed_fixed: measure('wrapA2', 'board-table-a2'),
     B_collapsed_visible: measure('wrapB', 'board-table-b'),
-    C_splits_open_auto: measure('wrapC', 'board-table-c')
+    C_splits_open_auto: measure('wrapC', 'board-table-c'),
+    D_splits_open_fixed: measure('wrapD', 'board-table-d')
   }, null, 1);
   document.getElementById('out').textContent = out;
   document.title = 'done';
