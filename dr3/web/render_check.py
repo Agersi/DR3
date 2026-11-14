@@ -381,6 +381,12 @@ def main() -> int:
               and '<span class="tyre-img" data-tip="' in det
               and ".tyre-img::after {\n  content: attr(data-tip);" in board_css
               and '.tyre-img:hover::after { opacity: 1; }' in board_css, '')
+        check('club detail: driver flag merged into the driver cell (no own column)',
+              '<th>#</th><th>Driver</th>' in det
+              and 'colspan="12"' not in det
+              and "'<td class=\"flag-cell\">'" not in det
+              and "'<td>' + flagCell(r.flag_url, r.username) + '<a href=\"' + root + esc(r.driver_url) + '\">'" in det
+              and '.flag { height: .95em; width: auto; vertical-align: -0.18em; margin-right: 0.3em; }' in board_css, '')
         # championship builder: create a fresh draft, render edit + preview
         r = client.post(f'/clubs/{club_id}/championship/new', data={'num_events': '2', 'num_stages': '3'}, follow_redirects=False)
         check('champ new -> redirect to edit', r.status_code == 302, f'status={r.status_code}')

@@ -91,13 +91,13 @@
       <table class="board" id="board-table">
         <thead>
           <tr>
-            <th>#</th><th></th><th>Driver</th><th>Vehicle</th><th>Tyre</th>
+            <th>#</th><th>Driver</th><th>Vehicle</th><th>Tyre</th>
             <th>Input</th><th>Camera</th><th>Assists</th><th>Penalty</th>
             <th class="num">Time</th><th class="num">Diff 1st</th><th></th>
           </tr>
         </thead>
         <tbody id="board-body">
-          <tr class="board-empty"><td colspan="12">Loading…</td></tr>
+          <tr class="board-empty"><td colspan="11">Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -488,14 +488,13 @@
     var body = document.getElementById('board-body');
     var rows = board.rows || [];
     if (!rows.length) {
-      body.innerHTML = '<tr class="board-empty"><td colspan="12">No results yet.</td></tr>';
+      body.innerHTML = '<tr class="board-empty"><td colspan="11">No results yet.</td></tr>';
       return;
     }
     body.innerHTML = rows.map(function (r) {
       var tr = '<tr class="board-row' + (r.dnf ? ' dnf' : '') + '" data-pos="' + r.pos + '">' +
         '<td class="num">' + r.pos + '</td>' +
-        '<td class="flag-cell">' + flagCell(r.flag_url, r.username) + '</td>' +
-        '<td><a href="' + root + esc(r.driver_url) + '">' + esc(r.username) + '</a></td>' +
+        '<td>' + flagCell(r.flag_url, r.username) + '<a href="' + root + esc(r.driver_url) + '">' + esc(r.username) + '</a></td>' +
         '<td>' + esc(r.vehicle || '') + '</td>' +
         '<td class="tyre-cell">' + tyreCell(r.tyres) + '</td>' +
         '<td class="input-cell">' + inputCell(r.input, r.vr) + '</td>' +
@@ -508,7 +507,7 @@
         '</tr>';
       if (state.mode === 'stage' && r.splits && r.splits.length) {
         tr += '<tr class="splits-row" data-splits-for="' + r.pos + '" hidden>' +
-          '<td colspan="12"><span class="info-key">Splits</span> ' +
+          '<td colspan="11"><span class="info-key">Splits</span> ' +
           r.splits.map(function (s) { return esc(Number(s).toFixed(2)); }).join('  ') + '</td></tr>';
       }
       return tr;
