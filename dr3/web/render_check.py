@@ -367,7 +367,7 @@ def main() -> int:
               and '"splits-toggle"' in det
               and det.find("'<th class=\"num split-col\">'") < det.find("'<th class=\"expand-head\">'")
               and "data-tip=\"' + (open ? 'Hide Splits' : 'Show Splits') + '\"" in det
-              and '.expand-head, .expand-cell { text-align: center; white-space: nowrap; }' in board_css
+               and '.expand-head, .expand-cell { width: 3rem; text-align: center; white-space: nowrap; }' in board_css
               and 'margin: .2em;' in board_css.split('.expand-btn {', 1)[1].split('}', 1)[0]
               and '.hover-tip.show { opacity: 1; }' in board_css
               and "tip.className = 'hover-tip';" in det
@@ -380,7 +380,7 @@ def main() -> int:
         check('club detail: board table fills wrapper collapsed, grows to fit split columns when open',
               '.board-wrap { overflow-x: auto; }' in board_css
               and 'width: max-content' not in board_css
-              and 'table.board { width: 100%; border-collapse: collapse; font-size: 0.9rem; }' in board_css, '')
+              and 'table.board { width: 100%; border-collapse: collapse; font-size: 0.9rem; table-layout: fixed; }' in board_css, '')
         check('club detail: board rows are single-line (no cell wrapping)',
               '#board-table th, #board-table td { white-space: nowrap; }' in board_css, '')
         check('club detail: active round box uses card-mixed location bar',
@@ -424,11 +424,16 @@ def main() -> int:
                and "tip.style.whiteSpace = text.indexOf('\\n') >= 0 ? 'pre-line' : 'nowrap';" in det
                and '.input-tip { position: relative; display: inline-block; }' in board_css, '')
         check('club detail: tight board padding, centered tyre/input columns (incl. header), right-aligned penalty',
-              'table.board th, table.board td { padding: 0.15rem 0.15rem; text-align: left; vertical-align: middle; }' in board_css
+               'table.board th, table.board td { padding: 0.15rem 0.15rem; text-align: left; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; }' in board_css
               and 'table.board th:nth-child(4), table.board td:nth-child(4), table.board th:nth-child(5), table.board td:nth-child(5) { text-align: center; }' in board_css
                and 'letter-spacing: 0.0em; text-transform: uppercase; }' in board_css
-               and "table.board thead th:nth-child(1) { text-align: center; }" in board_css
-               and "table.board thead th:nth-child(2) { padding-left: 40px; }" in board_css
+               and "table.board { width: 100%; border-collapse: collapse; font-size: 0.9rem; table-layout: fixed; }" in board_css
+               and "table.board th, table.board td { padding: 0.15rem 0.15rem; text-align: left; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; }" in board_css
+               and "table.board th:nth-child(1), table.board td:nth-child(1) { width: 2rem; text-align: center; }" in board_css
+               and all(f"table.board th:nth-child({n}), table.board td:nth-child({n}) {{ width: {w}; }}" in board_css
+                       for n, w in ((2, '13rem'), (3, '13rem'), (4, '3rem'), (5, '3rem'), (6, '4rem'), (7, '4rem'), (8, '5.5rem'), (9, '6rem')))
+               and ".split-col { white-space: nowrap; width: 4rem; }" in board_css
+               and ".expand-head, .expand-cell { width: 3rem; text-align: center; white-space: nowrap; }" in board_css
                and "'<td class=\"num\">' + penaltyCell(r.penalty_ms) + '</td>'" in det, '')
         # championship builder: create a fresh draft, render edit + preview
         r = client.post(f'/clubs/{club_id}/championship/new', data={'num_events': '2', 'num_stages': '3'}, follow_redirects=False)
