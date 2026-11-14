@@ -564,7 +564,7 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
 }
 .round-thumb-wrap { position: relative; display: block; margin-bottom: 0.25rem; }
 .round-thumb { display: block; width: 100%; aspect-ratio: 736 / 347; object-fit: cover; filter: brightness(0.5) blur(3px); }
-.round-box:hover .round-thumb, .round-box.active .round-thumb { filter: none; }
+.round-box:hover .round-thumb, .round-box.hovered .round-thumb, .round-box.active .round-thumb { filter: none; }
 .round-class-thumb {
   position: absolute;
   top: 0;

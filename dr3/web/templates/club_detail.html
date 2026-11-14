@@ -555,6 +555,25 @@
     load();
   });
 
+  // Wheel scrolling fires no pointermove, so :hover is never re-evaluated mid-scroll —
+  // mirror it by flagging the box under the cursor after each scroll frame.
+  var hoveredBox = null;
+  function setHoveredBox(el) {
+    if (hoveredBox === el) return;
+    if (hoveredBox) hoveredBox.classList.remove('hovered');
+    hoveredBox = el;
+    if (el) el.classList.add('hovered');
+  }
+  document.getElementById('round-strip').addEventListener('wheel', function (e) {
+    requestAnimationFrame(function () {
+      var el = document.elementFromPoint(e.clientX, e.clientY);
+      setHoveredBox(el ? el.closest('.round-box') : null);
+    });
+  }, { passive: true });
+  document.getElementById('round-strip').addEventListener('mouseleave', function () {
+    setHoveredBox(null);
+  });
+
   document.getElementById('mode-toggle').addEventListener('click', function (e) {
     var btn = e.target.closest('.mode-btn');
     if (!btn) return;
