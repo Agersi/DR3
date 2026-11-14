@@ -418,6 +418,9 @@ def test_posttime_splits_e2e():
         def max_distance(self):
             return 0.0
 
+        def total_distance(self):
+            return 0.0
+
     class _Tel:
         def __init__(self):
             self.run = _Run()

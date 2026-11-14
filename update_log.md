@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.71**
+- Fixed time trial distance recording on rallycross tracks (multi-lap runs).
+
 **v0.1.70**
 - Time trial distances are now recorded per run instead of adding up across repeated attempts on the same stage.
 

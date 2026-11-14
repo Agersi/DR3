@@ -2396,28 +2396,31 @@ class RpcDispatcher:
 
         entry_id = secrets.token_hex(8)
 
-        # Real per-segment splits from the UDP run just driven on this circuit.
-        # Rally tracks resolve a split count from their max-time limit; rallycross
-        # circuits (no laps in PostTime) stay unmapped -> no splits, time only.
+        # Real per-run distance (and, on rally tracks, per-segment splits) from
+        # the UDP run just driven on this circuit. Rally tracks resolve a split
+        # count from their max-time limit; rallycross circuits (no laps in
+        # PostTime) stay unmapped -> no splits, but distance is still measured:
+        # TTs send no StageComplete RPC, so without it the web falls back to the
+        # snapshot's cumulative camera counters.
         tt_splits: Optional[List[float]] = None
         tt_distance: Optional[int] = None
         if not club_stage and self.telemetry is not None and stage_time_ms > 0:
-            n_tt = split_count_for_limit(stage_limit_ms(track))
-            if n_tt:
-                run = self.telemetry.take_run_since(self._telemetry_arm_wall)
-                if run is not None:
-                    # Measured per-run distance for the stage_runs row: TTs send
-                    # no StageComplete RPC, so without this the web would fall
-                    # back to the snapshot's cumulative camera counters.
-                    measured = run.max_distance() or run.track_length_m
-                    if measured > 0:
-                        tt_distance = int(round(measured))
+            run = self.telemetry.take_run_since(self._telemetry_arm_wall)
+            if run is not None:
+                # Wrap-aware: on a multi-lap rallycross circuit F_DIST resets at
+                # the line each lap, so max_distance() would see only one lap of
+                # an N-lap run.
+                measured = run.total_distance() or run.track_length_m
+                if measured > 0:
+                    tt_distance = int(round(measured))
+                n_tt = split_count_for_limit(stage_limit_ms(track))
+                if n_tt:
                     segs = run.segment_times(n_tt)
                     if segs:
                         tt_splits = scale_segments_to_total(
                             segs, stage_time_ms / 1000.0)
-                else:
-                    self._warn_no_telemetry()
+            else:
+                self._warn_no_telemetry()
 
         # Stash the splits + distance for the StageComplete that follows
         # (official/TT runs are proxied — their merge feed is the only on-ramp

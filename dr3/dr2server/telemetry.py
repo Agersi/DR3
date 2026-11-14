@@ -347,6 +347,31 @@ class StageRun:
                 m = s[idist]
         return m
 
+    def total_distance(self) -> float:
+        """Total metres driven over the whole run (0.0 when empty). A single
+        monotonic pass ends at its final counter value; on a multi-lap circuit
+        the per-sample distance wraps at the line, and each wrap drops the
+        counter by one lap — so the total is the final value plus one full lap
+        per wrap (last + n_wraps * track_length_m). Backward jumps below the
+        wrap threshold are jitter, not wraps."""
+        try:
+            idist = TELEMETRY_FIELDS.index(F_DIST)
+        except ValueError:
+            return 0.0
+        if not self.samples:
+            return 0.0
+        last = max(0.0, float(self.samples[-1][idist]))
+        wraps = 0
+        prev: Optional[float] = None
+        for s in self.samples:
+            d = s[idist]
+            if prev is not None and (prev - d) > 25.0:  # as has_wrap()
+                wraps += 1
+            prev = d
+        if self.track_length_m > 0:
+            return last + wraps * self.track_length_m
+        return max(last, self.max_distance())
+
 
 def scale_segments_to_total(segs: List[float], total_s: float) -> Optional[List[float]]:
     """Scale measured per-segment times (seconds) so they sum exactly to

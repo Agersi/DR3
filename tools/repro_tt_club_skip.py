@@ -91,6 +91,9 @@ class FakeRun:
     def max_distance(self):
         return 0.0
 
+    def total_distance(self):
+        return 0.0
+
 
 class FakeTelemetry:
     """Counts take_run_since claims; returns the fixed run (or None)."""
