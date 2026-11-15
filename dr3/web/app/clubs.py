@@ -184,6 +184,31 @@ def add_member(club: Club, user: User) -> bool:
     return True
 
 
+def auto_join_club(user: User) -> Club | None:
+    """Add a fresh signup to the configured home club (``AUTO_JOIN_CLUB_ID``).
+
+    Returns the club when membership was added, or ``None`` when no club is
+    configured / it cannot be found. Registration must never fail because of
+    this, so any DB error is logged and swallowed.
+    """
+    club_id = current_app.config.get('AUTO_JOIN_CLUB_ID', '')
+    if not club_id:
+        return None
+    club = db.session.get(Club, club_id)
+    if club is None:
+        log.warning('AUTO_JOIN_CLUB_ID %r does not exist — no auto-join for %s',
+                    club_id, user.username)
+        return None
+    try:
+        add_member(club, user)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        log.exception('auto-join to %s failed for %s', club.id, user.username)
+        return None
+    return club
+
+
 def remove_member(club: Club, username: str) -> bool:
     u = get_user_by_name(username)
     if u is None:

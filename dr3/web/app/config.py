@@ -21,6 +21,8 @@ class Config:
     SQLALCHEMY_DATABASE_URI: str = DATABASE_URL
     SITE_URL: str = os.environ.get('SITE_URL', 'http://localhost:5001')
     CRON_API_KEY: str = os.environ.get('CRON_API_KEY', '')
+    # Club (by id) that every new signup is added to automatically; empty = off.
+    AUTO_JOIN_CLUB_ID: str = os.environ.get('AUTO_JOIN_CLUB_ID', '')
     SESSION_COOKIE_HTTPONLY: bool = True
     SESSION_COOKIE_SAMESITE: str = 'Lax'
     SESSION_COOKIE_SECURE: bool = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() == 'true'

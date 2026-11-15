@@ -298,7 +298,7 @@ def main() -> int:
           'name="next" value="/clubs?active=1"' in auth_clubs, '')
 
     with app.app_context():
-        club = Club.query.first()
+        club = Club.query.filter_by(name='Smoke Crew').first()
         events = Event.query.all()
         club_id = club.id if club else None
         event_ids = [e.id for e in events]

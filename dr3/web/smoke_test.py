@@ -21,13 +21,15 @@ os.environ['SECRET_KEY'] = 'smoke-test-key'
 os.environ['DATABASE_URL'] = f'sqlite:///{DB_PATH}'
 os.environ['CRON_API_KEY'] = 'smoke-cron-key'
 os.environ['DR3_DISABLE_CSRF'] = '1'
+os.environ['AUTO_JOIN_CLUB_ID'] = 'club-autojoin-test'
 os.environ.pop('SESSION_COOKIE_SECURE', None)
 
 sys.path.insert(0, str(HERE))
 
 from app import create_app  # noqa: E402
+from app.auth import create_user  # noqa: E402
 from app.db import db  # noqa: E402
-from app.models import User, utcnow  # noqa: E402
+from app.models import Club as _AjClub, ClubMember as _AjMember, User, utcnow  # noqa: E402
 
 
 def main() -> int:
@@ -40,6 +42,15 @@ def main() -> int:
         print(f'[{status}] {name}' + (f' — {extra}' if extra and not cond else ''))
         if not cond:
             failures.append(name)
+
+    # 0. fixture club for the signup auto-join check
+    with app.app_context():
+        owner = create_user('autojoinowner', 'autojoinowner@example.com', 'password123',
+                            email_verified=True)
+        db.session.add(_AjClub(id='club-autojoin-test', name='Auto Join Test',
+                               description='', visibility='public', join_policy='open',
+                               created_by=owner.id))
+        db.session.commit()
 
     # 1. register
     r = client.post('/register', data={
@@ -62,6 +73,10 @@ def main() -> int:
         user = User.query.filter_by(username='smokedriver').first()
         check('user row created', user is not None)
         verify_token = user.verify_token if user else ''
+        m = (_AjMember.query.filter_by(club_id='club-autojoin-test')
+             .filter_by(user_id=user.id).first()) if user else None
+        check('new signup auto-joined the configured club',
+              m is not None and m.role == 'member')
 
     # 2. verify email
     r = client.get(f'/verify_email/{verify_token}', follow_redirects=True)

@@ -28,6 +28,7 @@ from ..auth import (
     verified_required,
 )
 from ..clubs import (
+    auto_join_club,
     clear_cooldown,
     club_admins,
     club_invites,
@@ -272,13 +273,18 @@ def register():
             return render_template('register.html', username=username, email=email)
 
         user = create_user(username, email, password, display_name=display_name, country=country)
+        auto_club = auto_join_club(user)
         send_email(
             user.email,
             'Verify your Dirt Rally 3.0 account',
             f"Hi {user.display_name},\n\n"
             f"Confirm your email to activate your account:\n\n{_verify_link(user)}\n",
         )
-        flash('Account created. Check your inbox to verify your email.', 'info')
+        if auto_club is not None:
+            flash(f"Account created — you're now a member of {auto_club.name}. "
+                  'Check your inbox to verify your email.', 'info')
+        else:
+            flash('Account created. Check your inbox to verify your email.', 'info')
         return redirect(url_for('pages.login'))
     return render_template('register.html')
 
