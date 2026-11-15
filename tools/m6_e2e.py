@@ -35,6 +35,21 @@ def vps_run_script(path):
     return out.stdout + out.stderr
 
 
+def cleanup(username):
+    """Delete this run's throwaway account (and its rows) from the dr3 DB."""
+    script = os.path.join(ROOT, 'build', '_e2e_cleanup.sh')
+    with open(script, 'w', encoding='utf-8', newline='\n') as f:
+        f.write('#!/bin/bash\n')
+        f.write(f"IDS=$(mysql -N dr3 -e \"SELECT id FROM users WHERE username='{username}'\" | paste -sd, -)\n")
+        f.write('if [ -n "$IDS" ]; then\n')
+        for table in ('game_tokens', 'club_members', 'notifications'):
+            f.write(f'mysql -N dr3 -e "DELETE FROM {table} WHERE user_id IN ($IDS)";\n')
+        f.write('mysql -N dr3 -e "DELETE FROM users WHERE id IN ($IDS)"; echo removed\n')
+        f.write('else echo "nothing to remove"\nfi\n')
+    log = vps_run_script(script)
+    check('teardown: throwaway account deleted', 'removed' in log, log[-200:])
+
+
 def cron_key():
     with open(os.path.join(ROOT, 'build', 'web.env'), encoding='utf-8') as f:
         for line in f:
@@ -49,7 +64,14 @@ def main():
     username = f'e2e_{suffix}'
     password = 'E2e-Passw0rd!'
     email = f'{username}@example.com'
+    try:
+        _run_checks(s, username, password, email, suffix)
+    finally:
+        cleanup(username)
+    finish()
 
+
+def _run_checks(s, username, password, email, suffix):
     r = s.get(BASE + '/')
     check('home renders', r.status_code == 200 and 'Dirt Rally' in r.text, str(r.status_code))
     r = s.get(BASE + '/events')
@@ -79,8 +101,6 @@ def main():
                 "| grep -oE '[A-Za-z0-9_-]{43}'\n")
     log = vps_run_script(script)
     m = re.search(r'([A-Za-z0-9_-]{43})', log)
-    if not m:
-        print(f"[debug] full token-fetch log: {log!r}")
     check('verify token fetched from db', m is not None, log[-200:])
     if not m:
         return finish()
@@ -140,8 +160,6 @@ def main():
     r = s.head(BASE + '/download/DR3-windows.zip')
     check('client zip served', r.status_code == 200 and int(r.headers.get('Content-Length', 0)) > 10_000_000,
           f"{r.status_code} len={r.headers.get('Content-Length')}")
-
-    return finish()
 
 
 def finish():
