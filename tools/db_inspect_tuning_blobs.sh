@@ -1,7 +1,8 @@
 #!/bin/bash
 # Per-stage TuningSetup blob summary (raw length + sha1[:8]) from the production
 # DB, for one or more event ids (default: every event that has result rows).
-# Run via:
+# Blobs are read from club_stage_states (post-migration); a legacy-inline
+# fallback covers pre-migration rows. Run via:
 #   python tools\vps.py --run-script tools\db_inspect_tuning_blobs.sh
 #   python tools\vps.py --run-script tools\db_inspect_tuning_blobs.sh evt-xxxx [evt-yyyy ...]
 cd /opt/dr3/web
@@ -36,21 +37,24 @@ else:
     eids = [r[0] for r in cur.fetchall()]
 
 for eid in eids:
-    cur.execute("SELECT username, vehicle_id, stages_json, in_progress_json FROM club_results WHERE event_id=%s", (eid,))
+    cur.execute("SELECT username, vehicle_id, stages_json FROM club_results WHERE event_id=%s", (eid,))
     rows = cur.fetchall()
     print(f'===== {eid} ({len(rows)} result rows) =====')
-    for uname, veh, stages, inprog in rows:
+    for uname, veh, stages in rows:
         st = json.loads(stages or '[]')
-        ip = json.loads(inprog or '{}')
+        # Per-stage heavy payloads from the side table (post-migration).
+        cur.execute("""SELECT flat_stage_index, tuning_setup_b64
+                       FROM club_stage_states WHERE event_id=%s AND username=%s""",
+                    (eid, uname))
+        side = {idx: b64 or '' for idx, b64 in cur.fetchall()}
         print(f'-- user={uname} veh={veh}')
         for i, s in enumerate(st):
             if not s:
                 print(f'   stage[{i}]: (empty)')
                 continue
-            t = blobinfo(s.get('tuning_setup_b64', ''))
+            t = blobinfo(side.get(i) or s.get('tuning_setup_b64', ''))
             print(f"   stage[{i}]: time={s.get('time_ms')} veh={s.get('vehicle_id')} tyre={s.get('tyre_compound')}/{s.get('tyres_remaining')} tuning={t} submitted={s.get('submitted_at')}")
-        for k, v in ip.items():
-            t = blobinfo(v.get('tuning_setup_b64', ''))
-            print(f'   in_progress[{k}]: veh={v.get("vehicle_id")} tyre={v.get("tyre_compound")}/{v.get("tyres_remaining")} tuning={t}')
+        for i in sorted(set(side) - set(range(len(st)))):
+            print(f'   pending[{i}]: tuning={blobinfo(side[i])}')
     print()
 EOF

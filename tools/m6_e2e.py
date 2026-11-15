@@ -27,9 +27,9 @@ def csrf_of(html):
     return m.group(1) if m else None
 
 
-def vps_sudo(cmd):
+def vps_run_script(path):
     out = subprocess.run(
-        [sys.executable, os.path.join(ROOT, 'tools', 'vps.py'), '--sudo', cmd],
+        [sys.executable, os.path.join(ROOT, 'tools', 'vps.py'), '--sudo', '--run-script', path],
         capture_output=True, text=True, timeout=120,
     )
     return out.stdout + out.stderr
@@ -70,10 +70,17 @@ def main():
     # SMTP not configured yet, so the verify link isn't emailed. Read the
     # throwaway account's one-time verify_token from the dedicated dr3 DB to
     # exercise the /verify_email endpoint (no secrets are logged by the app).
-    log = vps_sudo(
-        f"mysql -N dr3 -e \"SELECT verify_token FROM users WHERE username='{username}'\""
-        " | grep -oE '[A-Za-z0-9_-]{43}'")
+    # Goes through --run-script: an inline `sudo <quoted SQL>` via vps.py's
+    # exec_command path comes back empty on this box.
+    script = os.path.join(ROOT, 'build', '_e2e_verify_token.sh')
+    with open(script, 'w', encoding='utf-8', newline='\n') as f:
+        f.write('#!/bin/bash\n')
+        f.write(f"mysql -N dr3 -e \"SELECT verify_token FROM users WHERE username='{username}'\" "
+                "| grep -oE '[A-Za-z0-9_-]{43}'\n")
+    log = vps_run_script(script)
     m = re.search(r'([A-Za-z0-9_-]{43})', log)
+    if not m:
+        print(f"[debug] full token-fetch log: {log!r}")
     check('verify token fetched from db', m is not None, log[-200:])
     if not m:
         return finish()
@@ -123,8 +130,9 @@ def main():
 
     r = s.get(BASE + '/api/game/challenges', headers=gh)
     check('official challenges endpoint removed', r.status_code == 404, str(r.status_code))
-    for path in ('/api/game/time-trial-submit',
-                 '/api/game/time-trial-leaderboard?vclass=101&track=10&conditions=5',
+    # time-trial-submit is a live endpoint again (re-added in the v0.1.58
+    # stage-data consolidation) — only the old leaderboard routes stay removed.
+    for path in ('/api/game/time-trial-leaderboard?vclass=101&track=10&conditions=5',
                  '/api/game/time-trial-leaderboard-id?vclass=101&track=10&conditions=5&category=1'):
         r = s.get(BASE + path, headers=gh)
         check(f'removed endpoint {path.split("?")[0]}', r.status_code == 404, str(r.status_code))

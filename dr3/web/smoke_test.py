@@ -175,6 +175,103 @@ def main() -> int:
     check('leaderboard: entry-level nationality_id from stage-begin',
           e0.get('nationality_id') == 1, str(e0.get('nationality_id')))
 
+    # Heavy payloads live in club_stage_states, not the result row's JSON
+    with app.app_context():
+        from app.models import ClubStageState, Result as ClubResult
+        raw = db.session.query(ClubResult).filter_by(
+            event_id=eid, username='smokedriver').first()
+        check('club_results: no tuning key in stages_json',
+              'tuning_setup_b64' not in (raw.stages_json or ''), raw.stages_json)
+        check('club_results: in_progress pruned after complete',
+              json.loads(raw.in_progress_json or '{}') == {}, raw.in_progress_json)
+        st = db.session.query(ClubStageState).filter_by(
+            event_id=eid, username='smokedriver', flat_stage_index=0).first()
+        check('club_stage_states: tuning blob stored per stage',
+              st is not None and st.tuning_setup_b64 == 'dHVuaW5n',
+              st.tuning_setup_b64 if st else None)
+
+    # damage/mud round-trip through the side table (my-progress shape intact)
+    r = client.post('/api/game/stage-begin', headers=headers, json={
+        'event_id': eid, 'stage_index': 1, 'event_index': 0,
+        'livery_id': 2, 'tuning_setup_b64': 'c3RhZ2Ux', 'tyre_compound': 3,
+        'tyres_remaining': 2, 'nationality_id': 1, 'vehicle_id': 1,
+    })
+    check('stage-begin stage 1 ok',
+          (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+    r = client.post('/api/game/stage-complete', headers=headers, json={
+        'event_id': eid, 'username': 'smokedriver', 'stage_index': 1,
+        'event_index': 0, 'time_ms': 300000, 'vehicle_id': 1, 'race_status': 0,
+        'comp_damage': {'clutch_wear': 0.5}, 'vehicle_mud': {'mud_level': 3},
+    })
+    check('stage-complete stage 1 ok',
+          (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+    r = client.get('/api/game/my-progress', headers=headers)
+    j = r.get_json() or {}
+    evp = next((e for e in j.get('events', []) if e.get('event_id') == eid), {})
+    c1 = next((s for s in evp.get('completed_stages', [])
+               if s.get('stage_index') == 1), {})
+    check('my-progress: damage/mud/tuning re-attached from side table',
+          c1.get('vehicle_damage') == {'clutch_wear': 0.5}
+          and c1.get('vehicle_mud') == {'mud_level': 3}
+          and c1.get('tuning_setup_b64') == 'c3RhZ2Ux', str(c1))
+    with app.app_context():
+        from app.models import ClubStageState
+        st1 = db.session.query(ClubStageState).filter_by(
+            event_id=eid, username='smokedriver', flat_stage_index=1).first()
+        check('club_stage_states: damage/mud stored per stage',
+              st1 is not None
+              and json.loads(st1.comp_damage_json or 'null') == {'clutch_wear': 0.5}
+              and json.loads(st1.vehicle_mud_json or 'null') == {'mud_level': 3},
+              (st1.comp_damage_json, st1.vehicle_mud_json) if st1 else None)
+
+    # Boot migration: simulate a pre-migration row (heavy fields still inline)
+    with app.app_context():
+        from app import _backfill_club_stage_states
+        from app.models import ClubStageState, Result as ClubResult
+        raw = db.session.query(ClubResult).filter_by(
+            event_id=eid, username='smokedriver').first()
+        stages = json.loads(raw.stages_json)
+        stages[0]['tuning_setup_b64'] = 'bGVnYWN5'
+        stages[0]['comp_damage'] = {'legacy': True}
+        ip = json.loads(raw.in_progress_json or '{}')
+        ip['7'] = {'tuning_setup_b64': 'aW5wcm9ncmVzcw==', 'vehicle_id': 1}
+        raw.stages_json = json.dumps(stages)
+        raw.in_progress_json = json.dumps(ip)
+        db.session.commit()
+        _backfill_club_stage_states(db)
+        db.session.expire_all()
+        raw2 = db.session.query(ClubResult).filter_by(
+            event_id=eid, username='smokedriver').first()
+        check('backfill: heavy fields stripped from JSON columns',
+              'tuning_setup_b64' not in (raw2.stages_json or '')
+              and 'comp_damage' not in (raw2.stages_json or '')
+              and json.loads(raw2.in_progress_json or '{}').get('7') == {'vehicle_id': 1},
+              raw2.stages_json)
+        st0 = db.session.query(ClubStageState).filter_by(
+            event_id=eid, username='smokedriver', flat_stage_index=0).first()
+        check('backfill: stage-entry values win over begin capture',
+              st0.tuning_setup_b64 == 'bGVnYWN5'
+              and json.loads(st0.comp_damage_json or 'null') == {'legacy': True},
+              (st0.tuning_setup_b64, st0.comp_damage_json))
+        st7 = db.session.query(ClubStageState).filter_by(
+            event_id=eid, username='smokedriver', flat_stage_index=7).first()
+        check('backfill: begin-only capture stored for uncompleted stage',
+              st7 is not None and st7.tuning_setup_b64 == 'aW5wcm9ncmVzcw==',
+              st7.tuning_setup_b64 if st7 else None)
+
+    # Restore the smoke event's result to its pre-test state so later
+    # recent-times checks see exactly one posted stage row.
+    with app.app_context():
+        from app.models import Result as ClubResult
+        raw = db.session.query(ClubResult).filter_by(
+            event_id=eid, username='smokedriver').first()
+        stages = json.loads(raw.stages_json)
+        del stages[1]
+        raw.stages_json = json.dumps(stages)
+        raw.total_time_ms = 424000
+        raw.in_progress_json = '{}'
+        db.session.commit()
+
     # Personal bests (best_times): every clean finish updates the driver's best
     # for car + track + conditions. Unit-checked directly below (a live submit
     # would add rows to the global recent-times feed).

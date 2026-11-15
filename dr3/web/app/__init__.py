@@ -189,6 +189,7 @@ def _create_schema(db) -> None:
     _ensure_tt_vehicle_key(db)
     _ensure_best_times_key(db)
     _ensure_stage_run_columns(db)
+    _ensure_club_stage_states(db)
 
 
 def _rename_legacy_tables(db) -> None:
@@ -339,6 +340,141 @@ def _ensure_tt_ghost_column(db) -> None:
         conn.execute(text('SET SESSION lock_wait_timeout = 30'))
         conn.execute(text(
             'ALTER TABLE best_times MODIFY ghost_data_b64 MEDIUMTEXT NULL'))
+
+
+def _ensure_club_stage_states(db) -> None:
+    """Move the heavy per-stage club-result fields into club_stage_states.
+
+    stages_json / in_progress_json used to carry tuning_setup_b64, comp_damage
+    and vehicle_mud inline; a long multi-leg championship grew one cell past
+    MySQL's 65,535-byte TEXT cap and 500'd stage-complete (error 1406). The
+    heavy fields now live in club_stage_states (one row per flat stage
+    ordinal) and are re-attached on read by events.entries_for_event, so
+    every consumer sees the same shape as before.
+
+    Additive: (1) widens both JSON columns to MEDIUMTEXT (no-op off MySQL —
+    SQLite TEXT is unbounded), (2) one-shot backfill that copies every stored
+    blob into the side table and strips it from the JSON — no result data is
+    lost. Idempotent: skips when no row still carries a tuning key; safe under
+    multi-worker boot races (idempotent upserts, retry on duplicate key)."""
+    from sqlalchemy import text
+
+    if db.engine.dialect.name == 'mysql':
+        for col in ('stages_json', 'in_progress_json'):
+            with db.engine.connect() as conn:
+                row = conn.execute(text(
+                    "SELECT COLUMN_TYPE FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='club_results' "
+                    f"AND COLUMN_NAME='{col}'")).fetchone()
+            if not row or 'mediumtext' in str(row[0]).lower():
+                continue
+            with db.engine.begin() as conn:
+                conn.execute(text('SET SESSION lock_wait_timeout = 30'))
+                conn.execute(text(
+                    f'ALTER TABLE club_results MODIFY {col} MEDIUMTEXT NULL'))
+
+    import time as _time
+
+    from sqlalchemy.exc import IntegrityError, OperationalError
+
+    def _pending() -> int:
+        with db.engine.connect() as conn:
+            return conn.execute(text(
+                "SELECT COUNT(*) FROM club_results WHERE "
+                "stages_json LIKE '%tuning_setup_b64%' OR "
+                "in_progress_json LIKE '%tuning_setup_b64%'")).scalar()
+
+    # A single host-wide lock (POSIX only — local Windows test runs are
+    # single-process): multi-worker boots must not backfill concurrently,
+    # since simultaneous inserts into the same unique key deadlock in
+    # InnoDB (1213 took the first deploy down). Losers wait, then see
+    # _pending() == 0 and skip.
+    import os
+
+    lock = None
+    if os.name == 'posix':
+        import fcntl
+
+        lock = open('/tmp/dr3_club_stage_states_backfill.lock', 'w')
+        fcntl.flock(lock, fcntl.LOCK_EX)
+    try:
+        for _attempt in range(5):
+            if _pending() == 0:
+                return
+            try:
+                _backfill_club_stage_states(db)
+                return
+            except IntegrityError:
+                # Lost the race to a concurrent writer — re-check.
+                db.session.rollback()
+            except OperationalError as e:
+                db.session.rollback()
+                if '1213' not in str(e):
+                    raise
+            _time.sleep(1.0 + _attempt)
+        raise RuntimeError('club_stage_states backfill did not converge')
+    finally:
+        if lock is not None:
+            import fcntl
+
+            fcntl.flock(lock, fcntl.LOCK_UN)
+            lock.close()
+
+
+def _backfill_club_stage_states(db) -> None:
+    """One transaction: copy heavy fields out of every club_results row into
+    club_stage_states, then strip them from both JSON columns."""
+    import json
+
+    from .models import ClubStageState, Result as ClubResult
+
+    heavy = ('tuning_setup_b64', 'comp_damage', 'vehicle_mud')
+    for r in ClubResult.query.all():
+        stages = json.loads(r.stages_json or '[]')
+        ip = json.loads(r.in_progress_json or '{}')
+        # Collect per flat index: stage-entry values win (what reads used to
+        # see), the stage-begin capture fills what has no completed entry yet.
+        collected: dict[int, dict] = {}
+        for i, s in enumerate(stages):
+            if not isinstance(s, dict):
+                continue
+            vals = {k: s.pop(k) for k in heavy if k in s}
+            if vals:
+                collected[i] = vals
+        for key, ip_entry in list(ip.items()):
+            if not isinstance(ip_entry, dict):
+                continue
+            try:
+                idx = int(key)
+            except (TypeError, ValueError):
+                continue
+            vals = {k: v for k, v in ip_entry.items() if k in heavy}
+            for k in vals:
+                del ip_entry[k]
+            if vals and idx not in collected:
+                collected[idx] = vals
+        for idx, vals in collected.items():
+            tuning = vals.get('tuning_setup_b64')
+            damage = vals.get('comp_damage')
+            mud = vals.get('vehicle_mud')
+            if not (tuning or damage is not None or mud is not None):
+                continue
+            st = ClubStageState.query.filter_by(
+                event_id=r.event_id, username=r.username,
+                flat_stage_index=idx).first()
+            if st is None:
+                st = ClubStageState(event_id=r.event_id, username=r.username,
+                                    flat_stage_index=idx)
+                db.session.add(st)
+            if tuning:
+                st.tuning_setup_b64 = tuning
+            if damage is not None:
+                st.comp_damage_json = json.dumps(damage)
+            if mud is not None:
+                st.vehicle_mud_json = json.dumps(mud)
+        r.stages_json = json.dumps(stages)
+        r.in_progress_json = json.dumps(ip)
+    db.session.commit()
 
 
 def _ensure_tt_vehicle_key(db) -> None:

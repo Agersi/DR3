@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 
 from .db import db
-from .models import Event, Result, utcnow
+from .models import ClubStageState, Event, Result, utcnow
 from .tables import normalize_championship
 
 _SAFE_ID_RE = re.compile(r'^[A-Za-z0-9_-]+$')
@@ -126,14 +126,54 @@ def upsert_result(event_id: str, username: str) -> Result:
     return r
 
 
-def entry_to_dict(r: Result) -> dict:
+def upsert_stage_state(event_id: str, username: str, flat_index: int, *,
+                       tuning_b64: str | None = None,
+                       comp_damage: dict | None = None,
+                       vehicle_mud: dict | None = None) -> ClubStageState:
+    """Set ONLY the provided heavy fields for one stage slot (partial
+    submissions must never clobber stored values — same rule as the stages
+    merge). An empty tuning string clears a previously stored blob."""
+    s = ClubStageState.query.filter_by(
+        event_id=event_id, username=username,
+        flat_stage_index=flat_index).first()
+    if s is None:
+        s = ClubStageState(event_id=event_id, username=username,
+                           flat_stage_index=flat_index)
+        db.session.add(s)
+    if tuning_b64 is not None:
+        s.tuning_setup_b64 = tuning_b64 or None
+    if comp_damage is not None:
+        s.comp_damage_json = json.dumps(comp_damage)
+    if vehicle_mud is not None:
+        s.vehicle_mud_json = json.dumps(vehicle_mud)
+    return s
+
+
+def entry_to_dict(r: Result, states_by_key: dict | None = None) -> dict:
+    stages = json.loads(r.stages_json or '[]')
+    if states_by_key:
+        # Re-attach the heavy per-stage payloads stored in club_stage_states so
+        # every consumer sees the same entry shape as when they lived inside
+        # stages_json.
+        for i, s in enumerate(stages):
+            if not isinstance(s, dict):
+                continue
+            st = states_by_key.get((r.username, i))
+            if st is None:
+                continue
+            if st.tuning_setup_b64:
+                s['tuning_setup_b64'] = st.tuning_setup_b64
+            if st.comp_damage_json:
+                s['comp_damage'] = json.loads(st.comp_damage_json)
+            if st.vehicle_mud_json:
+                s['vehicle_mud'] = json.loads(st.vehicle_mud_json)
     return {
         'username': r.username,
         'car': r.car or '',
         'vehicle_id': r.vehicle_id,
         'total_time_ms': r.total_time_ms,
         'attempts_used': r.attempts_used,
-        'stages': json.loads(r.stages_json or '[]'),
+        'stages': stages,
     }
 
 
@@ -150,4 +190,8 @@ def entry_nationality(entry: dict) -> int:
 
 def entries_for_event(event_id: str) -> list[dict]:
     rows = Result.query.filter_by(event_id=event_id).order_by(Result.id).all()
-    return [entry_to_dict(r) for r in rows]
+    states_by_key = {
+        (s.username, s.flat_stage_index): s
+        for s in ClubStageState.query.filter_by(event_id=event_id).all()
+    }
+    return [entry_to_dict(r, states_by_key) for r in rows]

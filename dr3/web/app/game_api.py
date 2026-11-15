@@ -30,6 +30,7 @@ from .events import (
     global_stage_index,
     sort_events,
     upsert_result,
+    upsert_stage_state,
     validate_id,
 )
 from .models import Club, ClubMember, GameToken, StageRun, TimeTrialEntry, User, utcnow
@@ -281,12 +282,15 @@ def api_game_stage_begin():
     in_progress[str(pos)] = {
         'vehicle_id': data.get('vehicle_id'),
         'livery_id': data.get('livery_id'),
-        'tuning_setup_b64': data.get('tuning_setup_b64', ''),
         'tyre_compound': data.get('tyre_compound', 2),
         'tyres_remaining': data.get('tyres_remaining', 3),
         'nationality_id': data.get('nationality_id', 0),
     }
     r.in_progress_json = json.dumps(in_progress)
+    # The tuning blob lives in club_stage_states — it used to be duplicated
+    # into both JSON columns, which grew unbounded over a long championship.
+    upsert_stage_state(event_id, user.username, pos,
+                       tuning_b64=data.get('tuning_setup_b64', ''))
     db.session.commit()
     return jsonify({'ok': True})
 
@@ -399,6 +403,10 @@ def api_game_stage_complete():
 
     # Routing/identity fields that don't belong inside a stage entry.
     _routing_keys = {'event_id', 'username', 'stage_index', 'event_index'}
+    # Heavy per-stage payloads — stored in club_stage_states, never inside the
+    # result row's JSON (kept out of every merge so legacy residue can't leak
+    # back in either).
+    _heavy_keys = {'tuning_setup_b64', 'comp_damage', 'vehicle_mud'}
 
     if mark_dnf:
         # DNF close-out marker (backlog 32): the game pre-persisted a stage's
@@ -467,17 +475,22 @@ def api_game_stage_complete():
                 entry['time_ms'] = t
             entry.setdefault('time_ms', 0)
             entry.setdefault('penalties_ms', 0)
+            for k in _heavy_keys:
+                entry.pop(k, None)
             stages[p] = entry
             if not vid:
                 vid = entry.get('vehicle_id') or sent_vid
     else:
         # Merge oldest→newest so newer wins: prior submission, then stage-begin
-        # capture, then this submission's explicitly-sent fields.
+        # capture, then this submission's explicitly-sent fields. Heavy keys
+        # are excluded — they live in club_stage_states (re-attached on read).
         stage_entry = {
-            **prev_stage_entry,
-            **{k: v for k, v in in_progress_entry.items() if v is not None},
+            **{k: v for k, v in prev_stage_entry.items() if k not in _heavy_keys},
+            **{k: v for k, v in in_progress_entry.items()
+               if v is not None and k not in _heavy_keys},
             **{k: v for k, v in data.items()
-               if v is not None and k not in _routing_keys},
+               if v is not None and k not in _routing_keys
+               and k not in _heavy_keys},
         }
         stage_entry['time_ms'] = time_ms
         stage_entry['submitted_at'] = utcnow().isoformat()
@@ -487,6 +500,26 @@ def api_game_stage_complete():
         stage_entry.setdefault('race_status', 0)
         vid = vehicle_id if vehicle_id is not None else stage_entry.get('vehicle_id')
         stages[pos] = stage_entry
+        # Set-only-provided: a partial submission keeps the stored values.
+        if data.get('comp_damage') is not None:
+            upsert_stage_state(event_id, user.username, pos,
+                               comp_damage=data['comp_damage'])
+        if data.get('vehicle_mud') is not None:
+            upsert_stage_state(event_id, user.username, pos,
+                               vehicle_mud=data['vehicle_mud'])
+        if data.get('tuning_setup_b64') is not None:
+            upsert_stage_state(event_id, user.username, pos,
+                               tuning_b64=data['tuning_setup_b64'])
+
+    # The consumed stage-begin captures are merged — drop them so
+    # in_progress_json holds only the currently-running stage (it used to
+    # accumulate a second copy of every tuning blob, forever).
+    if mark_dnf:
+        for p, _t in targets:
+            in_progress_all.pop(str(p), None)
+    else:
+        in_progress_all.pop(str(pos), None)
+    r.in_progress_json = json.dumps(in_progress_all)
 
     # A DNF/retired finish burns an attempt; race_status==0 is a clean finish.
     # Markers don't count — see the mark_dnf branch above.

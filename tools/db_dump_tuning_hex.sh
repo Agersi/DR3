@@ -1,7 +1,9 @@
 #!/bin/bash
 # Full decompressed TuningSetup payload hex dump + pairwise byte diffs per
 # stage, for one or more event ids (default: the two 2026-10-26 multi events).
-# Output is parseable by tools\tuning_field_analysis.py. Run via:
+# Blobs are read from club_stage_states (post-migration); a legacy-inline
+# fallback covers pre-migration rows. Output is parseable by
+# tools\tuning_field_analysis.py. Run via:
 #   python tools\vps.py --run-script tools\db_dump_tuning_hex.sh
 #   python tools\vps.py --run-script tools\db_dump_tuning_hex.sh evt-xxxx [evt-yyyy ...]
 cd /opt/dr3/web
@@ -39,28 +41,42 @@ for eid in eids:
     cur.execute("SELECT name FROM events WHERE id=%s", (eid,))
     row = cur.fetchone()
     label = row[0] if row else eid
-    cur.execute("SELECT stages_json FROM club_results WHERE event_id=%s LIMIT 1", (eid,))
-    row = cur.fetchone()
-    if not row:
-        print(f'{label}: no result'); continue
-    st = json.loads(row[0] or '[]')
-    payloads = []
-    for i, s in enumerate(st):
-        pl = payload((s or {}).get('tuning_setup_b64', ''))
-        if isinstance(pl, bytes):
-            payloads.append(pl)
-            print(f'{label} stage[{i}] usize={len(pl)}: {pl.hex()}')
-        else:
-            payloads.append(None)
-            print(f'{label} stage[{i}]: {pl}')
-    for a in range(len(payloads)):
-        for b in range(a + 1, len(payloads)):
-            pa, pb = payloads[a], payloads[b]
-            if not isinstance(pa, bytes) or not isinstance(pb, bytes):
-                continue
-            n = min(len(pa), len(pb))
-            first_diff = next((j for j in range(n) if pa[j] != pb[j]), None)
-            ndiff = sum(1 for j in range(n) if pa[j] != pb[j])
-            print(f'{label} diff stage[{a}] vs stage[{b}]: lens {len(pa)}/{len(pb)} first_diff_byte={first_diff} n_diff={ndiff}')
-    print()
+    # Tuning blobs live in club_stage_states (one row per driver x flat stage).
+    cur.execute("""SELECT username, flat_stage_index, tuning_setup_b64
+                   FROM club_stage_states WHERE event_id=%s
+                   ORDER BY username, flat_stage_index""", (eid,))
+    by_user = {}
+    for uname, idx, b64 in cur.fetchall():
+        by_user.setdefault(uname, {})[idx] = b64 or ''
+    # Legacy fallback: pre-migration rows still carry blobs inline.
+    if not by_user:
+        cur.execute("SELECT username, stages_json FROM club_results WHERE event_id=%s", (eid,))
+        for uname, stages in cur.fetchall():
+            st = json.loads(stages or '[]')
+            for i, s in enumerate(st):
+                if (s or {}).get('tuning_setup_b64'):
+                    by_user.setdefault(uname, {})[i] = s['tuning_setup_b64']
+    if not by_user:
+        print(f'{label}: no stored tuning'); continue
+    for uname, per in sorted(by_user.items()):
+        tag = f'{label} {uname}' if len(by_user) > 1 else label
+        payloads = []
+        for i in sorted(per):
+            pl = payload(per[i])
+            if isinstance(pl, bytes):
+                payloads.append(pl)
+                print(f'{tag} stage[{i}] usize={len(pl)}: {pl.hex()}')
+            else:
+                payloads.append(None)
+                print(f'{tag} stage[{i}]: {pl}')
+        for a in range(len(payloads)):
+            for b in range(a + 1, len(payloads)):
+                pa, pb = payloads[a], payloads[b]
+                if not isinstance(pa, bytes) or not isinstance(pb, bytes):
+                    continue
+                n = min(len(pa), len(pb))
+                first_diff = next((j for j in range(n) if pa[j] != pb[j]), None)
+                ndiff = sum(1 for j in range(n) if pa[j] != pb[j])
+                print(f'{tag} diff stage[{a}] vs stage[{b}]: lens {len(pa)}/{len(pb)} first_diff_byte={first_diff} n_diff={ndiff}')
+        print()
 EOF

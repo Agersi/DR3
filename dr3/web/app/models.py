@@ -193,6 +193,34 @@ class Result(db.Model):
     __table_args__ = (db.UniqueConstraint('event_id', 'username'),)
 
 
+class ClubStageState(db.Model):
+    """Per-stage heavy payloads for one driver's club result — the bulky fields
+    that used to live inside club_results.stages_json / in_progress_json.
+
+    One row per flat stage ordinal: the base64 tuning blob (MEDIUMTEXT, 16 MiB
+    headroom) plus the comp_damage / vehicle_mud snapshots. Kept out of the
+    result row's JSON so a long multi-leg championship can never grow a single
+    cell past MySQL's TEXT cap (error 1406 on stage-complete). Read back into
+    the stage entries by events.entries_for_event, so every consumer sees the
+    same shape as before."""
+
+    __tablename__ = 'club_stage_states'
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    event_id: str = db.Column(db.String(64), db.ForeignKey('events.id'), nullable=False, index=True)
+    username: str = db.Column(db.String(64), nullable=False, index=True)
+    flat_stage_index: int = db.Column(db.Integer, nullable=False)
+    tuning_setup_b64: str | None = db.Column(
+        db.Text().with_variant(mysql.MEDIUMTEXT, 'mysql'))
+    comp_damage_json: str | None = db.Column(db.Text)
+    vehicle_mud_json: str | None = db.Column(db.Text)
+
+    __table_args__ = (
+        db.UniqueConstraint('event_id', 'username', 'flat_stage_index',
+                            name='uq_club_stage_states_key'),
+    )
+
+
 class TimeTrialEntry(db.Model):
     """A driver's personal best on a given car at a given track + conditions —
     one row per user + car + track + conditions, updated by ANY run type (club
