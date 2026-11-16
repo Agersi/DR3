@@ -539,6 +539,8 @@ pre code, .codeblock code { background: none; border: 0; padding: 0; color: inhe
 .token-box button { flex: none; align-self: center; margin-top: 0; }
 .invite-link { min-width: 0; }
 .invite-link code { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.invite-link-row { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; }
+.invite-link-row > * { margin: 0; }
 
 /* ── Events-tab board (EA WRC-style) ─────────────────────── */
 .muted { color: var(--muted); }

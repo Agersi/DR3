@@ -244,11 +244,13 @@
     {% if invite_links %}
     {% for link in invite_links %}
     {{ copy_box(site_url + url_for('clubs.join_via_invite_link', club_id=club.id, token=link.token), 'invite-link') }}
-    <p class="meta">Created {{ link.created_at | timeago }}</p>
-    <form method="post" action="{{ url_for('clubs.revoke_invite_link', club_id=club.id, token=link.token) }}" class="inline">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="ghost small">Revoke</button>
-    </form>
+    <div class="invite-link-row">
+      <p class="meta">Created {{ link.created_at | timeago }}</p>
+      <form method="post" action="{{ url_for('clubs.revoke_invite_link', club_id=club.id, token=link.token) }}" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="ghost small">Revoke</button>
+      </form>
+    </div>
     {% endfor %}
     {% endif %}
 
@@ -314,13 +316,35 @@
 (function () {
   var links = document.querySelectorAll('.club-menu [data-tab]');
   var panels = document.querySelectorAll('#club-tab-content .club-tab');
-  function show(name) {
+  var storeKey = 'dr3_club_tab_{{ club.id }}';
+  function hasTab(name) {
+    return Array.prototype.some.call(links, function (l) { return l.getAttribute('data-tab') === name; });
+  }
+  function show(name, remember) {
     links.forEach(function (l) { l.classList.toggle('active', l.getAttribute('data-tab') === name); });
     panels.forEach(function (p) { p.hidden = p.getAttribute('data-tab') !== name; });
+    if (remember) {
+      try { sessionStorage.setItem(storeKey, name); } catch (e) {}
+      history.replaceState(null, '', '#tab-' + name);
+    }
   }
   links.forEach(function (l) {
-    l.addEventListener('click', function (e) { e.preventDefault(); show(l.getAttribute('data-tab')); });
+    l.addEventListener('click', function (e) { e.preventDefault(); show(l.getAttribute('data-tab'), true); });
   });
+  // Restore the tab after a flash redirect (server redirects drop the hash, so
+  // sessionStorage is the source of truth; an explicit deep-link hash wins).
+  var initial = null;
+  if (location.hash) {
+    var h = location.hash.slice(1).replace(/^tab-/, '');
+    if (hasTab(h)) initial = h;
+  }
+  if (!initial) {
+    try {
+      var saved = sessionStorage.getItem(storeKey);
+      if (saved && hasTab(saved)) initial = saved;
+    } catch (e) {}
+  }
+  if (initial) show(initial, false);
 })();
 </script>
 
