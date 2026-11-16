@@ -1424,6 +1424,14 @@ def main() -> int:
     expected_copy = f'data-copy="{base}/clubs/{club_id}/join/{link_token}"'
     check('invite link shows full URL in copy box',
           r.status_code == 200 and expected_copy.encode() in r.data, '')
+    check('create button hidden while a link is active',
+          b'Create invite link' not in r.data, '')
+    client.post(f'/clubs/{club_id}/invite-link', follow_redirects=False)
+    with app.app_context():
+        active_count = (ClubInvite.query.filter_by(club_id=club_id)
+                        .filter(ClubInvite.revoked_at.is_(None)).count())
+    check('second invite link rejected while one is active',
+          active_count == 1, str(active_count))
 
     client4 = app.test_client()
     client4.post('/register', data={
@@ -1442,6 +1450,15 @@ def main() -> int:
     with app.app_context():
         m4 = ClubMember.query.filter_by(club_id=club_id, user_id=u4.id).first()
         check('invite link join -> member', m4 is not None, '')
+
+    r = client.post(f'/clubs/{club_id}/invite-link/{link_token}/revoke', follow_redirects=False)
+    with app.app_context():
+        link_row = ClubInvite.query.filter_by(club_id=club_id, token=link_token).first()
+    check('invite link revoked in place',
+          link_row is not None and link_row.revoked_at is not None, '')
+    r = client.get(f'/clubs/{club_id}')
+    check('create button returns after revocation',
+          r.status_code == 200 and b'Create invite link' in r.data, '')
 
     # 18. pick a resolvable location/class for the championship tests
     from app.tables import (

@@ -1002,6 +1002,11 @@ def decline_invite(club_id: str):
 @verified_required
 def create_invite_link(club_id: str):
     club = _require_club_admin(club_id)
+    active = (ClubInvite.query.filter_by(club_id=club.id)
+              .filter(ClubInvite.revoked_at.is_(None)).first())
+    if active is not None:
+        flash('This club already has an active invite link.', 'info')
+        return redirect(url_for('clubs.club_detail', club_id=club_id))
     link = ClubInvite(token=secrets.token_urlsafe(24), club_id=club.id, created_by=g.user.id)
     db.session.add(link)
     db.session.commit()

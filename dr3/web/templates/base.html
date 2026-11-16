@@ -58,8 +58,8 @@
   })();
   </script>
 {%- endmacro %}
-{% macro copy_box(value) -%}
-<div class="token-box" data-copy="{{ value }}">
+{% macro copy_box(value, box_class='') -%}
+<div class="{{ ['token-box', box_class] | select | join(' ') }}" data-copy="{{ value }}">
   <code class="token-value">{{ value }}</code>
   <button type="button" class="small ghost copy-btn">Copy</button>
 </div>
