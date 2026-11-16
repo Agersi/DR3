@@ -2066,13 +2066,25 @@ def main() -> int:
               and '<td class="num dim">' in mem,  # unearned medals dimmed
               '')
         r = client.get(f'/event/{eid2}')
-        check('event detail shows rounds + classification + stage results',
-              r.status_code == 200 and b'Round 1' in r.data
-              and b'Classification' in r.data
-              and b'Stage 1' in r.data
-              and b'sweden-flag.png' in r.data
-              and r.data.index(b'smokedriver') < r.data.index(b'secondpilot'),
-              f'status={r.status_code}')
+        check('old event page removed: GET /event/<id> -> 404',
+              r.status_code == 404, f'status={r.status_code}')
+        api_st = client.get(f'/clubs/{club_id}/championship-standings?event={eid2}')
+        st = api_st.get_json() or {}
+        st_by_name = {row['username']: row for row in st.get('rows') or []}
+        check('championship-standings API: per-round cells + total, faster driver on top',
+              api_st.status_code == 200
+              and len(st.get('rounds') or []) == len(legs2)
+              and [rw['username'] for rw in st.get('rows') or []][:1] == ['smokedriver']
+              and st_by_name.get('smokedriver', {}).get('total', 0) > st_by_name.get('secondpilot', {}).get('total', 0)
+              and all(len(rw.get('cells') or []) == len(legs2) for rw in st.get('rows') or []),
+              f"status={api_st.status_code} rounds={len(st.get('rounds') or [])} rows={[(rw.get('username'), rw.get('total')) for rw in st.get('rows') or []]}")
+        m_st = re.search(r'id="board-state">(.*?)</script>', det, re.S)
+        bs_st = json.loads(m_st.group(1)) if m_st else {}
+        check('club detail: embedded board state carries championship standings',
+              'id="standings-table"' in det
+              and isinstance(bs_st.get('standings'), dict)
+              and (bs_st.get('standings') or {}).get('rows') is not None,
+              f"event_id={bs_st.get('event_id')} key_present={'standings' in bs_st} standings={str(bs_st.get('standings'))[:200]}")
 
     # 19e. Car classes: any confirmed class is valid on any track type
     #      (rally + RX classes both selectable everywhere).  Multi-Location

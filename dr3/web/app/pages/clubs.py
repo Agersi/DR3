@@ -75,6 +75,7 @@ from ..events import (
 )
 from ..models import ChampionshipDraft, Club, ClubInvite, Event, Result, User, utcnow
 from ..results_view import (
+    championship_points_table,
     championship_rounds,
     club_podium_counts,
     current_leg_index,
@@ -511,11 +512,16 @@ def club_detail(club_id: str):
             default_event_id = events[0]['id']
 
     board = None
+    standings = None
     default_champ_index = 0
     if default_event_id is not None:
         default_event = get_event(default_event_id)
         if default_event is not None:
             board = event_board(default_event, default_round_index, 'stage', now=now)
+            # Championship points table for the same championship (server-
+            # rendered initial state; the JS re-fetches on championship switch).
+            standings = championship_points_table(
+                default_event, entries_for_event(default_event['id']))
         for i, s in enumerate(champ_selectors):
             if s['event_id'] == default_event_id:
                 default_champ_index = i
@@ -525,7 +531,7 @@ def club_detail(club_id: str):
         'club_detail.html', club=club, members=members, events=events,
         championships=championships, podiums=podiums,
         live_event=live_event, live_ends=live_ends,
-        champ_selectors=champ_selectors, board=board,
+        champ_selectors=champ_selectors, board=board, standings=standings,
         default_event_id=default_event_id, default_round_index=default_round_index,
         default_champ_index=default_champ_index,
         is_owner=user_is_owner(club, uname),
@@ -576,6 +582,26 @@ def club_event_board(club_id: str):
 
     board = event_board(event, round_index, mode, stage_local_index)
     return jsonify(board if board is not None else {'rows': []})
+
+
+@clubs_bp.route('/clubs/<club_id>/championship-standings')
+def club_championship_standings(club_id: str):
+    """JSON championship points table for the events tab (fetched when the
+    championship selector switches). Query arg: ``event`` (championship id,
+    must belong to the club)."""
+    club = _load_club(club_id)
+    user_id = session.get('user_id')
+    user = db.session.get(User, user_id) if user_id else None
+    if not club_is_visible_to(club, user):
+        abort(404)
+
+    event_id = request.args.get('event', '')
+    event = get_event(event_id) if event_id else None
+    if event is None or event.get('club_id') != club_id:
+        abort(404)
+
+    table = championship_points_table(event, entries_for_event(event['id']))
+    return jsonify(table)
 
 
 @clubs_bp.route('/clubs/<club_id>/edit', methods=['POST'])

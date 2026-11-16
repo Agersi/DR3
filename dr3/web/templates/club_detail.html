@@ -96,7 +96,18 @@
       </table>
     </div>
 
-    <script type="application/json" id="board-state">{{ {'club_id': club.id, 'selectors': champ_selectors, 'champ_index': default_champ_index, 'event_id': default_event_id, 'round_index': default_round_index, 'mode': 'stage', 'stage': 0, 'script_root': request.script_root, 'board': board} | tojson }}</script>
+    <h2 class="standings-title">Championship Standings</h2>
+    <div class="table-wrap standings-wrap">
+      <table class="standings" id="standings-table">
+        <thead id="standings-head"></thead>
+        <tbody id="standings-body">
+          <tr class="board-empty"><td colspan="3">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="standings-note" id="standings-note" hidden>Power-stage bonus: the top five finishers of each round's final stage earn +5 / +4 / +3 / +2 / +1, shown in brackets.</p>
+
+    <script type="application/json" id="board-state">{{ {'club_id': club.id, 'selectors': champ_selectors, 'champ_index': default_champ_index, 'event_id': default_event_id, 'round_index': default_round_index, 'mode': 'stage', 'stage': 0, 'script_root': request.script_root, 'board': board, 'standings': standings} | tojson }}</script>
     {% else %}
     <p>No events yet.</p>
     {% endif %}
@@ -530,6 +541,48 @@
     }).join('');
   }
 
+  function standingsUrl() {
+    var p = new URLSearchParams();
+    p.set('event', state.event_id);
+    return root + '/clubs/' + state.club_id + '/championship-standings?' + p.toString();
+  }
+
+  function standingsCell(c) {
+    if (!c || (!c.points && !c.bonus)) return '<span class="muted">—</span>';
+    var s = String(c.points);
+    if (c.bonus) s += ' <span class="ps-bonus">(+' + c.bonus + ')</span>';
+    return s;
+  }
+
+  function renderStandings(st) {
+    var head = document.getElementById('standings-head');
+    var body = document.getElementById('standings-body');
+    if (!head || !body) return;
+    var rounds = (st && st.rounds) || [];
+    var ths = '<th>#</th><th>Driver</th>';
+    rounds.forEach(function (r) {
+      ths += '<th class="num" title="' + esc(r.location || '') + '">' + esc(r.label) + '</th>';
+    });
+    ths += '<th class="num">Total</th>';
+    head.innerHTML = '<tr>' + ths + '</tr>';
+    var rows = (st && st.rows) || [];
+    if (!rows.length) {
+      body.innerHTML = '<tr class="board-empty"><td colspan="' + (rounds.length + 3) + '">No results yet.</td></tr>';
+      return;
+    }
+    body.innerHTML = rows.map(function (r) {
+      var tds = '<td class="num">' + r.pos + '</td>' +
+        '<td>' + flagCell(r.flag_url, r.username) + '<a href="' + root + esc(r.driver_url) + '">' + esc(r.username) + '</a></td>';
+      (r.cells || []).forEach(function (c) {
+        tds += '<td class="num">' + standingsCell(c) + '</td>';
+      });
+      tds += '<td class="num strong">' + r.total + '</td>';
+      return '<tr>' + tds + '</tr>';
+    }).join('');
+    var note = document.getElementById('standings-note');
+    if (note) note.hidden = !(st && st.power_stage);
+  }
+
   function renderAll() {
     var board = state.board;
     renderSelector();
@@ -538,6 +591,7 @@
     renderInfo(board);
     renderHead(board);
     renderRows(board);
+    renderStandings(state.standings);
   }
 
   function load() {
@@ -547,12 +601,20 @@
       .catch(function () {});
   }
 
+  function loadStandings() {
+    fetch(standingsUrl(), { headers: { 'Accept': 'application/json' } })
+      .then(function (res) { if (!res.ok) throw new Error(res.status); return res.json(); })
+      .then(function (st) { state.standings = st; renderStandings(st); })
+      .catch(function () {});
+  }
+
   document.getElementById('champ-prev').addEventListener('click', function () {
     if (state.champ_index < state.selectors.length - 1) {
       state.champ_index += 1;
       state.event_id = state.selectors[state.champ_index].event_id;
       state.round_index = 0;
       load();
+      loadStandings();
     }
   });
   document.getElementById('champ-next').addEventListener('click', function () {
@@ -561,6 +623,7 @@
       state.event_id = state.selectors[state.champ_index].event_id;
       state.round_index = 0;
       load();
+      loadStandings();
     }
   });
 

@@ -18,9 +18,11 @@ from .scoring import (
     adjusted_total_ms,
     car_label,
     championship_points,
+    championship_points_breakdown,
     championship_view,
     flat_stage_bogeys_ms,
     overall_standings,
+    power_stage_enabled,
     rally_standings,
     scoring_system_for,
     vehicle_meta,
@@ -293,6 +295,43 @@ def overall_table(event: dict, entries: list[dict]) -> list[dict]:
         r['gap_str'] = gap_text(r['gap_ms'])
     rows.sort(key=lambda r: (-r['points'], r['total_time_ms'], -r['stages_done']))
     return rows
+
+
+def championship_points_table(event: dict, entries: list[dict]) -> dict:
+    """Championship points table for the club page's events tab.
+
+    One row per driver who ran at least one stage (same population and order as
+    ``overall_table``), a cell per round with that round's classification points
+    and power-stage bonus, plus the total across rounds. Round headers carry
+    the location so multi-location events stay readable."""
+    from .models import User
+
+    rounds = championship_rounds(event, _now_utc())
+    order = overall_table(event, entries)
+    breakdown = championship_points_breakdown(event, entries)
+    flag_by_user: dict = {}
+    wanted = {r['username'] for r in order if r.get('username')}
+    if wanted:
+        for u in User.query.filter(User.username.in_(wanted)).all():
+            flag_by_user[u.username] = flag_url(u.country or '')
+    rows = []
+    for i, r in enumerate(order):
+        cells = breakdown.get(r['username']) or [{'points': 0, 'bonus': 0} for _ in rounds]
+        rows.append({
+            'pos': i + 1,
+            'username': r['username'],
+            'driver_url': f"/profile/{r['username']}",
+            'flag_url': flag_by_user.get(r['username']) or flag_url(''),
+            'vehicle': r.get('car') or '',
+            'cells': cells,
+            'total': r['points'],
+        })
+    return {
+        'rounds': [{'index': i, 'label': f'R{i + 1}', 'location': rd['location']}
+                   for i, rd in enumerate(rounds)],
+        'rows': rows,
+        'power_stage': power_stage_enabled(event),
+    }
 
 
 def _ran_any_stage(row: dict) -> bool:

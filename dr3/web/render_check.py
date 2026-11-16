@@ -288,7 +288,9 @@ def main() -> int:
           and '.table-wrap td { padding: 0.5rem 0.7rem; vertical-align: middle; }' in dash_css
           and '.dot-red { background: #e05252; box-shadow: 0 0 14px rgba(224, 82, 82, 0.75); }' in dash_css
           and '.dot-yellow { background: #e8c33f; box-shadow: 0 0 14px rgba(232, 195, 63, 0.75); }' in dash_css
-          and '.dot-green { background: #71b348; box-shadow: 0 0 14px rgba(113, 179, 72, 0.75); }' in dash_css, '')
+            and '.dot-green { background: #71b348; box-shadow: 0 0 14px rgba(113, 179, 72, 0.75); }' in dash_css, '')
+    check('dashboard: live events no longer link to the removed event page',
+          'href="/event/' not in dash_html, '')
 
     # join/leave forms (logged-in only): next field must carry the prefixed
     # list URL + active filters so the post-action redirect lands on /clubs,
@@ -441,8 +443,16 @@ def main() -> int:
                        for n, w in ((2, '13rem'), (3, '13rem'), (4, '3rem'), (5, '3rem'), (6, '4rem'), (7, '4rem'), (8, '5.5rem'), (9, '6rem')))
                and ".split-col { white-space: nowrap; width: 4rem; }" in board_css
                and ".expand-head, .expand-cell { width: 3rem; text-align: center; white-space: nowrap; }" in board_css
-               and "'<td class=\"num\">' + penaltyCell(r.penalty_ms) + '</td>'" in det, '')
-        # championship builder: create a fresh draft, render edit + preview
+                and "'<td class=\"num\">' + penaltyCell(r.penalty_ms) + '</td>'" in det, '')
+        check('club detail: championship standings table below the board (JS + CSS)',
+               '<h2 class="standings-title">Championship Standings</h2>' in det
+               and 'id="standings-table"' in det
+               and "function renderStandings(st) {" in det
+               and "' <span class=\"ps-bonus\">(+' + c.bonus + ')</span>'" in det
+               and "root + '/clubs/' + state.club_id + '/championship-standings?'" in det
+               and 'table.standings .num { text-align: right; font-variant-numeric: tabular-nums; }' in board_css
+               and '.ps-bonus { color: var(--accent); font-size: 0.85em; }' in board_css, '')
+         # championship builder: create a fresh draft, render edit + preview
         r = client.post(f'/clubs/{club_id}/championship/new', data={'num_events': '2', 'num_stages': '3'}, follow_redirects=False)
         check('champ new -> redirect to edit', r.status_code == 302, f'status={r.status_code}')
         if r.status_code == 302:
@@ -459,7 +469,7 @@ def main() -> int:
 
     for eid in event_ids:
         r = client.get(f'/event/{eid}')
-        check(f'auth GET /event/{eid}', r.status_code == 200, f'status={r.status_code}')
+        check(f'old event page removed: GET /event/{eid} -> 404', r.status_code == 404, f'status={r.status_code}')
 
     print()
     if failures:

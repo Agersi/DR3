@@ -21,7 +21,7 @@
       <tr><th>Event</th><th>Type</th><th>Current event</th><th>Championship</th><th>Location</th><th>Class</th><th>Drivers</th></tr>
       {% for e in active_events %}
       <tr>
-        <td><a href="{{ url_for('pages.event_detail', event_id=e['id']) }}">{{ e['name'] }}</a></td>
+        <td><a href="{{ url_for('clubs.club_detail', club_id=e['club_id']) }}">{{ e['name'] }}</a></td>
         <td><span class="chip">{{ e.mode_label }}</span></td>
         <td>{{ e.current_end | countdown }}</td>
         <td>{{ e.end_time | countdown }}</td>

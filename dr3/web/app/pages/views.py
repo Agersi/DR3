@@ -792,40 +792,6 @@ def car_stats(vehicle_id: int):
                            title=title, class_label=class_label)
 
 
-@pages_bp.route('/event/<event_id>')
-def event_detail(event_id: str):
-    from ..events import entries_for_event, get_event
-    from ..models import utcnow
-    from ..results_view import (
-        championship_rounds,
-        effective_end,
-        event_status,
-        mode_label,
-        overall_table,
-        round_results,
-        scoring_label,
-    )
-    from ..scoring import power_stage_enabled
-    from ..tables import RX_LOCATIONS
-    event = get_event(event_id)
-    if event is None or event.get('system'):
-        return render_template('not_found.html'), 404
-    now = utcnow()
-    entries = entries_for_event(event_id)
-    rounds = championship_rounds(event, now)
-    per_round = {r['index']: round_results(r, entries) for r in rounds}
-    is_rx = (event.get('location') in RX_LOCATIONS
-             or any(r['is_rx'] for r in rounds))
-    ee = effective_end(event, now)
-    return render_template(
-        'event_detail.html', event=event, now=now,
-        mode_label=mode_label(event), scoring_label=scoring_label(event),
-        power_stage=power_stage_enabled(event), status=event_status(event, now),
-        ends_in=ee.isoformat() if ee else '',
-        rounds=rounds, per_round=per_round,
-        standings=overall_table(event, entries), is_rx=is_rx)
-
-
 @pages_bp.route('/install')
 def install():
     return render_template('install.html')

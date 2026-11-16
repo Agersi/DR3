@@ -273,6 +273,52 @@ def _ran_any_stage(row: dict) -> bool:
     return any(s and int(s.get('time_ms', 0) or 0) > 0 for s in row['stages'])
 
 
+def championship_points_breakdown(event: dict, entries: list[dict]) -> dict[str, list[dict]]:
+    """Per-rally points breakdown for every driver in the championship.
+
+    ``{username: [one cell per rally]}`` where each cell is ``{'points': int,
+    'bonus': int}`` — the classification points from the scoring system and the
+    power-stage bonus (0 when disabled or unearned), aligned with the order of
+    ``championship_view`` (and ``championship_rounds``). Same rules as
+    ``championship_points``; a driver's total is the sum of their cells."""
+    rallies = championship_view(event)
+    out: dict[str, list[dict]] = {
+        e.get('username', ''): [{'points': 0, 'bonus': 0} for _ in rallies]
+        for e in entries}
+    system = scoring_system_for(event)
+    power_stage = power_stage_enabled(event)
+    for rally in rallies:
+        rows = rally_standings(entries, rally)
+        participants = [r for r in rows if _ran_any_stage(r)]
+        p_total = len(participants)
+        for pos, row in enumerate(participants, start=1):
+            cells = out.get(row['username'])
+            if cells is None:
+                continue
+            cell = cells[rally['index']]
+            if row['dnf_stages'] != 0:
+                # DNF: takes its position but no classification points — except
+                # Codemasters, where taking part earns the minimum 1 point.
+                cell['points'] = 1 if system == SCORING_CODEMASTERS else 0
+            else:
+                cell['points'] = rally_classification_points(system, p_total, pos)
+        if power_stage and rally['count'] > 0:
+            final_idx = rally['count'] - 1
+            runners: list[tuple[int, str]] = []
+            for row in rows:
+                s = row['stages'][final_idx] if final_idx < len(row['stages']) else None
+                t = int((s or {}).get('time_ms', 0) or 0)
+                if t > 0:
+                    runners.append((t + int((s or {}).get('penalties_ms', 0) or 0),
+                                    row['username']))
+            runners.sort(key=lambda x: x[0])
+            for i, (_t, name) in enumerate(runners[:len(POWER_STAGE_BONUS)]):
+                cells = out.get(name)
+                if cells is not None:
+                    cells[rally['index']]['bonus'] += POWER_STAGE_BONUS[i]
+    return out
+
+
 def championship_points(event: dict, entries: list[dict]) -> dict[str, int]:
     """Championship points per username.
 
@@ -286,34 +332,7 @@ def championship_points(event: dict, entries: list[dict]) -> dict[str, int]:
     When power-stage points are enabled, the top five finishers of each rally's
     FINAL stage earn an extra bonus (5/4/3/2/1) on top of the classification
     points. A driver's total is the sum across rallies; every driver in
-    ``entries`` is present in the result, with 0 if they scored nothing.
-    """
-    points: dict[str, int] = {e.get('username', ''): 0 for e in entries}
-    system = scoring_system_for(event)
-    power_stage = power_stage_enabled(event)
-    for rally in championship_view(event):
-        rows = rally_standings(entries, rally)
-        participants = [r for r in rows if _ran_any_stage(r)]
-        p_total = len(participants)
-        for pos, row in enumerate(participants, start=1):
-            name = row['username']
-            if row['dnf_stages'] != 0:
-                # DNF: takes its position but no classification points — except
-                # Codemasters, where taking part earns the minimum 1 point.
-                pts = 1 if system == SCORING_CODEMASTERS else 0
-            else:
-                pts = rally_classification_points(system, p_total, pos)
-            points[name] = points.get(name, 0) + pts
-        if power_stage and rally['count'] > 0:
-            final_idx = rally['count'] - 1
-            runners: list[tuple[int, str]] = []
-            for row in rows:
-                s = row['stages'][final_idx] if final_idx < len(row['stages']) else None
-                t = int((s or {}).get('time_ms', 0) or 0)
-                if t > 0:
-                    runners.append((t + int((s or {}).get('penalties_ms', 0) or 0),
-                                    row['username']))
-            runners.sort(key=lambda x: x[0])
-            for i, (_t, name) in enumerate(runners[:len(POWER_STAGE_BONUS)]):
-                points[name] = points.get(name, 0) + POWER_STAGE_BONUS[i]
-    return points
+    ``entries`` is present in the result, with 0 if they scored nothing."""
+    breakdown = championship_points_breakdown(event, entries)
+    return {name: sum(c['points'] + c['bonus'] for c in cells)
+            for name, cells in breakdown.items()}
