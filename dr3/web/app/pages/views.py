@@ -276,7 +276,7 @@ def register():
         auto_club = auto_join_club(user)
         send_email(
             user.email,
-            'Verify your Dirt Rally 3.0 account',
+            'Verify your DR3 account',
             f"Hi {user.display_name},\n\n"
             f"Confirm your email to activate your account:\n\n{_verify_link(user)}\n",
         )
@@ -314,7 +314,7 @@ def forgot_password():
             db.session.commit()
             send_email(
                 user.email,
-                'Reset your Dirt Rally 3.0 password',
+                'Reset your DR3 password',
                 f"Reset your password here:\n\n{_reset_link(user)}\n",
             )
         flash('If that address is registered, a reset link has been sent.', 'info')
@@ -407,7 +407,7 @@ def account():
                 db.session.commit()
                 send_email(
                     user.email,
-                    'Verify your Dirt Rally 3.0 account',
+                    'Verify your DR3 account',
                     f"Confirm your email to activate your account:\n\n{_verify_link(user)}\n",
                 )
                 flash('Verification email sent.', 'info')

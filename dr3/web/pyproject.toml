@@ -1,7 +1,7 @@
 [project]
 name = "dr3-web"
 version = "0.1.0"
-description = "Dirt Rally 3.0 community server web backend"
+description = "DR3 community server web backend"
 requires-python = ">=3.11"
 dependencies = [
     "flask>=3.1.0",

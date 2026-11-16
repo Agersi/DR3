@@ -512,7 +512,7 @@ def email_join_request(reviewer: User, requester: User, club: Club) -> bool:
         f'{requester.display_name or requester.username} has requested '
         f'to join your club "{club.name}".\n\n'
         f'Review and approve or deny the request here:\n{link}\n\n'
-        f'- Dirt Rally 3.0'
+        f'- DR3'
     )
     return send_email(reviewer.email, f'Join request for {club.name}', body)
 
@@ -524,7 +524,7 @@ def email_join_approved(user: User, club: Club) -> bool:
     body = (
         f'Hi {user.display_name or user.username},\n\n'
         f'Your request to join "{club.name}" was approved. You can now '
-        f'submit times to its events.\n\n{link}\n\n- Dirt Rally 3.0'
+        f'submit times to its events.\n\n{link}\n\n- DR3'
     )
     return send_email(user.email, f'You joined {club.name}', body)
 
@@ -535,7 +535,7 @@ def email_join_denied(user: User, club: Club) -> bool:
     body = (
         f'Hi {user.display_name or user.username},\n\n'
         f'Your request to join "{club.name}" was declined.\n\n'
-        f'- Dirt Rally 3.0'
+        f'- DR3'
     )
     return send_email(user.email, f'Join request for {club.name} declined', body)
 
@@ -547,8 +547,8 @@ def email_invite(invitee: User, inviter: User, club: Club) -> bool:
     body = (
         f'Hi {invitee.display_name or invitee.username},\n\n'
         f'{inviter.display_name or inviter.username} invited you to '
-        f'join their club "{club.name}" on Dirt Rally 3.0.\n\n'
+        f'join their club "{club.name}" on DR3.\n\n'
         f'View the club and accept here:\n{link}\n\n'
-        f'- Dirt Rally 3.0'
+        f'- DR3'
     )
     return send_email(invitee.email, f'Invitation to join {club.name}', body)

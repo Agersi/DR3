@@ -8,7 +8,7 @@ with app.app_context():
     ok = send_email(
         'nagersoe@hotmail.com',
         'DR3 test: transactional email is live',
-        'Hi!\n\nThis is a test from the DR3 (Dirt Rally 3.0) backend at byagersi.com/rally.\n\n'
+        'Hi!\n\nThis is a test from the DR3 backend at byagersi.com/rally.\n\n'
         'If you received this, Brevo SMTP + domain authentication (noreply@byagersi.com) are working.\n\n'
         'No action needed - you can delete this.',
     )

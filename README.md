@@ -1,4 +1,4 @@
-# DR3 — Dirt Rally 3.0
+# DR3
 
 A self-hosted club server for **DiRT Rally 2.0**. DR3 replaces the official
 RaceNet/EgoNet backend with your own: players run a small local server on
