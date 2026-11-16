@@ -4,7 +4,7 @@ Extracts: exception record (code/address), faulting thread stack, module
 list — maps stack addresses to module + RVA so the crash site can be
 located inside dirtrally2.exe without symbols.
 
-Run: python tools\\parse_crashdump.py [path-to-dmp]
+Run: python tools\\parse_crashdump.py <path-to-dmp>
 """
 import struct
 import sys
@@ -15,8 +15,9 @@ for s in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-DMP = (sys.argv[1] if len(sys.argv) > 1 else
-       r"D:\CODE\DR2\reference\crash_dump\crashdump.dmp")
+if len(sys.argv) < 2:
+    sys.exit("usage: python tools\\parse_crashdump.py <path-to-dmp>")
+DMP = sys.argv[1]
 
 data = open(DMP, "rb").read()
 sig, ver, nstreams = struct.unpack_from("<4sII", data, 0)

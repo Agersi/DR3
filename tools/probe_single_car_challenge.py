@@ -7,15 +7,15 @@ JSON of any challenge carrying a Type=0 (single-vehicle) requirement, so we can
 field-diff it against our club shape and see if there is anything beyond the
 Type=0 requirement that makes it safe in-game.
 
-Run: python tools/probe_single_car_challenge.py [capture.json]
+Run: python tools/probe_single_car_challenge.py <capture.json>
 """
 import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-default = ROOT / "reference" / "20261025-064333-1792907013962646300.json"
-path = Path(sys.argv[1]) if len(sys.argv) > 1 else default
+if len(sys.argv) < 2:
+    sys.exit("usage: python tools/probe_single_car_challenge.py <capture.json>")
+path = Path(sys.argv[1])
 
 data = json.loads(path.read_text(encoding="utf-8"))
 resp = data.get("response") or {}
