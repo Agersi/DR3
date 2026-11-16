@@ -246,7 +246,7 @@
     {{ copy_box(site_url + url_for('clubs.join_via_invite_link', club_id=club.id, token=link.token), 'invite-link') }}
     <div class="invite-link-row">
       <p class="meta">Created {{ link.created_at | timeago }}</p>
-      <form method="post" action="{{ url_for('clubs.revoke_invite_link', club_id=club.id, token=link.token) }}" class="inline">
+      <form method="post" action="{{ url_for('clubs.revoke_invite_link', club_id=club.id, token=link.token) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="ghost small">Revoke</button>
       </form>
