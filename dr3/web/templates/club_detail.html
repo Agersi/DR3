@@ -245,7 +245,7 @@
         <tr><th>Link</th><th>Created</th><th></th></tr>
         {% for link in invite_links %}
         <tr>
-          <td><code>{{ url_for('clubs.join_via_invite_link', club_id=club.id, token=link.token) }}</code></td>
+          <td>{{ copy_box(site_url + url_for('clubs.join_via_invite_link', club_id=club.id, token=link.token)) }}</td>
           <td class="num">{{ link.created_at | timeago }}</td>
           <td>
             <form method="post" action="{{ url_for('clubs.revoke_invite_link', club_id=club.id, token=link.token) }}" class="inline">

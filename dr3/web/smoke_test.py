@@ -1419,6 +1419,12 @@ def main() -> int:
         link_token = link.token if link else ''
     check('invite link created', bool(link_token), '')
 
+    base = app.config['SITE_URL'].rstrip('/')
+    r = client.get(f'/clubs/{club_id}')
+    expected_copy = f'data-copy="{base}/clubs/{club_id}/join/{link_token}"'
+    check('invite link shows full URL in copy box',
+          r.status_code == 200 and expected_copy.encode() in r.data, '')
+
     client4 = app.test_client()
     client4.post('/register', data={
         'username': 'linkjoiner', 'email': 'link@example.com',

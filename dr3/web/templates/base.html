@@ -58,6 +58,12 @@
   })();
   </script>
 {%- endmacro %}
+{% macro copy_box(value) -%}
+<div class="token-box" data-copy="{{ value }}">
+  <code class="token-value">{{ value }}</code>
+  <button type="button" class="small ghost copy-btn">Copy</button>
+</div>
+{%- endmacro %}
 <!doctype html>
 <html lang="en">
 <head>
@@ -130,6 +136,37 @@
 </footer>
 <script>
 if (document.querySelector('.flash.error')) window.scrollTo(0, 0);
+(function () {
+  var boxes = document.querySelectorAll('.token-box[data-copy]');
+  boxes.forEach(function (box) {
+    var btn = box.querySelector('.copy-btn');
+    if (!btn) return;
+    var value = box.dataset.copy;
+    btn.addEventListener('click', function () {
+      var copied = function () {
+        btn.textContent = 'Copied';
+        setTimeout(function () { btn.textContent = 'Copy'; }, 1500);
+      };
+      var fallback = function () {
+        var code = box.querySelector('.token-value');
+        if (code) {
+          var range = document.createRange();
+          range.selectNodeContents(code);
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+        btn.textContent = 'Select + copy';
+        setTimeout(function () { btn.textContent = 'Copy'; }, 2000);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(value).then(copied, fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+})();
 </script>
 </body>
 </html>

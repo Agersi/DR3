@@ -132,6 +132,12 @@ def create_app() -> Flask:
         return {'location_thumb_url': location_thumb_url,
                 'class_thumb_url': class_thumb_url}
 
+    @app.context_processor
+    def inject_site_url():
+        """Absolute site base (SITE_URL minus trailing slash) so templates can
+        build shareable full URLs without trusting the proxied request host."""
+        return {'site_url': app.config['SITE_URL'].rstrip('/')}
+
     from .game_api import game_api_bp
     from .pages import register_page_blueprints
     app.register_blueprint(game_api_bp)
