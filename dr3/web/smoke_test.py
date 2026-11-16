@@ -1674,10 +1674,11 @@ def main() -> int:
     check('codemasters formula P=4',
           [codemasters_points(4, i) for i in range(1, 5)] == [4, 2, 1, 1], '')
     from app.scoring import championship_points
-    # Synthetic 2-rally championship (3 + 2 stages): A finishes everything, B
-    # DNFs rally 1's last stage, C is fastest in rally 1 but DNFs rally 2's
-    # final stage. WRC scale + power-stage bonus: A = 17+4 + 25+5 = 51,
-    # B = 0 (DNF) + 17+4 = 21, C = 25+5 + 0 (DNF) = 30.
+    # Synthetic 2-rally SEASON championship (3 + 2 stages) — seasons classify
+    # each rally separately: A finishes everything, B DNFs rally 1's last
+    # stage, C is fastest in rally 1 but DNFs rally 2's final stage. WRC scale
+    # + power-stage bonus: A = 17+4 + 25+5 = 51, B = 0 (DNF) + 17+4 = 21,
+    # C = 25+5 + 0 (DNF) = 30.
     fake_event = {
         'id': 'evt-fake-points', 'type': 'weekly',
         'events': [
@@ -1688,7 +1689,7 @@ def main() -> int:
              'duration': {'days': 1, 'hours': 0, 'mins': 0},
              'stages': [{'distance_km': 1.0}] * 2},
         ],
-        'settings': {'scoring': 'wrc', 'power_stage': True},
+        'settings': {'scoring': 'wrc', 'power_stage': True, 'mode': 'season'},
     }
 
     def _entry(name, times):
@@ -1703,7 +1704,8 @@ def main() -> int:
     check('wrc points: dnf takes position, power stage bonus on final stage',
           championship_points(fake_event, fake_entries) == {'A': 51, 'B': 21, 'C': 30},
           f"points={championship_points(fake_event, fake_entries)}")
-    fake_event['settings'] = {'scoring': 'codemasters', 'power_stage': False}
+    fake_event['settings'] = {'scoring': 'codemasters', 'power_stage': False,
+                              'mode': 'season'}
     # Codemasters, P=3 per rally: p = [3, 2, 1]. Rally 1: C=3, A=2, B DNF=1;
     # rally 2: A=3, B=2, C DNF=1. Totals: A=5, B=3, C=4.
     check('codemasters points: field-size scale, dnf takes minimum 1 point',
@@ -2058,6 +2060,18 @@ def main() -> int:
               med.get('smokedriver') == {'gold': 1, 'silver': 0, 'bronze': 0}
               and 'secondpilot' not in med,
               f"medals={med}")
+        api_mst = client.get(
+            f'/clubs/{club_id}/championship-standings?event=evt-smoke-board-multi')
+        m_st = api_mst.get_json() or {}
+        m_st_by_name = {row['username']: row for row in m_st.get('rows') or []}
+        check('championship-standings API: multi event scores ONE whole-event round, not per location',
+              api_mst.status_code == 200
+              and len(m_st.get('rounds') or []) == 1
+              and (m_st.get('rounds') or [{}])[0].get('label') == 'R1'
+              and m_st_by_name.get('smokedriver', {}).get('total') == 25
+              and m_st_by_name.get('secondpilot', {}).get('total') == 0,
+              f"status={api_mst.status_code} rounds={m_st.get('rounds')} "
+              f"rows={[(n, r.get('total')) for n, r in m_st_by_name.items()]}")
 
         mem = det[det.index('id="tab-members"'):]
         check('members tab: Gold/Silver/Bronze columns populated from clean finishes',

@@ -19,6 +19,7 @@ from .scoring import (
     car_label,
     championship_points,
     championship_points_breakdown,
+    championship_points_rounds,
     championship_view,
     flat_stage_bogeys_ms,
     overall_standings,
@@ -301,12 +302,14 @@ def championship_points_table(event: dict, entries: list[dict]) -> dict:
     """Championship points table for the club page's events tab.
 
     One row per driver who ran at least one stage (same population and order as
-    ``overall_table``), a cell per round with that round's classification points
-    and power-stage bonus, plus the total across rounds. Round headers carry
-    the location so multi-location events stay readable."""
+    ``overall_table``), a cell per points round with that round's classification
+    points and power-stage bonus, plus the total across rounds. Points rounds
+    follow the championship mode: Rally Seasons show one column per leg;
+    Multi-Location rallies and legacy events are classified once over the whole
+    event (one column, all locations in its header)."""
     from .models import User
 
-    rounds = championship_rounds(event, _now_utc())
+    rounds = championship_points_rounds(event)
     order = overall_table(event, entries)
     breakdown = championship_points_breakdown(event, entries)
     flag_by_user: dict = {}
@@ -327,8 +330,8 @@ def championship_points_table(event: dict, entries: list[dict]) -> dict:
             'total': r['points'],
         })
     return {
-        'rounds': [{'index': i, 'label': f'R{i + 1}', 'location': rd['location']}
-                   for i, rd in enumerate(rounds)],
+        'rounds': [{'index': rd['index'], 'label': rd['label'], 'location': rd['location']}
+                   for rd in rounds],
         'rows': rows,
         'power_stage': power_stage_enabled(event),
     }

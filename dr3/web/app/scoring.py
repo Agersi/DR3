@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from dr2server.game_data import VEHICLE_CLASSES, VEHICLES  # noqa: E402
 
-from .tables import RX_LOCATIONS, STAGES, normalize_championship  # noqa: E402
+from .tables import CHAMP_MODE_SEASON, RX_LOCATIONS, STAGES, normalize_championship  # noqa: E402
 
 BOGEY_SHORT_MS = 15 * 60 * 1000
 BOGEY_LONG_MS = 30 * 60 * 1000
@@ -273,37 +273,97 @@ def _ran_any_stage(row: dict) -> bool:
     return any(s and int(s.get('time_ms', 0) or 0) > 0 for s in row['stages'])
 
 
-def championship_points_breakdown(event: dict, entries: list[dict]) -> dict[str, list[dict]]:
-    """Per-rally points breakdown for every driver in the championship.
+def championship_points_rounds(event: dict) -> list[dict]:
+    """Points rounds for a championship, grouped by mode.
 
-    ``{username: [one cell per rally]}`` where each cell is ``{'points': int,
-    'bonus': int}`` — the classification points from the scoring system and the
-    power-stage bonus (0 when disabled or unearned), aligned with the order of
-    ``championship_view`` (and ``championship_rounds``). Same rules as
-    ``championship_points``; a driver's total is the sum of their cells."""
+    Rally Seasons classify each leg separately (one round per leg). Multi-Location
+    rallies and legacy events run as one championship, so points are awarded only
+    once over the whole event — a single round spanning every leg, the same
+    grouping as the combined board and the whole-event member medals. Each entry
+    carries the flat stage range to classify (``offset``/``count``) plus display
+    fields."""
     rallies = championship_view(event)
+    if not rallies:
+        return []
+    if normalize_championship(event)['mode'] == CHAMP_MODE_SEASON:
+        return [{
+            'index': r['index'],
+            'offset': r['offset'],
+            'count': r['count'],
+            'label': f'R{r["index"] + 1}',
+            'location': r['location'],
+        } for r in rallies]
+    locations = [r['location'] for r in rallies if r['location']]
+    return [{
+        'index': 0,
+        'offset': 0,
+        'count': sum(r['count'] for r in rallies),
+        'label': 'R1',
+        'location': ', '.join(dict.fromkeys(locations)),
+    }]
+
+
+def _range_standings(entries: list[dict], offset: int, count: int,
+                     bogeys: list[int]) -> list[dict]:
+    """Standings over the flat stage range ``[offset, offset+count)``.
+
+    Same row shape and ordering as ``rally_standings``, but per-stage bogeys come
+    from ``bogeys`` (see ``flat_stage_bogeys_ms``), so a round may span several
+    locations — each stage is judged against its own location's bogey."""
+    rows: list[dict] = []
+    for e in entries:
+        seg = (e.get('stages', []) or [])[offset:offset + count]
+        seg += [None] * (count - len(seg))
+        done = sum(1 for s in seg
+                   if s and int(s.get('time_ms', 0) or 0) > 0
+                   and int(s.get('race_status', 0) or 0) == 0)
+        rows.append({
+            'username': e.get('username', ''),
+            'car': car_label(e),
+            'vehicle_id': e.get('vehicle_id'),
+            'stages': seg,
+            'total_time_ms': adjusted_total_ms({'stages': seg}, bogeys[offset:offset + count]),
+            'dnf_stages': count - done,
+        })
+    rows.sort(key=lambda r: (r['total_time_ms'], r['dnf_stages']))
+    return rows
+
+
+def championship_points_breakdown(event: dict, entries: list[dict]) -> dict[str, list[dict]]:
+    """Per-round points breakdown for every driver in the championship.
+
+    ``{username: [one cell per points round]}`` where each cell is ``{'points':
+    int, 'bonus': int}`` — the classification points from the scoring system and
+    the power-stage bonus (0 when disabled or unearned), aligned with
+    ``championship_points_rounds``. Points rounds follow the championship mode:
+    Rally Seasons classify each leg separately; Multi-Location rallies and legacy
+    events are classified once over the whole event (all legs combined). Same
+    rules as ``championship_points``; a driver's total is the sum of their cells."""
+    rounds = championship_points_rounds(event)
     out: dict[str, list[dict]] = {
-        e.get('username', ''): [{'points': 0, 'bonus': 0} for _ in rallies]
+        e.get('username', ''): [{'points': 0, 'bonus': 0} for _ in rounds]
         for e in entries}
     system = scoring_system_for(event)
     power_stage = power_stage_enabled(event)
-    for rally in rallies:
-        rows = rally_standings(entries, rally)
+    bogeys = flat_stage_bogeys_ms(event)
+    for rnd in rounds:
+        offset, count = rnd['offset'], rnd['count']
+        rows = _range_standings(entries, offset, count, bogeys)
         participants = [r for r in rows if _ran_any_stage(r)]
         p_total = len(participants)
         for pos, row in enumerate(participants, start=1):
             cells = out.get(row['username'])
             if cells is None:
                 continue
-            cell = cells[rally['index']]
+            cell = cells[rnd['index']]
             if row['dnf_stages'] != 0:
                 # DNF: takes its position but no classification points — except
                 # Codemasters, where taking part earns the minimum 1 point.
                 cell['points'] = 1 if system == SCORING_CODEMASTERS else 0
             else:
                 cell['points'] = rally_classification_points(system, p_total, pos)
-        if power_stage and rally['count'] > 0:
-            final_idx = rally['count'] - 1
+        if power_stage and count > 0:
+            final_idx = count - 1
             runners: list[tuple[int, str]] = []
             for row in rows:
                 s = row['stages'][final_idx] if final_idx < len(row['stages']) else None
@@ -315,24 +375,27 @@ def championship_points_breakdown(event: dict, entries: list[dict]) -> dict[str,
             for i, (_t, name) in enumerate(runners[:len(POWER_STAGE_BONUS)]):
                 cells = out.get(name)
                 if cells is not None:
-                    cells[rally['index']]['bonus'] += POWER_STAGE_BONUS[i]
+                    cells[rnd['index']]['bonus'] += POWER_STAGE_BONUS[i]
     return out
 
 
 def championship_points(event: dict, entries: list[dict]) -> dict[str, int]:
     """Championship points per username.
 
-    Each rally of the championship is classified over every driver who took a
-    real stage time in it (``rally_standings``, bogey-adjusted, fastest first).
-    A driver's classification position earns points from the championship's
-    scoring system — WRC/GroupB fixed top-ten scales or the field-size
-    Codemasters formula — but only if they finished every stage of that rally.
-    A DNF takes up its classification position and scores nothing under
-    WRC/GroupB; under Codemasters, taking part still earns the minimum 1 point.
-    When power-stage points are enabled, the top five finishers of each rally's
-    FINAL stage earn an extra bonus (5/4/3/2/1) on top of the classification
-    points. A driver's total is the sum across rallies; every driver in
-    ``entries`` is present in the result, with 0 if they scored nothing."""
+    Each points round of the championship is classified over every driver who
+    took a real stage time in it (bogey-adjusted, fastest first). Points rounds
+    follow the championship mode: Rally Seasons classify each leg separately;
+    Multi-Location rallies and legacy events are classified once over the whole
+    event. A driver's classification position earns points from the
+    championship's scoring system — WRC/GroupB fixed top-ten scales or the
+    field-size Codemasters formula — but only if they finished every stage of
+    that round. A DNF takes up its classification position and scores nothing
+    under WRC/GroupB; under Codemasters, taking part still earns the minimum 1
+    point. When power-stage points are enabled, the top five finishers of each
+    round's FINAL stage earn an extra bonus (5/4/3/2/1) on top of the
+    classification points. A driver's total is the sum across rounds; every
+    driver in ``entries`` is present in the result, with 0 if they scored
+    nothing."""
     breakdown = championship_points_breakdown(event, entries)
     return {name: sum(c['points'] + c['bonus'] for c in cells)
             for name, cells in breakdown.items()}
