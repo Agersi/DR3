@@ -1,7 +1,8 @@
 """Game-facing REST API (called by each player's local dr2server).
 
 Exact contract of the club-site game API (see docs/notes/web_server_api.md):
-Bearer ``df_`` token auth, JSON in/out. Web-page routes live in ``pages``.
+Bearer ``dr3_`` token auth (legacy ``df_`` tokens remain valid), JSON in/out.
+Web-page routes live in ``pages``.
 """
 from __future__ import annotations
 
@@ -154,7 +155,7 @@ def api_token_revoke():
     return redirect(url_for('pages.dashboard'))
 
 
-# ── Game API (Bearer df_ token) ──────────────────────────
+# ── Game API (Bearer dr3_ token; legacy df_ tokens valid) ──
 
 @game_api_bp.route('/api/game/token-test')
 @csrf.exempt  # type: ignore[untyped-decorator]

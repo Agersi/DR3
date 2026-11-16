@@ -109,7 +109,17 @@ def main() -> int:
         from app.models import GameToken
         gt = GameToken.query.filter_by(user_id=u.id, revoked_at=None).first()
         token = gt.token if gt else ''
-    check('token issued with df_ prefix', token.startswith('df_'), token[:8])
+    check('token issued with dr3_ prefix', token.startswith('dr3_'), token[:8])
+
+    # Legacy df_-prefixed tokens (issued before the dr3_ rename) must keep working
+    legacy_token = 'df_' + 'a' * 43
+    with app.app_context():
+        db.session.add(GameToken(user_id=u.id, token=legacy_token))
+        db.session.commit()
+    r = client.get('/api/game/token-test', headers={'Authorization': f'Bearer {legacy_token}'})
+    j = r.get_json() or {}
+    check('legacy df_ token still authenticates',
+          j.get('ok') is True and j.get('username') == 'smokedriver', str(j))
 
     headers = {'Authorization': f'Bearer {token}'}
 
@@ -1245,9 +1255,11 @@ def main() -> int:
     j = r.get_json() or {}
     check('game auth links by display name', j.get('ok') is True and j.get('linked') is True, str(j))
 
-    # 11. bad token rejected
+    # 11. bad token rejected (both legacy and new formats)
     r = client.get('/api/game/token-test', headers={'Authorization': 'Bearer df_bad'})
-    check('bad token 401', r.status_code == 401, f'status={r.status_code}')
+    check('bad legacy-format token 401', r.status_code == 401, f'status={r.status_code}')
+    r = client.get('/api/game/token-test', headers={'Authorization': 'Bearer dr3_bad'})
+    check('bad new-format token 401', r.status_code == 401, f'status={r.status_code}')
 
     # ── Clubs flow (client is logged in as smokedriver) ───────────────
     from app.models import Club, ClubMember, Event

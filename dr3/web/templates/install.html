@@ -121,7 +121,7 @@ Get-ChildItem Cert:\CurrentUser\CA,Cert:\LocalMachine\CA | Where-Object { $_.Sub
         <pre><code>python scripts\generate_dev_cert.py --cert runtime\certs\dr2server-cert.pem --key runtime\certs\dr2server-key.pem
 powershell -ExecutionPolicy Bypass -File scripts\install_dev_cert.ps1</code></pre></li>
     <li><strong>Run the server headless:</strong>
-        <pre><code>python -m dr2server.httpd --data-dir data --ssl-cert runtime\certs\dr2server-cert.pem --ssl-key runtime\certs\dr2server-key.pem --api-url https://byagersi.com/rally --api-token df_...</code></pre></li>
+        <pre><code>python -m dr2server.httpd --data-dir data --ssl-cert runtime\certs\dr2server-cert.pem --ssl-key runtime\certs\dr2server-key.pem --api-url https://byagersi.com/rally --api-token dr3_...</code></pre></li>
   </ol>
   <p class="meta">To undo the redirect later:
     <code>powershell -ExecutionPolicy Bypass -File scripts\remove_windows_redirect.ps1</code></p>

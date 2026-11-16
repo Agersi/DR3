@@ -120,7 +120,7 @@ def _run_checks(s, username, password, email, suffix):
                    headers={'Referer': BASE + '/account'}, allow_redirects=False)
         check('token generate redirects', r.status_code in (302, 303), str(r.status_code))
         page = s.get(BASE + '/dashboard')
-        m = re.search(r'df_[A-Za-z0-9_-]{30,}', page.text)
+        m = re.search(r'(?:dr3|df)_[A-Za-z0-9_-]{30,}', page.text)
         return m.group(0) if m else None
 
     token = generate_token()

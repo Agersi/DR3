@@ -66,7 +66,7 @@ class GameToken(db.Model):
 
 
 def generate_game_token() -> str:
-    return 'df_' + secrets.token_urlsafe(32)
+    return 'dr3_' + secrets.token_urlsafe(32)
 
 
 class Club(db.Model):
