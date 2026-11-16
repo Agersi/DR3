@@ -157,7 +157,7 @@
   {% if is_admin %}
   <section class="club-tab" data-tab="new-championship" id="tab-new-championship" hidden>
     <h2>New Championship</h2>
-    <div>
+    <div class="new-champ-intro">
     <p>Schedule a championship that runs over days or weeks. Pick the type (Multi-Location Rally or Rally Season), the points system and the power-stage option on the next screen.</p>
     <div class="champ-actions">
       <a class="btn ghost" href="{{ url_for('clubs.championship_new', club_id=club.id) }}">Create New</a>
