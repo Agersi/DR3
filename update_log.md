@@ -2,8 +2,11 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.73**
+- Fixed a setup failure on some PCs where the Windows hosts file was missing; DR3 now recreates it automatically.
+
 **v0.1.72**
-- Setup errors are now clearer: if Windows can't launch the admin helper (for example when DR3 is installed in the Downloads folder), the log tells you what to do instead of a confusing code.
+- Setup errors are now clearer: if Windows can't launch the admin helper, the log tells you what to do instead of a confusing code.
 
 **v0.1.71**
 - Fixed time trial distance recording on rallycross tracks (multi-lap runs).

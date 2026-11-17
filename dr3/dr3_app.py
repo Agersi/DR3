@@ -600,6 +600,11 @@ def install_cert_into_dr2_prefix(cert_path: Path) -> tuple[bool, str]:
 def _read_hosts() -> str:
     try:
         return HOSTS_FILE.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        # A missing hosts file (removed by AV or a "PC optimizer") behaves
+        # like an empty one for name resolution; treat it as such so
+        # add_hosts recreates it instead of crashing the elevated helper.
+        return ""
     except UnicodeDecodeError:
         return HOSTS_FILE.read_text(encoding="latin-1")
 
@@ -636,6 +641,8 @@ def add_hosts() -> None:
 
 
 def remove_hosts() -> None:
+    if not HOSTS_FILE.exists():
+        return  # nothing to remove (hosts file missing, e.g. removed by AV)
     existing = _read_hosts()
     cleaned = _strip_block(existing)
     HOSTS_FILE.write_bytes(cleaned.encode("utf-8"))
