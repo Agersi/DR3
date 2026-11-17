@@ -344,9 +344,12 @@ def _windows_elevate_admin_helper(op: str, timeout: int = ELEVATION_TIMEOUT_SECO
 
     if not shell32.ShellExecuteExW(ctypes.byref(info)):
         # Typically ERROR_CANCELLED (1223): user declined the UAC prompt.
-        return ctypes.get_last_error() or 1
+        # ERROR_FILE_NOT_FOUND (2) shows up when the exe path can't be
+        # resolved for elevation - e.g. the app sits in Downloads or another
+        # OneDrive-synced/protected folder.
+        return LAUNCH_FAILED_BASE + (ctypes.get_last_error() or 1)
     if not info.hProcess:
-        return 1
+        return LAUNCH_FAILED_BASE + 1
     try:
         wait_ms = INFINITE if timeout is None else int(timeout * 1000)
         if kernel32.WaitForSingleObject(info.hProcess, wait_ms) == WAIT_TIMEOUT:
@@ -364,6 +367,11 @@ ADMIN_HELPER_OK = 0
 ADMIN_HELPER_BAD_OP = 1
 ADMIN_HELPER_EXCEPTION = 2
 ADMIN_HELPER_CERT_FAILED = 3   # hosts written, but cert trust install failed
+# Launch failures are reported as LAUNCH_FAILED_BASE + Win32 error code so a
+# failed UAC launch can never be mistaken for the helper's own exit codes
+# (0-3). E.g. ERROR_FILE_NOT_FOUND (2) used to collide with
+# ADMIN_HELPER_EXCEPTION and logged an unhelpful "helper exit 2".
+LAUNCH_FAILED_BASE = 1000
 
 
 def _run_admin_helper(op: str) -> int:
@@ -382,6 +390,10 @@ def _run_admin_helper(op: str) -> int:
             remove_hosts()
             return ADMIN_HELPER_OK
     except Exception:
+        # stderr is tee'd into this child's own debug.log (see
+        # _setup_file_logging), so the traceback survives for diagnosis.
+        import traceback
+        traceback.print_exc()
         return ADMIN_HELPER_EXCEPTION
     return ADMIN_HELPER_BAD_OP
 
@@ -2190,7 +2202,14 @@ def run_gui():
                             root.after(0, lambda: log(
                                 "WARNING: UAC prompt timed out after 5 minutes."))
 
-                        if not hosts_configured():
+                        if rc is not None and rc >= LAUNCH_FAILED_BASE:
+                            root.after(0, lambda e=rc - LAUNCH_FAILED_BASE: log(
+                                f"WARNING: Could not launch the elevated helper "
+                                f"(Windows error {e}). If DR3 is installed in "
+                                "Downloads or a OneDrive-synced folder, move it to a plain "
+                                "folder such as C:\\DR3 and start again; also check the "
+                                "Windows Defender quarantine for the exe."))
+                        elif not hosts_configured():
                             root.after(0, lambda: log(
                                 f"WARNING: Could not configure hosts (helper exit {rc}). "
                                 "Did you decline the admin prompt?"))
@@ -2303,9 +2322,12 @@ def run_gui():
                 if IS_WIN:
                     rc = _windows_elevate_admin_helper("stop")
                     if rc != ADMIN_HELPER_OK:
-                        root.after(0, lambda: log(
-                            f"WARNING: admin helper exited with code {rc}; "
-                            "hosts entries may still be present."))
+                        detail = (f"could not launch the elevated helper "
+                                  f"(Windows error {rc - LAUNCH_FAILED_BASE})"
+                                  if rc >= LAUNCH_FAILED_BASE else
+                                  f"admin helper exited with code {rc}")
+                        root.after(0, lambda d=detail: log(
+                            f"WARNING: {d}; hosts entries may still be present."))
                 else:
                     helper_python = _system_python_for_helper()
                     if helper_python is None:
