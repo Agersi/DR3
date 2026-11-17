@@ -171,7 +171,7 @@
         {% if my_drafts %}
         <select name="draft_id">
           {% for d in my_drafts %}
-          <option value="{{ d.id }}">{{ d.label }} ({{ d.created_at }}){% if d.permanent %} — permanent{% endif %}{% if d.source %} — from {{ d.source }}{% endif %}</option>
+          <option value="{{ d.id }}">{{ d.label }} ({{ d.created_at | local_dt('date') }}){% if d.permanent %} — permanent{% endif %}{% if d.source %} — from {{ d.source }}{% endif %}</option>
           {% endfor %}
         </select>
         {% endif %}
@@ -192,7 +192,7 @@
             {% elif s.status == 'upcoming' %}<span class="chip chip-warn">Upcoming</span>
             {% else %}<span class="muted">Ended</span>{% endif %}
           </td>
-          <td class="num">{{ s.window_text }}</td>
+          <td class="num">{% if s.window_start or s.window_end %}{{ s.window_start | local_dt }} → {{ s.window_end | local_dt }}{% endif %}</td>
           <td>
             <a class="btn danger small" href="{{ url_for('clubs.championship_delete_confirm', club_id=club.id, event_id=s.event_id) }}">Delete</a>
           </td>
@@ -438,7 +438,7 @@
   function renderSelector() {
     var sel = state.selectors[state.champ_index] || {};
     document.getElementById('champ-name').textContent = sel.name || '';
-    document.getElementById('champ-window').textContent = sel.window_text || '';
+    document.getElementById('champ-window').textContent = dr3WindowText(sel.window_start_iso, sel.window_end_iso);
     document.getElementById('champ-prev').disabled = state.champ_index >= state.selectors.length - 1;
     document.getElementById('champ-next').disabled = state.champ_index <= 0;
   }
@@ -454,7 +454,7 @@
     strip.style.display = '';
     strip.innerHTML = (board.rounds || []).map(function (r) {
       var cls = 'round-box' + (r.index === board.round_index ? ' active' : '');
-      var w = r.window_text || '';
+      var w = dr3WindowText(r.window_start_iso, r.window_end_iso);
       var wi = w.indexOf(' → ');
       var win = wi >= 0 ? esc(w.slice(0, wi + 3)) + '<br>' + esc(w.slice(wi + 3)) : esc(w);
       var thumb = r.thumb_url ?

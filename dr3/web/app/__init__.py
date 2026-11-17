@@ -7,6 +7,7 @@ from pathlib import Path
 
 from flask import Flask, g
 from flask_wtf import CSRFProtect
+from markupsafe import Markup
 
 csrf = CSRFProtect()
 
@@ -88,6 +89,21 @@ def create_app() -> Flask:
     def countdown_filter(value):
         dt = _parse_dt(value)
         return _countdown(dt) if dt else (value or '')
+
+    @app.template_filter('local_dt')
+    def local_dt_filter(value, fmt='datetime'):
+        """Absolute timestamp as <time class="js-local"> markup: the server
+        renders a UTC fallback label and base.html's script rewrites it in
+        the viewer's own timezone on load. ``fmt`` is 'datetime' (default)
+        or 'date'."""
+        dt = _parse_dt(value)
+        if not dt:
+            return value or ''
+        label = dt.strftime('%a %d %b %Y, %H:%M' if fmt == 'datetime' else '%d %b %Y')
+        return Markup(
+            '<time class="js-local" datetime="%s" data-format="%s">%s</time>'
+            % (dt.isoformat(), fmt, label)
+        )
 
     @app.context_processor
     def inject_site_links():

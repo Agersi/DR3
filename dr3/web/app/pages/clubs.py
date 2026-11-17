@@ -462,7 +462,7 @@ def club_detail(club_id: str):
                     'id': d.id,
                     'permanent': bool(d.permanent),
                     'label': label,
-                    'created_at': d.created_at.strftime('%d %b %Y') if d.created_at else '',
+                    'created_at': d.created_at.isoformat() if d.created_at else '',
                     'source': source_names.get(d.club_id, '') if d.club_id != club.id else '',
                 })
 
@@ -496,6 +496,10 @@ def club_detail(club_id: str):
             'name': f'Championship {chrono_rank[c["event"]["id"]]}',
             'status': c['status'],
             'window_text': window_text(_dt(start_iso), _dt(end_iso)),
+            'window_start': _dt(start_iso),
+            'window_end': _dt(end_iso),
+            'window_start_iso': start_iso,
+            'window_end_iso': end_iso,
         })
 
     default_event_id = None

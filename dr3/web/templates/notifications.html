@@ -8,7 +8,7 @@
     <tr><th>When</th><th>Type</th><th>Detail</th></tr>
     {% for n in items %}
     <tr>
-      <td class="num">{{ n.created_at.strftime('%Y-%m-%d %H:%M') if n.created_at else '' }}</td>
+      <td class="num">{{ n.created_at | local_dt }}</td>
       <td><span class="chip">{{ n.kind }}</span></td>
       <td>{{ n.payload_json }}</td>
     </tr>

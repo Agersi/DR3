@@ -1460,6 +1460,20 @@ def main() -> int:
     check('create button returns after revocation',
           r.status_code == 200 and b'Create invite link' in r.data, '')
 
+    # 17b. absolute timestamps render as local-time <time> markup
+    with app.app_context():
+        from app.clubs import add_notification
+        add_notification('smokedriver', {
+            'type': 'club_join_request',
+            'club_id': club_id,
+            'from_username': 'localtimeprobe',
+            'club_name': 'Smoke Club',
+        })
+        db.session.commit()
+    r = client.get('/notifications')
+    check('notification times render as local-time <time> markup',
+          r.status_code == 200 and b'time class="js-local"' in r.data, '')
+
     # 18. pick a resolvable location/class for the championship tests
     from app.tables import (
         STAGES, CAR_CLASSES, RX_CAR_CLASSES, CONFIRMED_VEHICLE_CLASS_IDS,
@@ -1546,6 +1560,9 @@ def main() -> int:
         check('championship carries the club name',
               champ is not None and champ.name == 'Smoke Crew',
               f"name={champ.name if champ else None}")
+    r = client.get(f'/clubs/{club_id}')
+    check('selector window cells render as local-time <time> markup',
+          r.status_code == 200 and b'time class="js-local"' in r.data, '')
 
     # 19b. rally season: per-event durations, staggered back-to-back windows
     r = client.post(f'/clubs/{club_id}/championship/new', data={
