@@ -77,6 +77,52 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script>
+  /* All server-side timestamps are UTC; render them in the viewer's own
+     timezone. Naive ISO strings get a 'Z' so Date parses them as UTC.
+     Defined in <head> because page inline scripts may call these before
+     the footer scripts run. */
+  (function () {
+    function parseUTC(iso) {
+      if (!iso) return null;
+      var s = String(iso);
+      if (s.indexOf('T') < 0) s = s.replace(' ', 'T');
+      if (!/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
+      var d = new Date(s);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    window.dr3ParseUTC = parseUTC;
+    window.dr3LocalDateTime = function (iso) {
+      var d = parseUTC(iso);
+      if (!d) return '';
+      return d.toLocaleString(undefined, {
+        weekday: 'short', day: '2-digit', month: 'short',
+        year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+      });
+    };
+    window.dr3LocalDate = function (iso) {
+      var d = parseUTC(iso);
+      if (!d) return '';
+      return d.toLocaleDateString(undefined, {
+        day: '2-digit', month: 'short', year: 'numeric',
+      });
+    };
+    window.dr3WindowText = function (startIso, endIso) {
+      if (!startIso && !endIso) return '';
+      var s = startIso ? window.dr3LocalDateTime(startIso) : '?';
+      var e = endIso ? window.dr3LocalDateTime(endIso) : '?';
+      return s + ' → ' + e;
+    };
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('time.js-local[datetime]').forEach(function (el) {
+        var iso = el.getAttribute('datetime');
+        if (!parseUTC(iso)) return;
+        el.textContent = el.getAttribute('data-format') === 'date' ?
+          window.dr3LocalDate(iso) : window.dr3LocalDateTime(iso);
+      });
+    });
+  })();
+  </script>
 </head>
 <body>
 <header class="site-header">
@@ -136,48 +182,6 @@
 </footer>
 <script>
 if (document.querySelector('.flash.error')) window.scrollTo(0, 0);
-/* All server-side timestamps are UTC; render them in the viewer's own
-   timezone. Naive ISO strings get a 'Z' so Date parses them as UTC. */
-(function () {
-  function parseUTC(iso) {
-    if (!iso) return null;
-    var s = String(iso);
-    if (s.indexOf('T') < 0) s = s.replace(' ', 'T');
-    if (!/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
-    var d = new Date(s);
-    return isNaN(d.getTime()) ? null : d;
-  }
-  window.dr3ParseUTC = parseUTC;
-  window.dr3LocalDateTime = function (iso) {
-    var d = parseUTC(iso);
-    if (!d) return '';
-    return d.toLocaleString(undefined, {
-      weekday: 'short', day: '2-digit', month: 'short',
-      year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
-    });
-  };
-  window.dr3LocalDate = function (iso) {
-    var d = parseUTC(iso);
-    if (!d) return '';
-    return d.toLocaleDateString(undefined, {
-      day: '2-digit', month: 'short', year: 'numeric',
-    });
-  };
-  window.dr3WindowText = function (startIso, endIso) {
-    if (!startIso && !endIso) return '';
-    var s = startIso ? window.dr3LocalDateTime(startIso) : '?';
-    var e = endIso ? window.dr3LocalDateTime(endIso) : '?';
-    return s + ' → ' + e;
-  };
-  document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('time.js-local[datetime]').forEach(function (el) {
-      var iso = el.getAttribute('datetime');
-      if (!parseUTC(iso)) return;
-      el.textContent = el.getAttribute('data-format') === 'date' ?
-        window.dr3LocalDate(iso) : window.dr3LocalDateTime(iso);
-    });
-  });
-})();
 (function () {
   var boxes = document.querySelectorAll('.token-box[data-copy]');
   boxes.forEach(function (box) {

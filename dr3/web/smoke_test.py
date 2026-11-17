@@ -1563,6 +1563,9 @@ def main() -> int:
     r = client.get(f'/clubs/{club_id}')
     check('selector window cells render as local-time <time> markup',
           r.status_code == 200 and b'time class="js-local"' in r.data, '')
+    check('local-time helpers defined before content scripts run',
+          r.status_code == 200 and b'window.dr3WindowText' in r.data
+          and r.data.find(b'window.dr3WindowText') < r.data.find(b'id="board-state"'), '')
 
     # 19b. rally season: per-event durations, staggered back-to-back windows
     r = client.post(f'/clubs/{club_id}/championship/new', data={
