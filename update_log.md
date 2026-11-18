@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.75**
+- Fixed the token prefix shown in the command line help (dr3_ instead of df_).
+
 **v0.1.74**
 - The number of spare tyres you carry is now shown on the club event boards.
 

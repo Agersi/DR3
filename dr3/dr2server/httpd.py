@@ -894,7 +894,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
                              "(e.g. https://byagersi.com/rally). "
                              "When omitted, the server uses local fallback data.")
     parser.add_argument("--api-token", default=None,
-                        help="Game API token (df_xxx) for authenticating with byagersi.com/rally.")
+                        help="Game API token (dr3_xxx) for authenticating with byagersi.com/rally.")
     return parser
 
 

@@ -5,9 +5,11 @@ Uses a throwaway SQLite DB; wipes it first.
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
+import struct
 import sys
 import time
 from pathlib import Path
@@ -1882,6 +1884,18 @@ def main() -> int:
 
         # Cumulative-Overall fixture: one leg with two stages so stage=1's
         # total can be checked against stage=0's.
+        from dr2server.tuning import TuningBlob as _TB
+
+        def _blob_b64(spares: int) -> str:
+            # A valid 222-byte tuning blob carrying the spare-tyre float at
+            # offset 210 — what pre-v0.1.74 clients stored at stage-begin.
+            b = _TB.default()
+            p = bytearray(b.payload)
+            p[210:214] = struct.pack('<f', float(spares))
+            return base64.b64encode(
+                _TB(version=b.version, uncompressed_size=222,
+                    payload=bytes(p)).encode()).decode()
+
         cum_routes = routes[:2] if len(routes) >= 2 else (routes * 2)[:2] if routes else []
         cum_conds = stage_conditions_for_location(qloc) if qloc else []
         cum_stages = []
@@ -1909,14 +1923,19 @@ def main() -> int:
             # the board must show the car actually driven in this round (565,
             # from the stage_runs rows), not the Result column.
             for name, t in (('smokedriver', 150000), ('secondpilot', 200000)):
-                # smokedriver reported spare tyres on both stages (tuning-blob
-                # parse stored at stage-begin); secondpilot never did.
+                # smokedriver (v0.1.74+ client) reported spare tyres on both
+                # stages; secondpilot (older client) has only the stored tuning
+                # blob at stage 0 — the board must decode spares from it — and
+                # no begin capture at stage 1 (stays unreported).
                 if name == 'smokedriver':
                     cum_stages_json = json.dumps([
                         {'time_ms': t, 'penalties_ms': 0, 'spare_tyres': 2},
                         {'time_ms': t, 'penalties_ms': 0, 'spare_tyres': 2}])
                 else:
-                    cum_stages_json = json.dumps([{'time_ms': t, 'penalties_ms': 0}] * 2)
+                    cum_stages_json = json.dumps([
+                        {'time_ms': t, 'penalties_ms': 0,
+                         'tuning_setup_b64': _blob_b64(1)},
+                        {'time_ms': t, 'penalties_ms': 0}])
                 db.session.add(_Result(
                     event_id='evt-smoke-board-cum', username=name, car='Test Car',
                     vehicle_id=532, total_time_ms=t * 2,
@@ -1989,11 +2008,11 @@ def main() -> int:
               and by_name1.get('smokedriver', {}).get('vehicle') == 'Porsche 911 RGT Rally Spec'
               and all(r.get('vehicle') != 'Ford Fiesta R2' for r in list(by_name0.values()) + list(by_name1.values())),
                f"cars={[(n, r.get('vehicle')) for n, r in {**by_name0, **by_name1}.items()]}")
-        check('event-board API: rows carry spare tyre counts (None when unreported)',
+        check('event-board API: rows carry spare tyre counts, decoded from the stored tuning blob when the client did not report them',
               by_name0.get('smokedriver', {}).get('spares') == 2
               and by_name1.get('smokedriver', {}).get('spares') == 2
-              and by_name0.get('secondpilot', {}).get('spares') is None
-              and by_name1.get('secondpilot', {}).get('spares') is None,
+              and by_name0.get('secondpilot', {}).get('spares') == 1
+              and by_name1.get('secondpilot', {}).get('spares') == 1,
               f"spares={[(n, r.get('spares')) for n, r in {**by_name0, **by_name1}.items()]}")
 
         # Combined-multi fixture: two legs x two stages so the board must span

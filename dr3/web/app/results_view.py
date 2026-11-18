@@ -8,6 +8,7 @@ leaderboard computes.
 """
 from __future__ import annotations
 
+import base64
 import json
 from datetime import datetime, timezone
 
@@ -39,6 +40,7 @@ from .tables import (
 
 from dr2server.game_data import rallycross_stage_plan  # noqa: E402
 from dr2server.stage_limits import split_count_for_limit, stage_limit_ms  # noqa: E402
+from dr2server.tuning import TuningBlob  # noqa: E402
 
 SCORING_LABELS = {'wrc': 'WRC', 'groupb': 'Group B', 'codemasters': 'Codemasters'}
 MODE_LABELS = {'multi': 'Multi-Location Rally', 'season': 'Rally Season'}
@@ -496,16 +498,28 @@ def _penalty_ms(stage_entry) -> int:
 
 
 def _spare_tyres(stage_entry):
-    """Spare tyre count chosen for one stage, parsed from the tuning blob by
-    the game server at stage-begin. ``None`` when unreported (older clients,
-    DNF markers with no stage-begin capture)."""
+    """Spare tyre count chosen for one stage. Prefers the value the game
+    server parsed at stage-begin (v0.1.74+ clients); falls back to decoding
+    the stored tuning blob, which older clients sent too — so historical
+    stages show spares as well. ``None`` when unreported (no stage-begin
+    capture, e.g. DNF markers)."""
     if not stage_entry:
         return None
     v = stage_entry.get('spare_tyres')
-    try:
-        return int(v) if v is not None else None
-    except (TypeError, ValueError):
-        return None
+    if v is not None:
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            pass
+    blob_b64 = stage_entry.get('tuning_setup_b64')
+    if blob_b64:
+        try:
+            blob = TuningBlob.decode(base64.b64decode(blob_b64))
+        except Exception:
+            return None
+        if blob is not None:
+            return blob.spare_tyres()
+    return None
 
 
 def event_board(event: dict, round_index: int, mode: str,
