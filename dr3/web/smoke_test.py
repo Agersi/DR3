@@ -2628,12 +2628,18 @@ def main() -> int:
     # Class column carries the CURRENTLY active leg's class (season leg 1 here,
     # not whatever was stored first).
     check('dashboard class column uses the current leg\'s class', 'class_1' in html)
-    # Drivers column: glowing dot with "done with current event / club members".
-    # Alpha: smokedriver done (genuine + terminal DNF both count as closed),
-    # 1 of 2 members; Beta/Season: nobody done yet, 0 of 1.
-    check('dashboard Drivers column shows done/total drivers',
-          'Drivers' in html and 'driver-dot' in html
-          and '1/2' in html and '0/1' in html)
+    # Drivers column: two dots per row — started/total first, done/total
+    # second. Alpha: both members touched a stage (2/2) but only smokedriver is
+    # closed (1/2); Beta: 1/1 started, 0/1 done; Season: untouched, 0/1 + 0/1.
+    check('dashboard Drivers column shows started + done dots',
+          'Drivers' in html and html.count('class="driver-dot') == 6
+          and '2/2' in html and '1/1' in html and '1/2' in html and '0/1' in html)
+    # Hover text distinguishes the two dots (board-style data-tip, no native title).
+    _tbl = html[html.find('class="live-events"'):html.find('</table>', html.find('class="live-events"'))]
+    check('driver dot tooltips: started vs done wording, no native title',
+          'data-tip="2 of 2 drivers have started the current event"' in _tbl
+          and 'data-tip="1 of 2 drivers are done with the current event"' in _tbl
+          and 'title=' not in _tbl)
     # Dot colors follow the signed-in user's state: Alpha done incl. a terminal
     # DNF stage (green), Beta mid-leg (yellow), Season untouched (red).
     check('dashboard driver dot colors: yellow partial, green done, red untouched',

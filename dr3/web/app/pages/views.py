@@ -557,9 +557,17 @@ def dashboard():
         # "Done" = every stage in the window is closed: a genuine finish OR a
         # terminal DNF (wrecked/skipped stages can never be driven again, so
         # they don't keep the dot yellow once the rest of the event is over).
-        drivers_done = sum(
-            1 for en in entries
-            if count and scope_participation(en, offset, count)[1] == count)
+        # "Started" = any stage in the window carries a time or DNF marker.
+        drivers_done = 0
+        drivers_started = 0
+        for en in entries:
+            if not count:
+                break
+            _f, closed, touched = scope_participation(en, offset, count)
+            if touched:
+                drivers_started += 1
+            if closed == count:
+                drivers_done += 1
         my_entry = next((en for en in entries
                          if en.get('username') == g.user.username), None)
         if count:
@@ -568,8 +576,10 @@ def dashboard():
                 if my_entry else (0, 0, False))
             driver_status = ('green' if my_closed == count
                              else 'yellow' if my_touched else 'red')
+            start_status = 'green' if my_touched else 'red'
         else:
             driver_status = 'red'
+            start_status = 'red'
         events.append({
             **e,
             'mode_label': ('Rally Season' if mode_of(e) == CHAMP_MODE_SEASON
@@ -580,7 +590,9 @@ def dashboard():
             # Class of the currently active leg, not the first stored one.
             'car_class': prof.get('car_class') or e.get('car_class'),
             'driver_status': driver_status,
+            'start_status': start_status,
             'drivers_done': drivers_done,
+            'drivers_started': drivers_started,
             'club_members': len(club.members),
         })
     active_token = next(

@@ -283,12 +283,20 @@ def main() -> int:
     check('dashboard: live-events table class + column borders + driver dot CSS',
           'class="live-events"' in dash_html
           and '.live-events td:not(:first-child) { border-left: 1px solid var(--line); }' in dash_css
-          and 'td:has(.driver-dot) { display: flex; justify-content: center; }' in dash_css
+          and 'td:has(.driver-dot) { display: flex; justify-content: center; align-items: center; gap: 0.4rem; }' in dash_css
           and 'width: 2rem; height: 2rem; border-radius: 50%;' in dash_css
           and '.table-wrap td { padding: 0.5rem 0.7rem; vertical-align: middle; }' in dash_css
           and '.dot-red { background: #e05252; box-shadow: 0 0 14px rgba(224, 82, 82, 0.75); }' in dash_css
           and '.dot-yellow { background: #e8c33f; box-shadow: 0 0 14px rgba(232, 195, 63, 0.75); }' in dash_css
             and '.dot-green { background: #71b348; box-shadow: 0 0 14px rgba(113, 179, 72, 0.75); }' in dash_css, '')
+    _tbl = dash_html[dash_html.find('class="live-events"'):dash_html.find('</table>', dash_html.find('class="live-events"'))]
+    check('dashboard: started + done dots use board-style hover tips (no native title)',
+          _tbl.count('data-tip=') >= 6 and 'title=' not in _tbl
+          and 'have started the current event' in _tbl
+          and 'are done with the current event' in _tbl, '')
+    check('dashboard: driver-dot tooltip script matches the board hover tip',
+          "tip.className = 'hover-tip';" in dash_html
+          and "tbl.addEventListener('mouseover'" in dash_html, '')
     check('dashboard: live events no longer link to the removed event page',
           'href="/event/' not in dash_html, '')
 

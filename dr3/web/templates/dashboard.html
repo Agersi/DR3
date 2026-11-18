@@ -28,8 +28,10 @@
         <td>{{ e.get('location') or '' }}</td>
         <td>{{ e.get('car_class') or '' }}</td>
         <td>
+          <span class="driver-dot dot-{{ e.start_status }}"
+                data-tip="{{ e.drivers_started }} of {{ e.club_members }} drivers have started the current event">{{ e.drivers_started }}/{{ e.club_members }}</span>
           <span class="driver-dot dot-{{ e.driver_status }}"
-                title="{{ e.drivers_done }} of {{ e.club_members }} drivers are done with the current event">{{ e.drivers_done }}/{{ e.club_members }}</span>
+                data-tip="{{ e.drivers_done }} of {{ e.club_members }} drivers are done with the current event">{{ e.drivers_done }}/{{ e.club_members }}</span>
         </td>
       </tr>
       {% endfor %}
@@ -53,4 +55,42 @@
   <h2>Notifications</h2>
   <p><a href="{{ url_for('pages.notifications') }}">{{ unread }} unread — open inbox</a></p>
 </div>
+
+<script>
+// Driver-dot tooltips: same fixed-position .hover-tip element as the club
+// board, so the dashboard hover matches the leaderboard's.
+(function () {
+  var tbl = document.querySelector('.live-events');
+  if (!tbl) return;
+  var tip = document.createElement('div');
+  tip.className = 'hover-tip';
+  document.body.appendChild(tip);
+  var tipTarget = null;
+  function showTip(el) {
+    var text = el.getAttribute('data-tip') || '';
+    tip.textContent = text;
+    tip.style.whiteSpace = text.indexOf('\n') >= 0 ? 'pre-line' : 'nowrap';
+    tip.classList.add('show');
+    var r = el.getBoundingClientRect();
+    var rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    var left = Math.min(Math.max(8, r.left + r.width / 2 - tip.offsetWidth / 2), window.innerWidth - tip.offsetWidth - 8);
+    var top = r.top - 0.3 * rem - tip.offsetHeight;
+    if (top < 4) top = r.bottom + 0.3 * rem;
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  }
+  function hideTip() {
+    tipTarget = null;
+    tip.classList.remove('show');
+  }
+  tbl.addEventListener('mouseover', function (e) {
+    var el = e.target.closest('[data-tip]');
+    if (el === tipTarget) return;
+    tipTarget = el;
+    if (el) showTip(el); else hideTip();
+  });
+  tbl.addEventListener('mouseleave', hideTip);
+  window.addEventListener('scroll', hideTip, { passive: true });
+})();
+</script>
 {% endblock %}
