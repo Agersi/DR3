@@ -382,7 +382,13 @@ def main() -> int:
               and '.hover-tip.show { opacity: 1; }' in board_css
               and "tip.className = 'hover-tip';" in det
               and "document.body.appendChild(tip);" in det
-              and "e.target.closest('[data-tip]')" in det, '')
+               and "e.target.closest('[data-tip]')" in det, '')
+        check('club detail: Overall mode drops the expand/splits column and widens Time by 1rem',
+              "if (state.mode === 'stage') {\n      ths += '<th class=\"expand-head\">'" in det
+              and "var span = (state.mode === 'stage' ? 11 : 10) + (open ? spec.n : 0);" in det
+              and "if (state.mode === 'stage') {\n        cells += '<td class=\"expand-cell\"></td>';" in det
+              and ".classList.toggle('board--overall', state.mode === 'overall');" in det
+              and 'table.board.board--overall th:nth-child(9), table.board.board--overall td:nth-child(9) { width: 6.5rem; }' in board_css, '')
         check('club detail: board tooltips flow out of the scroll wrapper (body-level fixed element)',
               '.board-wrap { overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }' in board_css
               and 'position: fixed;' in board_css.split('.hover-tip {', 1)[1].split('}', 1)[0]

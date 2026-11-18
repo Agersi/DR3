@@ -540,8 +540,10 @@
         ths += '<th class="num split-col">' + spec.word + ' #' + i + '</th>';
       }
     }
-    ths += '<th class="expand-head">' + (spec.n ?
-      '<button type="button" class="expand-btn' + (open ? ' open' : '') + '" id="splits-toggle" data-tip="' + (open ? 'Hide Splits' : 'Show Splits') + '" aria-label="Toggle splits">' + (open ? '&#9660;' : '&#9654;') + '</button>' : '') + '</th>';
+    if (state.mode === 'stage') {
+      ths += '<th class="expand-head">' + (spec.n ?
+        '<button type="button" class="expand-btn' + (open ? ' open' : '') + '" id="splits-toggle" data-tip="' + (open ? 'Hide Splits' : 'Show Splits') + '" aria-label="Toggle splits">' + (open ? '&#9660;' : '&#9654;') + '</button>' : '') + '</th>';
+    }
     document.getElementById('board-head').innerHTML = '<tr>' + ths + '</tr>';
   }
 
@@ -550,7 +552,7 @@
     var rows = board.rows || [];
     var spec = splitSpec(board);
     var open = state.splits_open && spec.n > 0;
-    var span = 11 + (open ? spec.n : 0);
+    var span = (state.mode === 'stage' ? 11 : 10) + (open ? spec.n : 0);
     if (!rows.length) {
       body.innerHTML = '<tr class="board-empty"><td colspan="' + span + '">No results yet.</td></tr>';
       return;
@@ -573,7 +575,9 @@
           cells += '<td class="num split-col">' + (v != null ? v : '<span class="dash-tip" data-tip="Configure Telemetry">-</span>') + '</td>';
         }
       }
-      cells += '<td class="expand-cell"></td>';
+      if (state.mode === 'stage') {
+        cells += '<td class="expand-cell"></td>';
+      }
       return '<tr class="board-row' + (r.dnf ? ' dnf' : '') + '" data-pos="' + r.pos + '">' + cells + '</tr>';
     }).join('');
   }
@@ -622,6 +626,7 @@
 
   function renderAll() {
     var board = state.board;
+    document.getElementById('board-table').classList.toggle('board--overall', state.mode === 'overall');
     renderSelector();
     renderRounds(board);
     renderToggles(board);
