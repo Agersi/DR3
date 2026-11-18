@@ -447,18 +447,19 @@ def main() -> int:
                and "data-tip=\"' + esc(tips.join('\\n'))" in det
                and "tip.style.whiteSpace = text.indexOf('\\n') >= 0 ? 'pre-line' : 'nowrap';" in det
                and '.input-tip { position: relative; display: inline-block; }' in board_css, '')
-        check('club detail: tight board padding, centered tyre/input columns (incl. header), right-aligned penalty',
+        check('club detail: tight board padding, centered tyre/input columns (incl. header), right-aligned penalty (incl. header)',
                'table.board th, table.board td { padding: 0.15rem 0.15rem; text-align: left; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; }' in board_css
                and 'table.board th:nth-child(4), table.board td:nth-child(4), table.board th:nth-child(5), table.board td:nth-child(5), table.board th:nth-child(6), table.board td:nth-child(6) { text-align: center; }' in board_css
                and 'letter-spacing: 0.0em; text-transform: uppercase; }' in board_css
                and "table.board { width: 100%; border-collapse: collapse; font-size: 0.9rem; table-layout: fixed; }" in board_css
                and "table.board th, table.board td { padding: 0.15rem 0.15rem; text-align: left; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; }" in board_css
                and "table.board th:nth-child(1), table.board td:nth-child(1) { width: 2rem; text-align: center; }" in board_css
-                and all(f"table.board th:nth-child({n}), table.board td:nth-child({n}) {{ width: {w}; }}" in board_css
-                        for n, w in ((2, '13rem'), (3, '13rem'), (4, '3rem'), (5, '3rem'), (6, '3rem'), (7, '4rem'), (8, '4rem'), (9, '5.5rem'), (10, '6rem')))
-               and ".split-col { white-space: nowrap; width: 4rem; }" in board_css
-               and ".expand-head, .expand-cell { width: 3rem; text-align: center; white-space: nowrap; }" in board_css
-                and "'<td class=\"num\">' + penaltyCell(r.penalty_ms) + '</td>'" in det, '')
+                 and all(f"table.board th:nth-child({n}), table.board td:nth-child({n}) {{ width: {w}; }}" in board_css
+                         for n, w in ((2, '13rem'), (3, '13rem'), (4, '3rem'), (5, '3rem'), (6, '3rem'), (7, '4rem'), (8, '5rem'), (9, '5rem'), (10, '5rem')))
+                and ".split-col { white-space: nowrap; width: 4rem; }" in board_css
+                and ".expand-head, .expand-cell { width: 3rem; text-align: center; white-space: nowrap; }" in board_css
+                 and "'<th>Input</th><th>Camera</th><th class=\"num\">Penalty</th>'" in det
+                 and "'<td class=\"num\">' + penaltyCell(r.penalty_ms) + '</td>'" in det, '')
         check('club detail: championship standings table below the board (JS + CSS)',
                '<h2 class="standings-title">Championship Standings</h2>' in det
                and 'id="standings-table"' in det
