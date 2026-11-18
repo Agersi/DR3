@@ -402,6 +402,12 @@ def main() -> int:
               '#board-table th, #board-table td { white-space: nowrap; }' in board_css, '')
         check('club detail: active round box uses card-mixed location bar',
               '.round-box.active .round-loc { background: color-mix(in srgb, var(--card) 65%, transparent); }' in board_css, '')
+        check('club detail: initial load centers the active round box in the visible strip (only when not first)',
+              'function centerActiveRound() {' in det
+              and "var active = strip.querySelector('.round-box.active');" in det
+              and 'if (!active || active === strip.children[0]) return;' in det
+              and 'strip.scrollLeft = Math.max(0, strip.scrollLeft + (bl - sl) - (strip.clientWidth - active.offsetWidth) / 2);' in det
+              and 'renderAll();\n  centerActiveRound();' in det, '')
         m = re.search(r'id="board-state">(.*?)</script>', det, re.S)
         board_state = json.loads(m.group(1)) if m else {}
         check('club detail: mode toggle is Stage-first with Stage the default mode (VR + Assists merged into Input)',

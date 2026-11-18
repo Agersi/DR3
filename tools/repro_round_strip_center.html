@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>round strip centering repro</title>
+<style>
+:root {
+  --bg: #181C14; --card: #3C3D37; --line: #697565; --text: #ECDFCC;
+  --muted: #afff95; --accent: #ECDFCC; --accent-deep: #2A2B25;
+  --body: 'Barlow', system-ui, -apple-system, sans-serif;
+  --page-max: 1440px;
+}
+* { box-sizing: border-box; }
+html { font-size: 24px; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--body); line-height: 1.55; }
+main { max-width: var(--page-max); width: 100%; margin: 0 auto; padding: 0 1.25rem 2rem; }
+
+/* production round-strip CSS (must mirror dr3/web/static/css/style.css) */
+.round-strip { display: flex; gap: 0.6rem; overflow-x: auto; padding-bottom: 0.3rem; margin-bottom: 0.8rem; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }
+.round-strip::-webkit-scrollbar { height: 10px; }
+.round-strip::-webkit-scrollbar-track { background: rgba(24, 28, 20, 0.5); }
+.round-strip::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--card); }
+.round-box {
+  flex: none;
+  width: 32.6%;
+  text-align: left;
+  background: var(--card);
+  border: none;
+  padding: 0 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+}
+.round-box.active { background: var(--accent-deep); }
+
+h2 { font-size: 1rem; color: var(--muted); }
+#out { font-family: ui-monospace, Consolas, monospace; font-size: 14px; white-space: pre-wrap; background: #000; padding: 1rem; }
+</style>
+</head>
+<body>
+<main>
+  <h2>A: 5 boxes, active = middle (3rd) — must center, scrollLeft &gt; 0</h2>
+  <div class="round-strip" id="stripA"></div>
+
+  <h2>B: 5 boxes, active = first — must NOT scroll (scrollLeft = 0)</h2>
+  <div class="round-strip" id="stripB"></div>
+
+  <h2>C: 8 boxes, active = last — centering clamps to max scroll</h2>
+  <div class="round-strip" id="stripC"></div>
+
+  <h2>D: 2 boxes (no overflow), active = second — stays at 0</h2>
+  <div class="round-strip" id="stripD"></div>
+
+  <pre id="out">measuring…</pre>
+</main>
+<script>
+// same centering algorithm as club_detail.html centerActiveRound() (parameterized by strip)
+function centerActiveRound(stripId) {
+  var strip = document.getElementById(stripId);
+  if (!strip || strip.style.display === 'none') return;
+  var active = strip.querySelector('.round-box.active');
+  if (!active || active === strip.children[0]) return;
+  var sl = strip.getBoundingClientRect().left;
+  var bl = active.getBoundingClientRect().left;
+  strip.scrollLeft = Math.max(0, strip.scrollLeft + (bl - sl) - (strip.clientWidth - active.offsetWidth) / 2);
+}
+function buildStrip(id, n, activeIdx) {
+  var strip = document.getElementById(id);
+  for (var i = 0; i < n; i++) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'round-box' + (i === activeIdx ? ' active' : '');
+    b.textContent = 'R' + (i + 1);
+    strip.appendChild(b);
+  }
+}
+function measure(id) {
+  var strip = document.getElementById(id);
+  var active = strip.querySelector('.round-box.active');
+  var sr = strip.getBoundingClientRect();
+  var ar = active.getBoundingClientRect();
+  return {
+    scroll_left_px: Math.round(strip.scrollLeft),
+    max_scroll_px: Math.round(strip.scrollWidth - strip.clientWidth),
+    box_center_vs_strip_center_px: Math.round((ar.left + ar.width / 2) - (sr.left + strip.clientWidth / 2))
+  };
+}
+window.addEventListener('load', function () {
+  buildStrip('stripA', 5, 2);
+  buildStrip('stripB', 5, 0);
+  buildStrip('stripC', 8, 7);
+  buildStrip('stripD', 2, 1);
+  centerActiveRound('stripA');
+  centerActiveRound('stripB');
+  centerActiveRound('stripC');
+  centerActiveRound('stripD');
+  var out = JSON.stringify({
+    viewport: window.innerWidth,
+    A_middle_centered: measure('stripA'),
+    B_first_no_scroll: measure('stripB'),
+    C_last_clamped: measure('stripC'),
+    D_no_overflow: measure('stripD')
+  }, null, 1);
+  document.getElementById('out').textContent = out;
+  document.title = 'done';
+});
+</script>
+</body>
+</html>

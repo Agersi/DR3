@@ -477,6 +477,16 @@
     }).join('');
   }
 
+  function centerActiveRound() {
+    var strip = document.getElementById('round-strip');
+    if (!strip || strip.style.display === 'none') return;
+    var active = strip.querySelector('.round-box.active');
+    if (!active || active === strip.children[0]) return;
+    var sl = strip.getBoundingClientRect().left;
+    var bl = active.getBoundingClientRect().left;
+    strip.scrollLeft = Math.max(0, strip.scrollLeft + (bl - sl) - (strip.clientWidth - active.offsetWidth) / 2);
+  }
+
   function renderToggles(board) {
     document.querySelectorAll('#mode-toggle .mode-btn').forEach(function (b) {
       b.classList.toggle('active', b.getAttribute('data-mode') === state.mode);
@@ -739,6 +749,7 @@
   window.addEventListener('scroll', hideTip, { passive: true });
 
   renderAll();
+  centerActiveRound();
 })();
 </script>
 {% endblock %}
