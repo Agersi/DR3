@@ -17,6 +17,7 @@
   --mustard: #ECDFCC;
   --olive: #697565;
   --danger: #697565;
+  --warning: #C4635A;
 
   --display: 'Oswald', 'Arial Narrow', 'Helvetica Neue', sans-serif;
   --body: 'Barlow', system-ui, -apple-system, sans-serif;
@@ -644,7 +645,7 @@ table.board th:nth-child(10), table.board td:nth-child(10) { width: 5.5rem; }
 table.board.board--overall th:nth-child(9), table.board.board--overall td:nth-child(9) { width: 6.5rem; }
 table.board .board-row:nth-child(even) td { background: rgba(24, 28, 20, 0.25); }
 table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
-.board-row.dnf td { color: var(--muted); }
+.board-row.dnf td { color: var(--warning); }
 .dnf-tag { font-size: 0.7rem; color: var(--text); border: 1px solid var(--line); padding: 0 0.25rem; margin-left: 0.3rem; white-space: nowrap; }
 .tyre-cell { white-space: nowrap; }
 .input-cell { white-space: nowrap; }

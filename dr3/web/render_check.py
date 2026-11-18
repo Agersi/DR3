@@ -439,9 +439,9 @@ def main() -> int:
               and "TYRE_FILE[t] || '#_unknown'" in det
                 and '<span class="tyre-img" data-tip="' in det
                 and ".hover-tip {\n  position: fixed;" in board_css, '')
-        check('club detail: spares column after Tyre shows the count with a tooltip (muted dash when unknown)',
+        check('club detail: spares column after Tyres shows the count with a tooltip (muted dash when unknown)',
               "function spareCell(v) {" in det
-              and "<th>Tyre</th><th>Spares</th>" in det
+              and "<th>Tyres</th><th>Spares</th>" in det
               and "'<td class=\"spare-cell num\">' + spareCell(r.spares) + '</td>'" in det
               and "var tip = n === 0 ? 'No spare tyres' : (n + (n === 1 ? ' spare tyre' : ' spare tyres'));" in det
               and "return '<span data-tip=\"' + tip + '\">' + n + '</span>';" in det
@@ -475,6 +475,9 @@ def main() -> int:
         check('club detail: DNF tag sits in the Diff 1st cell, not the Time cell',
               "'<td class=\"num\">' + esc(r.time_text) + '</td>'" in det
               and "'<td class=\"num\">' + esc(r.diff_str) + (r.dnf ? ' <span class=\"dnf-tag\">DNF</span>' : '') + '</td>'" in det, '')
+        check('club detail: DNF rows use the muted-red --warning color',
+              '--warning: #C4635A;' in board_css
+              and '.board-row.dnf td { color: var(--warning); }' in board_css, '')
         check('club detail: championship standings table below the board (JS + CSS)',
                '<h2 class="standings-title">Championship Standings</h2>' in det
                and 'id="standings-table"' in det
