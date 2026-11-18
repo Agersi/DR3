@@ -2348,15 +2348,25 @@ def main() -> int:
     check('cloned draft editor renders in the target club',
           r.status_code == 200, f'status={r.status_code}')
 
-    # 20. delete the championships
+    # 20. delete the championships — every one carries a club_stage_states row
+    #     first: that table FKs events.id without cascade, so MySQL rejects the
+    #     event delete unless the states go with it (SQLite never enforces this).
+    from app.models import ClubStageState as _CSS
     with app.app_context():
         champ_ids = [e.id for e in Event.query.filter_by(club_id=club_id).all()]
+        for eid in champ_ids:
+            if _CSS.query.filter_by(event_id=eid).count() == 0:
+                db.session.add(_CSS(event_id=eid, username='smokedriver', flat_stage_index=0,
+                                    comp_damage_json=json.dumps({'wheels_wear': [1, 1, 1, 1]})))
+        db.session.commit()
     for eid in champ_ids:
         r = client.get(f'/clubs/{club_id}/championship/{eid}/delete')
         check(f'championship delete confirm renders ({eid})', r.status_code == 200, f'status={r.status_code}')
         r = client.post(f'/clubs/{club_id}/championship/{eid}/delete', follow_redirects=False)
         with app.app_context():
             check(f'championship deleted ({eid})', db.session.get(Event, eid) is None, '')
+            check(f'stage states deleted with championship ({eid})',
+                  _CSS.query.filter_by(event_id=eid).count() == 0, '')
 
     # 21. discard a fresh draft
     r = client.post(f'/clubs/{club_id}/championship/new', data={
@@ -2727,6 +2737,8 @@ def main() -> int:
         db.session.add(_ResD(event_id='evt-smoke-doomed', username='smokedriver',
                              car='Test Car', total_time_ms=90000,
                              stages_json=json.dumps([{'time_ms': 45000, 'penalties_ms': 0}])))
+        db.session.add(_CSS(event_id='evt-smoke-doomed', username='smokedriver',
+                            flat_stage_index=0, tuning_setup_b64='dGVzdA=='))
         db.session.commit()
     r = client.get(f'/clubs/{doomed_id}/delete')
     check('club delete confirm renders',
@@ -2744,6 +2756,7 @@ def main() -> int:
         check('club row deleted', db.session.get(Club, doomed_id) is None, '')
         check('club events deleted', Event.query.filter_by(club_id=doomed_id).count() == 0, '')
         check('club results deleted', _ResD.query.filter_by(event_id='evt-smoke-doomed').count() == 0, '')
+        check('club stage states deleted', _CSS.query.filter_by(event_id='evt-smoke-doomed').count() == 0, '')
         check('club members removed', ClubMember.query.filter_by(club_id=doomed_id).count() == 0, '')
     # The name still appears in the success flash, so assert on the card link.
     r = client.get('/clubs')
@@ -2779,6 +2792,8 @@ def main() -> int:
         db.session.add(_Res5(event_id='evt-smoke-pilot', username='doomedpilot',
                              car='Test Car', total_time_ms=60000,
                              stages_json=json.dumps([{'time_ms': 30000, 'penalties_ms': 0}])))
+        db.session.add(_CSS(event_id='evt-smoke-pilot', username='doomedpilot',
+                            flat_stage_index=0, comp_damage_json='{}'))
         db.session.add(_Draft(id='draft-smoke-pilot', club_id=club_id, owner='doomedpilot',
                               data_json='{}'))
         db.session.commit()
@@ -2810,6 +2825,7 @@ def main() -> int:
         check('user row deleted', User.query.filter_by(username='doomedpilot').first() is None, '')
         check('memberships removed', ClubMember.query.filter_by(user_id=pilot_uid).count() == 0, '')
         check('results deleted', _Res5.query.filter_by(username='doomedpilot').count() == 0, '')
+        check('stage states deleted', _CSS.query.filter_by(username='doomedpilot').count() == 0, '')
         check('drafts deleted', _Draft.query.filter_by(owner='doomedpilot').count() == 0, '')
         check('owned club gone', db.session.get(Club, pilot_id) is None, '')
 

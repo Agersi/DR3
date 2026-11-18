@@ -51,6 +51,7 @@ from ..models import (
     Club,
     ClubInvite,
     ClubMember,
+    ClubStageState,
     Event,
     GameToken,
     Notification,
@@ -500,6 +501,10 @@ def _delete_account(user: User):
         db.session.delete(m)
     for r in Result.query.filter_by(username=user.username).all():
         db.session.delete(r)
+    # The per-stage heavy payloads are keyed by username too — drop them with
+    # the results so an account deletion leaves no orphaned rows behind.
+    for s in ClubStageState.query.filter_by(username=user.username).all():
+        db.session.delete(s)
     for t in TimeTrialEntry.query.filter_by(username=user.username).all():
         db.session.delete(t)
     for s in StageRun.query.filter_by(username=user.username).all():

@@ -15,6 +15,7 @@ dr3/web/smoke.db
 dr3/web/instance/
 dr3/web/csrf_check.db
 dr3/web/dbg.db
+dr3/web/repro_champ_delete.db
 dr3/DR3.spec
 
 # Not part of the public repo

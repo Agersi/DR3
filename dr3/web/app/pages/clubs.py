@@ -73,7 +73,16 @@ from ..events import (
     get_event,
     sort_events,
 )
-from ..models import ChampionshipDraft, Club, ClubInvite, Event, Result, User, utcnow
+from ..models import (
+    ChampionshipDraft,
+    Club,
+    ClubInvite,
+    ClubStageState,
+    Event,
+    Result,
+    User,
+    utcnow,
+)
 from ..results_view import (
     championship_points_table,
     championship_rounds,
@@ -1441,6 +1450,9 @@ def championship_delete_confirm(club_id: str, event_id: str):
 def championship_delete(club_id: str, event_id: str):
     club = _require_club_admin(club_id)
     event = _require_club_event(club_id, event_id)
+    # Children first: club_stage_states points at the event with a plain FK.
+    for s in ClubStageState.query.filter_by(event_id=event_id).all():
+        db.session.delete(s)
     for r in Result.query.filter_by(event_id=event_id).all():
         db.session.delete(r)
     e = db.session.get(Event, event_id)
@@ -1478,6 +1490,8 @@ def club_delete(club_id: str):
     # club (or its events) with plain FKs; members cascade via Club.members.
     event_ids = [e.id for e in Event.query.filter_by(club_id=club.id).all()]
     if event_ids:
+        for s in ClubStageState.query.filter(ClubStageState.event_id.in_(event_ids)).all():
+            db.session.delete(s)
         for r in Result.query.filter(Result.event_id.in_(event_ids)).all():
             db.session.delete(r)
     for e in Event.query.filter_by(club_id=club.id).all():
