@@ -1909,10 +1909,18 @@ def main() -> int:
             # the board must show the car actually driven in this round (565,
             # from the stage_runs rows), not the Result column.
             for name, t in (('smokedriver', 150000), ('secondpilot', 200000)):
+                # smokedriver reported spare tyres on both stages (tuning-blob
+                # parse stored at stage-begin); secondpilot never did.
+                if name == 'smokedriver':
+                    cum_stages_json = json.dumps([
+                        {'time_ms': t, 'penalties_ms': 0, 'spare_tyres': 2},
+                        {'time_ms': t, 'penalties_ms': 0, 'spare_tyres': 2}])
+                else:
+                    cum_stages_json = json.dumps([{'time_ms': t, 'penalties_ms': 0}] * 2)
                 db.session.add(_Result(
                     event_id='evt-smoke-board-cum', username=name, car='Test Car',
                     vehicle_id=532, total_time_ms=t * 2,
-                    stages_json=json.dumps([{'time_ms': t, 'penalties_ms': 0}] * 2)))
+                    stages_json=cum_stages_json))
                 for k in range(2):
                     db.session.add(_CumRun(
                         username=name, event_id='evt-smoke-board-cum',
@@ -1981,6 +1989,12 @@ def main() -> int:
               and by_name1.get('smokedriver', {}).get('vehicle') == 'Porsche 911 RGT Rally Spec'
               and all(r.get('vehicle') != 'Ford Fiesta R2' for r in list(by_name0.values()) + list(by_name1.values())),
                f"cars={[(n, r.get('vehicle')) for n, r in {**by_name0, **by_name1}.items()]}")
+        check('event-board API: rows carry spare tyre counts (None when unreported)',
+              by_name0.get('smokedriver', {}).get('spares') == 2
+              and by_name1.get('smokedriver', {}).get('spares') == 2
+              and by_name0.get('secondpilot', {}).get('spares') is None
+              and by_name1.get('secondpilot', {}).get('spares') is None,
+              f"spares={[(n, r.get('spares')) for n, r in {**by_name0, **by_name1}.items()]}")
 
         # Combined-multi fixture: two legs x two stages so the board must span
         # the whole event — a flat S1..S4 bar, Overall accumulating across

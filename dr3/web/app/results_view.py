@@ -495,6 +495,19 @@ def _penalty_ms(stage_entry) -> int:
             + int(stage_entry.get('repair_penalty_ms', 0) or 0))
 
 
+def _spare_tyres(stage_entry):
+    """Spare tyre count chosen for one stage, parsed from the tuning blob by
+    the game server at stage-begin. ``None`` when unreported (older clients,
+    DNF markers with no stage-begin capture)."""
+    if not stage_entry:
+        return None
+    v = stage_entry.get('spare_tyres')
+    try:
+        return int(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def event_board(event: dict, round_index: int, mode: str,
                 stage_local_index: int | None = None,
                 now: datetime | None = None) -> dict | None:
@@ -613,6 +626,7 @@ def event_board(event: dict, round_index: int, mode: str,
                 'score': t + _penalty_ms(se),
                 'dnf': rs != 0,
                 'vid': vid,
+                'spares': _spare_tyres(se),
                 **a,
             })
     elif count > 0:
@@ -631,6 +645,7 @@ def event_board(event: dict, round_index: int, mode: str,
             vrs: list = []
             cams: list = []
             assist_flags: list = []
+            spares_list: list = []
             user_runs = runs_by_user.get(e.get('username'), {})
             vid = None
             for k in range(j + 1):
@@ -654,6 +669,7 @@ def event_board(event: dict, round_index: int, mode: str,
                 vrs.append(a['vr'])
                 cams.append(a['camera'])
                 assist_flags.append(a['assists'])
+                spares_list.append(_spare_tyres(se))
             if not ran:
                 continue
             total = adjusted_total_ms(e, bogeys, offset=offset)
@@ -665,6 +681,7 @@ def event_board(event: dict, round_index: int, mode: str,
                 'dnf': done < j + 1,
                 'vid': vid or entries_by_user.get(e.get('username'), {}).get('vehicle_id'),
                 'tyres': sorted(tyres),
+                'spares': _most_common(spares_list),
                 'input': _most_common(inputs),
                 'vr': _most_common(vrs),
                 'camera': _most_common(cams),
@@ -698,6 +715,7 @@ def event_board(event: dict, round_index: int, mode: str,
             'flag_url': flag_by_user.get(r['username']) or flag_url(''),
             'vehicle': name,
             'tyres': tyres,
+            'spares': r.get('spares'),
             'input': r.get('input'),
             'vr': r.get('vr'),
             'camera': r.get('camera'),

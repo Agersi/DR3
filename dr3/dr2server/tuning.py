@@ -33,6 +33,22 @@ class TuningBlob:
     uncompressed_size: int
     payload: bytes  # decompressed tuning data
 
+    # The spare-tyre count is a float32 LE at this offset of the DECOMPRESSED
+    # payload (verified 2026-11-18 against a controlled test: values track the
+    # service-park SpareTyres selection exactly; uniform across car classes).
+    SPARE_TYRES_OFFSET = 210
+
+    def spare_tyres(self) -> Optional[int]:
+        """Spare tyre count chosen for the next stage, or None when unknown.
+
+        Only trusted on the observed 222-byte payload layout; any other size
+        (unknown / future format) yields None rather than a guess.
+        """
+        if len(self.payload) != 222:
+            return None
+        value = struct.unpack_from("<f", self.payload, self.SPARE_TYRES_OFFSET)[0]
+        return int(round(value))
+
     @classmethod
     def decode(cls, data: bytes) -> Optional[TuningBlob]:
         """Decode a tuning blob. Returns None on malformed data."""

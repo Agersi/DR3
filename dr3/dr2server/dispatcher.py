@@ -3229,6 +3229,12 @@ class RpcDispatcher:
         # Persist the pre-stage setup so my-progress reflects it for later calls.
         if event_id and self.api_client is not None:
             tuning_b64 = base64.b64encode(req.tuning_setup).decode("ascii") if req.tuning_setup else ""
+            spare_tyres = None
+            if req.tuning_setup:
+                from .tuning import TuningBlob
+                blob = TuningBlob.decode(req.tuning_setup)
+                if blob is not None:
+                    spare_tyres = blob.spare_tyres()
             try:
                 self.api_client.submit_stage_begin(
                     event_id=event_id,
@@ -3240,6 +3246,7 @@ class RpcDispatcher:
                     tyre_compound=req.tyre_compound,
                     tyres_remaining=req.tyres_remaining,
                     nationality_id=req.nationality_id,
+                    spare_tyres=spare_tyres,
                 )
             except Exception as exc:
                 print(f"[STAGE] Begin api_client.submit_stage_begin() raised: {exc}")

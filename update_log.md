@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.74**
+- The number of spare tyres you carry is now shown on the club event boards.
+
 **v0.1.73**
 - Fixed a setup failure on some PCs where the Windows hosts file was missing; DR3 now recreates it automatically.
 

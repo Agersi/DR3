@@ -91,7 +91,7 @@
       <table class="board" id="board-table">
         <thead id="board-head"></thead>
         <tbody id="board-body">
-          <tr class="board-empty"><td colspan="10">Loading…</td></tr>
+          <tr class="board-empty"><td colspan="11">Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -396,6 +396,13 @@
     }).join(' ');
   }
 
+  function spareCell(v) {
+    if (v == null) return '<span class="muted">—</span>';
+    var n = Number(v);
+    var tip = n === 0 ? 'No spare tyres' : (n + (n === 1 ? ' spare tyre' : ' spare tyres'));
+    return '<span data-tip="' + tip + '">' + n + '</span>';
+  }
+
   function flagCell(url, name) {
     if (!url) return '';
     return '<img class="flag" src="' + esc(url) + '" alt="' + esc(name) + '">';
@@ -515,7 +522,7 @@
   function renderHead(board) {
     var spec = splitSpec(board);
     var open = state.splits_open && spec.n > 0;
-    var ths = '<th>#</th><th>Driver</th><th>Vehicle</th><th>Tyre</th>' +
+    var ths = '<th>#</th><th>Driver</th><th>Vehicle</th><th>Tyre</th><th>Spares</th>' +
       '<th>Input</th><th>Camera</th><th>Penalty</th>' +
       '<th class="num">Time</th><th class="num">Diff 1st</th>';
     if (open) {
@@ -533,7 +540,7 @@
     var rows = board.rows || [];
     var spec = splitSpec(board);
     var open = state.splits_open && spec.n > 0;
-    var span = 10 + (open ? spec.n : 0);
+    var span = 11 + (open ? spec.n : 0);
     if (!rows.length) {
       body.innerHTML = '<tr class="board-empty"><td colspan="' + span + '">No results yet.</td></tr>';
       return;
@@ -544,6 +551,7 @@
         '<td>' + flagCell(r.flag_url, r.username) + '<a href="' + root + esc(r.driver_url) + '">' + esc(r.username) + '</a></td>' +
         '<td>' + esc(r.vehicle || '') + '</td>' +
         '<td class="tyre-cell">' + tyreCell(r.tyres) + '</td>' +
+        '<td class="spare-cell num">' + spareCell(r.spares) + '</td>' +
         '<td class="input-cell">' + inputCell(r.input, r.vr, r.assists) + '</td>' +
         '<td>' + camCell(r.camera) + '</td>' +
         '<td class="num">' + penaltyCell(r.penalty_ms) + '</td>' +

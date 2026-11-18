@@ -286,6 +286,9 @@ def api_game_stage_begin():
         'tyre_compound': data.get('tyre_compound', 2),
         'tyres_remaining': data.get('tyres_remaining', 3),
         'nationality_id': data.get('nationality_id', 0),
+        # Parsed from the tuning blob by the game server (float at offset 210);
+        # None on older clients that don't send it.
+        'spare_tyres': data.get('spare_tyres'),
     }
     r.in_progress_json = json.dumps(in_progress)
     # The tuning blob lives in club_stage_states — it used to be duplicated

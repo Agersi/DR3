@@ -236,6 +236,7 @@ class UpstreamClient:
         tyres_remaining: int = 3,
         nationality_id: int = 0,
         event_index: int = 0,
+        spare_tyres: Optional[int] = None,
     ) -> bool:
         """Store pre-stage setup data on the web server before a stage starts.
 
@@ -251,6 +252,8 @@ class UpstreamClient:
             "tyres_remaining": tyres_remaining,
             "nationality_id": nationality_id,
         }
+        if spare_tyres is not None:
+            payload["spare_tyres"] = spare_tyres
         if vehicle_id is not None:
             payload["vehicle_id"] = vehicle_id
         result = self._post("/api/game/stage-begin", payload)
