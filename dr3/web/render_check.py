@@ -455,7 +455,7 @@ def main() -> int:
                and "table.board th, table.board td { padding: 0.15rem 0.15rem; text-align: left; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; }" in board_css
                and "table.board th:nth-child(1), table.board td:nth-child(1) { width: 2rem; text-align: center; }" in board_css
                  and all(f"table.board th:nth-child({n}), table.board td:nth-child({n}) {{ width: {w}; }}" in board_css
-                         for n, w in ((2, '13rem'), (3, '13rem'), (4, '3rem'), (5, '3rem'), (6, '3rem'), (7, '4rem'), (8, '5rem'), (9, '5rem'), (10, '5rem')))
+                         for n, w in ((2, '11.5rem'), (3, '11.5rem'), (4, '3rem'), (5, '3rem'), (6, '3rem'), (7, '3.5rem'), (8, '5.5rem'), (9, '5.5rem'), (10, '5.5rem')))
                 and ".split-col { white-space: nowrap; width: 4rem; }" in board_css
                 and ".expand-head, .expand-cell { width: 3rem; text-align: center; white-space: nowrap; }" in board_css
                  and "'<th>Input</th><th>Camera</th><th class=\"num\">Penalty</th>'" in det
