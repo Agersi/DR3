@@ -465,7 +465,10 @@ def main() -> int:
                 and ".split-col { white-space: nowrap; width: 4rem; }" in board_css
                 and ".expand-head, .expand-cell { width: 3rem; text-align: center; white-space: nowrap; }" in board_css
                  and "'<th>Input</th><th>Camera</th><th class=\"num\">Penalty</th>'" in det
-                 and "'<td class=\"num\">' + penaltyCell(r.penalty_ms) + '</td>'" in det, '')
+                  and "'<td class=\"num\">' + penaltyCell(r.penalty_ms) + '</td>'" in det, '')
+        check('club detail: DNF tag sits in the Diff 1st cell, not the Time cell',
+              "'<td class=\"num\">' + esc(r.time_text) + '</td>'" in det
+              and "'<td class=\"num\">' + esc(r.diff_str) + (r.dnf ? ' <span class=\"dnf-tag\">DNF</span>' : '') + '</td>'" in det, '')
         check('club detail: championship standings table below the board (JS + CSS)',
                '<h2 class="standings-title">Championship Standings</h2>' in det
                and 'id="standings-table"' in det

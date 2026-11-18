@@ -565,8 +565,8 @@
         '<td class="input-cell">' + inputCell(r.input, r.vr, r.assists) + '</td>' +
         '<td>' + camCell(r.camera) + '</td>' +
         '<td class="num">' + penaltyCell(r.penalty_ms) + '</td>' +
-        '<td class="num">' + esc(r.time_text) + (r.dnf ? ' <span class="dnf-tag">DNF</span>' : '') + '</td>' +
-        '<td class="num">' + esc(r.diff_str) + '</td>';
+        '<td class="num">' + esc(r.time_text) + '</td>' +
+        '<td class="num">' + esc(r.diff_str) + (r.dnf ? ' <span class="dnf-tag">DNF</span>' : '') + '</td>';
       if (open) {
         for (var i = 0; i < spec.n; i++) {
           var v = (r.splits && r.splits[i] != null) ? Number(r.splits[i]).toFixed(2) : null;
