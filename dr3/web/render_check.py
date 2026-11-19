@@ -285,6 +285,7 @@ def main() -> int:
           and '.live-events td:not(:first-child) { border-left: 1px solid var(--line); }' in dash_css
           and 'td:has(.driver-dot) { display: flex; justify-content: center; align-items: center; gap: 0.4rem; }' in dash_css
           and 'width: 2rem; height: 2rem; border-radius: 50%;' in dash_css
+          and 'th, td { padding: 0.15rem 0.15rem; }' in dash_css
           and '.table-wrap td { padding: .15rem; vertical-align: middle; }' in dash_css
           and ".table th, .table-wrap th {\n  font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em;\n  font-size: 0.82rem; font-weight: 600; background: var(--bg); color: var(--text);\n  text-align: left; border: 0;\n}" in dash_css
           and '.dot-red { background: #e05252; box-shadow: 0 0 14px rgba(224, 82, 82, 0.75); }' in dash_css
