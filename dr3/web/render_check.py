@@ -286,6 +286,7 @@ def main() -> int:
           and 'td:has(.driver-dot) { display: flex; justify-content: center; align-items: center; gap: 0.4rem; }' in dash_css
           and 'width: 2rem; height: 2rem; border-radius: 50%;' in dash_css
           and '.table-wrap td { padding: .15rem; vertical-align: middle; }' in dash_css
+          and ".table th, .table-wrap th {\n  font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em;\n  font-size: 0.82rem; font-weight: 600; background: var(--bg); color: var(--text);\n  text-align: left; border: 0;\n}" in dash_css
           and '.dot-red { background: #e05252; box-shadow: 0 0 14px rgba(224, 82, 82, 0.75); }' in dash_css
           and '.dot-yellow { background: #e8c33f; box-shadow: 0 0 14px rgba(232, 195, 63, 0.75); }' in dash_css
             and '.dot-green { background: #71b348; box-shadow: 0 0 14px rgba(113, 179, 72, 0.75); }' in dash_css, '')
@@ -486,6 +487,7 @@ def main() -> int:
                 and "root + '/clubs/' + state.club_id + '/championship-standings?'" in det
                 and "ths += '<th class=\"num\"' + (r.location ? ' data-tip=\"' + esc(r.location) + '\"' : '') + '>' + esc(r.label) + '</th>';" in det
                 and "['board-table', 'standings-table'].forEach(function (id) {" in det
+                and 'table.standings th, table.standings td { text-align: left; white-space: nowrap; }' in board_css
                 and 'table.standings .num { text-align: right; font-variant-numeric: tabular-nums; }' in board_css
                 and 'table.standings th:nth-child(1), table.standings td:nth-child(1) { width: 2rem; text-align: center; }' in board_css
                 and 'table.standings th:nth-child(2) { padding-left: 40px; }' in board_css

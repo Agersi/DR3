@@ -341,7 +341,7 @@ table.table, .table-wrap table { width: 100%; border-collapse: collapse; backgro
 .table th, .table-wrap th {
   font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em;
   font-size: 0.82rem; font-weight: 600; background: var(--bg); color: var(--text);
-  padding: 0.55rem 0.7rem; text-align: left; border: 0;
+  text-align: left; border: 0;
 }
 .table td { padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
 .table-wrap td { padding: .15rem; vertical-align: middle; }
@@ -693,7 +693,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .standings-title { margin-top: 1.6rem; font-size: 1.15rem; }
 table.standings { border-collapse: collapse; font-size: 0.9rem; }
-table.standings th, table.standings td { padding: 0.3rem 0.7rem; text-align: left; white-space: nowrap; }
+table.standings th, table.standings td { text-align: left; white-space: nowrap; }
 table.standings thead th { border-bottom: 2px solid var(--line); color: var(--muted); font-size: 0.78rem; letter-spacing: 0.0em; text-transform: uppercase; }
 table.standings tbody tr + tr td { border-top: 1px solid var(--line); }
 table.standings .num { text-align: right; font-variant-numeric: tabular-nums; }
