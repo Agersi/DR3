@@ -105,7 +105,7 @@
         <td>{% if row.club_id %}<a href="{{ url_for('clubs.club_detail', club_id=row.club_id) }}">{{ row.club }}</a>{% else %}—{% endif %}</td>
         <td>{% if row.vehicle_id %}<a href="{{ url_for('pages.car_stats', vehicle_id=row.vehicle_id) }}">{{ row.car }}</a>{% else %}{{ row.car or '—' }}{% endif %}</td>
         <td class="num">{{ row.time_text }}</td>
-        <td class="meta">{{ row.at|timeago }}</td>
+        <td class="num">{{ row.at|timeago }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -174,7 +174,7 @@
           tr.appendChild(cell(row.club, '', row.club_url));
           tr.appendChild(cell(row.car, '', row.car_url));
           tr.appendChild(cell(row.time_text, 'num'));
-          tr.appendChild(cell(row.at_text, 'meta'));
+          tr.appendChild(cell(row.at_text, 'num'));
           tbody.appendChild(tr);
         });
         offset += rows.length;

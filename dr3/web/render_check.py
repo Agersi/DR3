@@ -116,6 +116,10 @@ def main() -> int:
           '<a class="driver-link" href="/profile/smokedriver">Smoke Driver</a>' in html
           and "a.className = 'driver-link';" in html
           and '<a href="/cars/1">Vehicle 1</a>' in html, '')
+    check('home: recent-times Time + Posted columns use num class (server + JS rows)',
+          html.count('<td class="num">') == 2
+          and "tr.appendChild(cell(row.time_text, 'num'));" in html
+          and "tr.appendChild(cell(row.at_text, 'num'));" in html, '')
     r = client.get('/cars/565')
     check('car stats page renders name + class',
           r.status_code == 200 and 'Porsche 911 RGT Rally Spec' in r.get_data(as_text=True)
