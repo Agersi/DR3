@@ -2079,11 +2079,22 @@ def main() -> int:
                 legs_json=json.dumps(m_legs),
                 active=True))
             # smokedriver finished all four stages cleanly (whole-event finisher).
+            # Tyres mimic live multi-location data: softs for leg 1, a fresh set
+            # of mediums fitted at the inter-leg service, and tyres_remaining
+            # restarting per leg (1 -> 2) so the compound change — not a
+            # decrement — is the only refit signal.
             db.session.add(_Result(
                 event_id='evt-smoke-board-multi', username='smokedriver', car='Test Car',
                 total_time_ms=420000,
-                stages_json=json.dumps([{'time_ms': t, 'penalties_ms': 0}
-                                        for t in (100000, 100000, 110000, 110000)])))
+                stages_json=json.dumps([
+                    {'time_ms': 100000, 'penalties_ms': 0,
+                     'tyre_compound': 6, 'tyres_remaining': 1},
+                    {'time_ms': 100000, 'penalties_ms': 0,
+                     'tyre_compound': 6, 'tyres_remaining': 1},
+                    {'time_ms': 110000, 'penalties_ms': 0,
+                     'tyre_compound': 7, 'tyres_remaining': 2},
+                    {'time_ms': 110000, 'penalties_ms': 0,
+                     'tyre_compound': 7, 'tyres_remaining': 2}])))
             # secondpilot only finished leg 1; stage 3 wrecked at its limit
             # (DNF close-out), stage 4 never run — not a clean whole-event finisher.
             db.session.add(_Result(
@@ -2130,6 +2141,11 @@ def main() -> int:
               and by_name_m3.get('smokedriver', {}).get('time_text') == format_ms(420000)
               and by_name_m3.get('smokedriver', {}).get('dnf') is False,
               f"rows={[(n, r.get('time_text'), r.get('dnf')) for n, r in by_name_m3.items()]}")
+        check('event-board API: combined overall tyres span legs (inter-leg refit via compound change)',
+              by_name_m0.get('smokedriver', {}).get('tyres') == [6]
+              and by_name_m3.get('smokedriver', {}).get('tyres') == [6, 7]
+              and by_name_m3.get('secondpilot', {}).get('tyres') == [],
+              f"tyres={[(n, r.get('tyres')) for n, r in {**by_name_m0, **by_name_m3}.items()]}")
         check('event-board API: combined info shows the selected stage + its leg location',
               (bm3.get('info') or {}).get('number') == 4
               and (bm3.get('info') or {}).get('location') == (qloc or ''),

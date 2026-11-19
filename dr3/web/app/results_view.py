@@ -656,6 +656,7 @@ def event_board(event: dict, round_index: int, mode: str,
             penalty = 0
             tyres_seq: list[int] = []
             last_rem: int | None = None
+            last_comp: int | None = None
             inputs: list = []
             vrs: list = []
             cams: list = []
@@ -695,15 +696,19 @@ def event_board(event: dict, round_index: int, mode: str,
                     if not tyres_seq:
                         # The set fitted for the first stage.
                         tyres_seq.append(comp)
+                    elif comp != last_comp:
+                        # A different compound is always a different physical
+                        # set — including at leg boundaries, where
+                        # tyres_remaining restarts per leg and never signals
+                        # the inter-leg service refit.
+                        tyres_seq.append(comp)
                     elif rem is not None and last_rem is not None \
                             and rem < last_rem:
-                        # A spare set was fitted at the service before this
-                        # stage — one image per set, in running order.
+                        # Same compound, but a spare set of it was fitted at
+                        # the service before this stage — one image per set,
+                        # in running order.
                         tyres_seq.append(comp)
-                    elif rem is None and comp != tyres_seq[-1]:
-                        # No tyres_remaining data (legacy rows): a compound
-                        # change between stages implies a fresh set.
-                        tyres_seq.append(comp)
+                    last_comp = comp
                 if rem is not None:
                     last_rem = rem
                 inputs.append(a['input'])
