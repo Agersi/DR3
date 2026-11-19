@@ -104,13 +104,15 @@ def main() -> int:
     # home recent-times box (backlog #42): server-rendered first page +
     # infinite-scroll JS wired to the public endpoint
     html = client.get('/').get_data(as_text=True)
-    check('home: recent-times box with rows + scroll JS',
+    check('home: recent-times box with rows + scroll JS (club-style num column)',
           'recent-times-box' in html and 'recent-times-body' in html
           and 'Smoke Driver' in html
           and 'data-url="/api/home/recent-times"' in html
-          and "addEventListener('scroll'" in html, '')
-    check('home: recent-times rows link driver + car pages',
-          '<a href="/profile/smokedriver">Smoke Driver</a>' in html
+          and "addEventListener('scroll'" in html
+          and '.recent-box .num { text-align: right; font-variant-numeric: tabular-nums; }' in css, '')
+    check('home: recent-times rows link driver + car pages (driver names use driver-link)',
+          '<a class="driver-link" href="/profile/smokedriver">Smoke Driver</a>' in html
+          and "a.className = 'driver-link';" in html
           and '<a href="/cars/1">Vehicle 1</a>' in html, '')
     r = client.get('/cars/565')
     check('car stats page renders name + class',
@@ -280,13 +282,16 @@ def main() -> int:
 
     dash_css = client.get('/static/css/style.css').get_data(as_text=True)
     dash_html = client.get('/dashboard').get_data(as_text=True)
-    check('dashboard: live-events table class + column borders + driver dot CSS',
+    check('dashboard: live-events table class + thead/tbody + club-style generic table CSS + driver dot CSS',
           'class="live-events"' in dash_html
-          and '.live-events td:not(:first-child) { border-left: 1px solid var(--line); }' in dash_css
+          and '<thead>' in dash_html and '<tbody>' in dash_html
+          and '.live-events td:not(:first-child) { border-left: 1px solid var(--line); }' not in dash_css
           and 'td:has(.driver-dot) { display: flex; justify-content: center; align-items: center; gap: 0.4rem; }' in dash_css
           and 'width: 2rem; height: 2rem; border-radius: 50%;' in dash_css
           and 'th, td { padding: 0.15rem 0.15rem; }' in dash_css
           and '.table-wrap { overflow-x: auto; background: var(--card); border: 2px solid var(--line); box-shadow: 4px 4px 4px var(--shadow); margin: 1rem 0; }' in dash_css
+          and 'table.table, .table-wrap table { width: 100%; border-collapse: collapse; background: var(--card); margin: 0; font-size: 0.9rem; }' in dash_css
+          and '.table-wrap thead th { border-bottom: 2px solid var(--line); color: var(--muted); font-size: 0.78rem; letter-spacing: 0.0em; }' in dash_css
           and '.table-wrap td { padding: .15rem; vertical-align: middle; }' in dash_css
           and ".table th, .table-wrap th {\n  font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em;\n  font-size: 0.82rem; font-weight: 600; background: var(--bg); color: var(--text);\n  text-align: left; border: 0;\n}" in dash_css
           and '.dot-red { background: #e05252; box-shadow: 0 0 14px rgba(224, 82, 82, 0.75); }' in dash_css
@@ -402,7 +407,7 @@ def main() -> int:
               and '.board-wrap::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--card); }' in board_css
               and '.board-wrap::-webkit-scrollbar-thumb:hover { background: var(--muted); }' in board_css
               and 'width: max-content' not in board_css
-              and 'table.board { width: 100%; border-collapse: collapse; font-size: 0.9rem; table-layout: fixed; }' in board_css, '')
+              and 'table.board { table-layout: fixed; }' in board_css, '')
         check('club detail: splits state survives stage/round reloads and opening scrolls to the right',
               ".then(function (board) { state.board = board; renderAll(); })" in det
               and "state.splits_open = false; renderAll()" not in det
@@ -467,8 +472,8 @@ def main() -> int:
         check('club detail: tight board padding, centered tyre/input columns (incl. header), right-aligned penalty (incl. header)',
                'table.board th, table.board td { padding: 0.15rem 0.15rem; text-align: left; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; }' in board_css
                and 'table.board th:nth-child(4), table.board td:nth-child(4), table.board th:nth-child(5), table.board td:nth-child(5), table.board th:nth-child(6), table.board td:nth-child(6) { text-align: center; }' in board_css
-               and 'letter-spacing: 0.0em; text-transform: uppercase; }' in board_css
-               and "table.board { width: 100%; border-collapse: collapse; font-size: 0.9rem; table-layout: fixed; }" in board_css
+                and '.table-wrap thead th { border-bottom: 2px solid var(--line); color: var(--muted); font-size: 0.78rem; letter-spacing: 0.0em; }' in board_css
+                and "table.board { table-layout: fixed; }" in board_css
                and "table.board th, table.board td { padding: 0.15rem 0.15rem; text-align: left; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; }" in board_css
                and "table.board th:nth-child(1), table.board td:nth-child(1) { width: 2rem; text-align: center; }" in board_css
                  and all(f"table.board th:nth-child({n}), table.board td:nth-child({n}) {{ width: {w}; }}" in board_css

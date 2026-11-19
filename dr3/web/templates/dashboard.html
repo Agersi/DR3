@@ -18,7 +18,10 @@
     {% if active_events %}
     <div class="table-wrap">
       <table class="live-events">
+      <thead>
       <tr><th>Event</th><th>Type</th><th>Current event</th><th>Championship</th><th>Location</th><th>Class</th><th>Drivers</th></tr>
+      </thead>
+      <tbody>
       {% for e in active_events %}
       <tr>
         <td><a href="{{ url_for('clubs.club_detail', club_id=e['club_id']) }}">{{ e['name'] }}</a></td>
@@ -35,6 +38,7 @@
         </td>
       </tr>
       {% endfor %}
+      </tbody>
     </table>
   </div>
   {% else %}

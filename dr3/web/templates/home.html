@@ -101,7 +101,7 @@
            data-limit="25">
       {% for row in stats.recent %}
       <tr>
-        <td>{{ flag_img(row.driver_flag) }}<a href="{{ url_for('pages.profile', username=row.driver_username) }}">{{ row.driver }}</a></td>
+        <td>{{ flag_img(row.driver_flag) }}<a class="driver-link" href="{{ url_for('pages.profile', username=row.driver_username) }}">{{ row.driver }}</a></td>
         <td>{% if row.club_id %}<a href="{{ url_for('clubs.club_detail', club_id=row.club_id) }}">{{ row.club }}</a>{% else %}—{% endif %}</td>
         <td>{% if row.vehicle_id %}<a href="{{ url_for('pages.car_stats', vehicle_id=row.vehicle_id) }}">{{ row.car }}</a>{% else %}{{ row.car or '—' }}{% endif %}</td>
         <td class="num">{{ row.time_text }}</td>
@@ -149,6 +149,7 @@
     }
     if (row.driver_url && row.driver) {
       var a = document.createElement('a');
+      a.className = 'driver-link';
       a.href = row.driver_url;
       a.textContent = row.driver;
       td.appendChild(a);
