@@ -377,8 +377,8 @@ def main() -> int:
               and '"splits-toggle"' in det
               and det.find("'<th class=\"num split-col\">'") < det.find("'<th class=\"expand-head\">'")
               and "data-tip=\"' + (open ? 'Hide Splits' : 'Show Splits') + '\"" in det
-               and '.expand-head, .expand-cell { width: 3rem; text-align: center; white-space: nowrap; }' in board_css
-              and 'margin: .2em;' in board_css.split('.expand-btn {', 1)[1].split('}', 1)[0]
+                and '.expand-head, .expand-cell { width: 2rem; text-align: center; white-space: nowrap; }' in board_css
+              and ".expand-btn {\n  position: relative;\n  background: none;\n  border: none;\n  cursor: pointer;\n  color: var(--accent);\n  font-size: .8rem;\n  line-height: .8;\n  padding: .3rem;\n  margin: .2em;\n}" in board_css
               and '.hover-tip.show { opacity: 1; }' in board_css
               and "tip.className = 'hover-tip';" in det
               and "document.body.appendChild(tip);" in det
@@ -469,7 +469,7 @@ def main() -> int:
                  and all(f"table.board th:nth-child({n}), table.board td:nth-child({n}) {{ width: {w}; }}" in board_css
                          for n, w in ((2, '11.5rem'), (3, '11.5rem'), (4, '3rem'), (5, '3rem'), (6, '3rem'), (7, '3.5rem'), (8, '5.5rem'), (9, '5.5rem'), (10, '5.5rem')))
                 and ".split-col { white-space: nowrap; width: 4rem; }" in board_css
-                and ".expand-head, .expand-cell { width: 3rem; text-align: center; white-space: nowrap; }" in board_css
+                 and ".expand-head, .expand-cell { width: 2rem; text-align: center; white-space: nowrap; }" in board_css
                  and "'<th>Input</th><th>Camera</th><th class=\"num\">Penalty</th>'" in det
                   and "'<td class=\"num\">' + penaltyCell(r.penalty_ms) + '</td>'" in det, '')
         check('club detail: DNF tag sits in the Diff 1st cell, not the Time cell',

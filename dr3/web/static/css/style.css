@@ -659,8 +659,18 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .board-wrap::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--card); }
 .board-wrap::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 #board-table th, #board-table td { white-space: nowrap; }
-.expand-head, .expand-cell { width: 3rem; text-align: center; white-space: nowrap; }
-.expand-btn { position: relative; background: none; border: none; cursor: pointer; color: var(--accent); font-size: 1rem; padding: 0 0.3rem; margin: .2em; }
+.expand-head, .expand-cell { width: 2rem; text-align: center; white-space: nowrap; }
+.expand-btn {
+  position: relative;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--accent);
+  font-size: .8rem;
+  line-height: .8;
+  padding: .3rem;
+  margin: .2em;
+}
 .split-col { white-space: nowrap; width: 4rem; }
 .dash-tip { position: relative; display: inline-block; cursor: help; color: var(--muted); }
 .hover-tip {
