@@ -434,7 +434,11 @@ def main() -> int:
               and "var span = (state.mode === 'stage' ? 11 : 10) + (open ? spec.n : 0);" in det
               and "if (state.mode === 'stage') {\n        cells += '<td class=\"expand-cell\"></td>';" in det
               and ".classList.toggle('board--overall', state.mode === 'overall');" in det
-              and 'table.board.board--overall th:nth-child(9), table.board.board--overall td:nth-child(9) { width: 6.5rem; }' in board_css, '')
+               and 'table.board.board--overall th:nth-child(9), table.board.board--overall td:nth-child(9) { width: 6.5rem; }' in board_css, '')
+        check('club detail: Overall mode stacks tyre sets with half-overlap in a wider Tyres column',
+              '.board--overall .tyre-cell .tyre-img + .tyre-img { margin-left: -0.75em; }' in board_css
+              and 'table.board.board--overall th:nth-child(4), table.board.board--overall td:nth-child(4) { width: 4.5rem; }' in board_css
+              and "}).join('');" in det, '')
         check('club detail: board tooltips flow out of the scroll wrapper (body-level fixed element)',
               '.board-wrap { overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }' in board_css
               and 'position: fixed;' in board_css.split('.hover-tip {', 1)[1].split('}', 1)[0]

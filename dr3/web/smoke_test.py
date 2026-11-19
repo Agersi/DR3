@@ -1945,14 +1945,23 @@ def main() -> int:
                 # blob at stage 0 — the board must decode spares from it — and
                 # no begin capture at stage 1 (stays unreported).
                 if name == 'smokedriver':
+                    # Fitted softs for stage 1, then a spare set of mediums
+                    # before stage 2 (tyres_remaining 3 -> 2): the overall
+                    # board must show both sets, in order.
                     cum_stages_json = json.dumps([
-                        {'time_ms': t, 'penalties_ms': 0, 'spare_tyres': 2},
-                        {'time_ms': t, 'penalties_ms': 0, 'spare_tyres': 2}])
+                        {'time_ms': t, 'penalties_ms': 0, 'spare_tyres': 2,
+                         'tyre_compound': 6, 'tyres_remaining': 3},
+                        {'time_ms': t, 'penalties_ms': 0, 'spare_tyres': 2,
+                         'tyre_compound': 7, 'tyres_remaining': 2}])
+                    run_comps = (6, 7)
                 else:
+                    # Legacy rows without tyres_remaining: the compound change
+                    # between stages is the only evidence of a fresh set.
                     cum_stages_json = json.dumps([
                         {'time_ms': t, 'penalties_ms': 0,
-                         'tuning_setup_b64': _blob_b64(1)},
-                        {'time_ms': t, 'penalties_ms': 0}])
+                         'tuning_setup_b64': _blob_b64(1), 'tyre_compound': 6},
+                        {'time_ms': t, 'penalties_ms': 0, 'tyre_compound': 8}])
+                    run_comps = (0, 0)
                 db.session.add(_Result(
                     event_id='evt-smoke-board-cum', username=name, car='Test Car',
                     vehicle_id=532, total_time_ms=t * 2,
@@ -1961,7 +1970,7 @@ def main() -> int:
                     db.session.add(_CumRun(
                         username=name, event_id='evt-smoke-board-cum',
                         vehicle_id=565, flat_stage_index=k, time_ms=t,
-                        player_finished=True))
+                        player_finished=True, tyre_compound=run_comps[k]))
             db.session.commit()
 
         api = client.get(
@@ -2031,6 +2040,12 @@ def main() -> int:
               and by_name0.get('secondpilot', {}).get('spares') == 1
               and by_name1.get('secondpilot', {}).get('spares') == 1,
               f"spares={[(n, r.get('spares')) for n, r in {**by_name0, **by_name1}.items()]}")
+        check('event-board API: overall tyres = one image per fitted set (initial + each spare change)',
+              by_name0.get('smokedriver', {}).get('tyres') == [6]
+              and by_name1.get('smokedriver', {}).get('tyres') == [6, 7]
+              and by_name0.get('secondpilot', {}).get('tyres') == [6]
+              and by_name1.get('secondpilot', {}).get('tyres') == [6, 8],
+              f"tyres={[(n, r.get('tyres')) for n, r in {**by_name0, **by_name1}.items()]}")
 
         # Combined-multi fixture: two legs x two stages so the board must span
         # the whole event — a flat S1..S4 bar, Overall accumulating across

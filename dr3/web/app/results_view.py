@@ -654,7 +654,8 @@ def event_board(event: dict, round_index: int, mode: str,
             ran = False
             done = 0
             penalty = 0
-            tyres: set[int] = set()
+            tyres_seq: list[int] = []
+            last_rem: int | None = None
             inputs: list = []
             vrs: list = []
             cams: list = []
@@ -677,8 +678,34 @@ def event_board(event: dict, round_index: int, mode: str,
                 if rv is not None:
                     vid = rv
                 a = _run_attrs(run_obj)
-                if a['tyre'] is not None:
-                    tyres.add(a['tyre'])
+                comp = a['tyre']
+                if comp is None and isinstance(se, dict):
+                    try:
+                        comp = int(se.get('tyre_compound') or 0) or None
+                    except (TypeError, ValueError):
+                        comp = None
+                rem = None
+                if isinstance(se, dict):
+                    rv = se.get('tyres_remaining')
+                    try:
+                        rem = int(rv) if rv is not None else None
+                    except (TypeError, ValueError):
+                        rem = None
+                if comp is not None:
+                    if not tyres_seq:
+                        # The set fitted for the first stage.
+                        tyres_seq.append(comp)
+                    elif rem is not None and last_rem is not None \
+                            and rem < last_rem:
+                        # A spare set was fitted at the service before this
+                        # stage — one image per set, in running order.
+                        tyres_seq.append(comp)
+                    elif rem is None and comp != tyres_seq[-1]:
+                        # No tyres_remaining data (legacy rows): a compound
+                        # change between stages implies a fresh set.
+                        tyres_seq.append(comp)
+                if rem is not None:
+                    last_rem = rem
                 inputs.append(a['input'])
                 vrs.append(a['vr'])
                 cams.append(a['camera'])
@@ -694,7 +721,7 @@ def event_board(event: dict, round_index: int, mode: str,
                 'score': total,
                 'dnf': done < j + 1,
                 'vid': vid or entries_by_user.get(e.get('username'), {}).get('vehicle_id'),
-                'tyres': sorted(tyres),
+                'tyres': tyres_seq,
                 'spares': _most_common(spares_list),
                 'input': _most_common(inputs),
                 'vr': _most_common(vrs),

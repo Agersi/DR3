@@ -393,7 +393,7 @@
       var slug = TYRE_FILE[t] || '#_unknown';
       var name = esc(tyreName(slug));
       return '<span class="tyre-img" data-tip="' + name + '"><img src="' + STATIC + 'tyres/' + slug + '.png" alt="" aria-label="' + name + '"></span>';
-    }).join(' ');
+    }).join('');
   }
 
   function spareCell(v) {
