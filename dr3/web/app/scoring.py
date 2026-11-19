@@ -356,12 +356,10 @@ def championship_points_breakdown(event: dict, entries: list[dict]) -> dict[str,
             if cells is None:
                 continue
             cell = cells[rnd['index']]
-            if row['dnf_stages'] != 0:
-                # DNF: takes its position but no classification points — except
-                # Codemasters, where taking part earns the minimum 1 point.
-                cell['points'] = 1 if system == SCORING_CODEMASTERS else 0
-            else:
-                cell['points'] = rally_classification_points(system, p_total, pos)
+            # Position points for every participant — a DNF takes up its
+            # classification position and scores like any other finisher
+            # (positions outside a fixed scale's top ten score nothing).
+            cell['points'] = rally_classification_points(system, p_total, pos)
         if power_stage and count > 0:
             final_idx = count - 1
             runners: list[tuple[int, str]] = []
@@ -388,10 +386,10 @@ def championship_points(event: dict, entries: list[dict]) -> dict[str, int]:
     Multi-Location rallies and legacy events are classified once over the whole
     event. A driver's classification position earns points from the
     championship's scoring system — WRC/GroupB fixed top-ten scales or the
-    field-size Codemasters formula — but only if they finished every stage of
-    that round. A DNF takes up its classification position and scores nothing
-    under WRC/GroupB; under Codemasters, taking part still earns the minimum 1
-    point. When power-stage points are enabled, the top five finishers of each
+    field-size Codemasters formula — regardless of whether they finished every
+    stage of that round: a DNF takes up its classification position and scores
+    like any other finisher (positions outside a fixed scale's top ten score
+    nothing). When power-stage points are enabled, the top five finishers of each
     round's FINAL stage earn an extra bonus (5/4/3/2/1) on top of the
     classification points. A driver's total is the sum across rounds; every
     driver in ``entries`` is present in the result, with 0 if they scored

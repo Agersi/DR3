@@ -1739,8 +1739,9 @@ def main() -> int:
     # Synthetic 2-rally SEASON championship (3 + 2 stages) — seasons classify
     # each rally separately: A finishes everything, B DNFs rally 1's last
     # stage, C is fastest in rally 1 but DNFs rally 2's final stage. WRC scale
-    # + power-stage bonus: A = 17+4 + 25+5 = 51, B = 0 (DNF) + 17+4 = 21,
-    # C = 25+5 + 0 (DNF) = 30.
+    # + power-stage bonus; a DNF takes its position points like any other
+    # finisher: A = 17+4 + 25+5 = 51, B = 15 (p3) + 17+4 = 36,
+    # C = 25+5 + 15 (p3) = 45.
     fake_event = {
         'id': 'evt-fake-points', 'type': 'weekly',
         'events': [
@@ -1763,14 +1764,15 @@ def main() -> int:
         _entry('B', [100000, 100000, 0, 100000, 110000]),
         _entry('C', [90000, 90000, 90000, 90000, 0]),
     ]
-    check('wrc points: dnf takes position, power stage bonus on final stage',
-          championship_points(fake_event, fake_entries) == {'A': 51, 'B': 21, 'C': 30},
+    check('wrc points: dnf takes position points, power stage bonus on final stage',
+          championship_points(fake_event, fake_entries) == {'A': 51, 'B': 36, 'C': 45},
           f"points={championship_points(fake_event, fake_entries)}")
     fake_event['settings'] = {'scoring': 'codemasters', 'power_stage': False,
                               'mode': 'season'}
-    # Codemasters, P=3 per rally: p = [3, 2, 1]. Rally 1: C=3, A=2, B DNF=1;
-    # rally 2: A=3, B=2, C DNF=1. Totals: A=5, B=3, C=4.
-    check('codemasters points: field-size scale, dnf takes minimum 1 point',
+    # Codemasters, P=3 per rally: p = [3, 2, 1]. Rally 1: C=3, A=2, B(p3)=1;
+    # rally 2: A=3, B=2, C(p3)=1. DNFs score their position like finishers —
+    # here p3 happens to be the same as the old minimum-1 rule. Totals: A=5, B=3, C=4.
+    check('codemasters points: field-size scale, dnf takes position points',
           championship_points(fake_event, fake_entries) == {'A': 5, 'B': 3, 'C': 4},
           f"points={championship_points(fake_event, fake_entries)}")
     r = client.get(f'/clubs/{club_id}/championship/new')
@@ -2177,7 +2179,8 @@ def main() -> int:
               and len(m_st.get('rounds') or []) == 1
               and (m_st.get('rounds') or [{}])[0].get('label') == 'R1'
               and m_st_by_name.get('smokedriver', {}).get('total') == 25
-              and m_st_by_name.get('secondpilot', {}).get('total') == 0,
+              # secondpilot DNFs the event but still takes its p2 position points.
+              and m_st_by_name.get('secondpilot', {}).get('total') == 17,
               f"status={api_mst.status_code} rounds={m_st.get('rounds')} "
               f"rows={[(n, r.get('total')) for n, r in m_st_by_name.items()]}")
 
@@ -2940,6 +2943,98 @@ def main() -> int:
                 follow_redirects=False)
     check('subpath: external next rejected',
           r.headers.get('Location', '').startswith('/rally/'), f"loc={r.headers.get('Location')}")
+
+    # 22c. DNF close-out: once a round's window has ended, the cron sweep flags
+    #      every stage a started driver left unfinished as DNF (race_status=4) —
+    #      clean finishes and non-participants stay untouched, open windows are
+    #      never touched, and a second pass changes nothing.
+    from app.events_generator import run_cron_tick
+    with app.app_context():
+        from datetime import timedelta as _co_td
+        from app.models import Result as _CoResult
+        _now = utcnow()
+        _co_stg = {'surface_deg': 'Medium', 'service_area': 'Medium'}
+        _co_leg = {
+            'location': '', 'car_class': '', 'surface': 'Gravel',
+            'duration': {'days': 1, 'hours': 0, 'mins': 0},
+            'stages': [dict(_co_stg), dict(_co_stg)],
+        }
+        # Season: both leg windows already ended.
+        db.session.add(Event(
+            id='evt-smoke-closeout-season', name='Closeout Season', club_id=club_id,
+            start_time=_now - _co_td(days=3), end_time=_now - _co_td(days=1),
+            settings_json=json.dumps({'mode': 'season'}),
+            legs_json=json.dumps([dict(_co_leg), dict(_co_leg)]), active=True))
+        # Multi: whole window still open.
+        db.session.add(Event(
+            id='evt-smoke-closeout-open', name='Closeout Open', club_id=club_id,
+            start_time=_now - _co_td(hours=2), end_time=_now + _co_td(days=1),
+            settings_json=json.dumps({'mode': 'multi'}),
+            legs_json=json.dumps([dict(_co_leg)]), active=True))
+        # Clean finisher: all four season stages done.
+        db.session.add(_CoResult(
+            event_id='evt-smoke-closeout-season', username='smokedriver', car='Test Car',
+            total_time_ms=400000,
+            stages_json=json.dumps([{'time_ms': t, 'penalties_ms': 0}
+                                    for t in (100000, 100000, 100000, 100000)])))
+        # Partial starter: ran leg 1's first stage only; never touched leg 2.
+        db.session.add(_CoResult(
+            event_id='evt-smoke-closeout-season', username='secondpilot', car='Test Car',
+            total_time_ms=90000,
+            stages_json=json.dumps([{'time_ms': 90000, 'penalties_ms': 0}, {}])))
+        # Non-participant: empty result row.
+        db.session.add(_CoResult(
+            event_id='evt-smoke-closeout-season', username='thirdpilot', car='Test Car',
+            total_time_ms=0, stages_json=json.dumps([])))
+        # Mid-stage when the window closed: in_progress entry on leg 1 stage 2.
+        db.session.add(_CoResult(
+            event_id='evt-smoke-closeout-season', username='fourthpilot', car='Test Car',
+            total_time_ms=0, stages_json=json.dumps([]),
+            in_progress_json=json.dumps({'1': {'tyre_compound': 2, 'tyres_remaining': 3}})))
+        # Same partial shape inside the OPEN window — must stay untouched.
+        db.session.add(_CoResult(
+            event_id='evt-smoke-closeout-open', username='secondpilot', car='Test Car',
+            total_time_ms=90000,
+            stages_json=json.dumps([{'time_ms': 90000, 'penalties_ms': 0}, {}])))
+        db.session.commit()
+
+        tick = run_cron_tick(_now)
+        check('close-out: ended season event closed out, open window not',
+              'evt-smoke-closeout-season' in (tick.get('closed_out') or [])
+              and 'evt-smoke-closeout-open' not in (tick.get('closed_out') or []),
+              str(tick))
+
+        def _co_stages(eid: str, user: str):
+            row = _CoResult.query.filter_by(event_id=eid, username=user).first()
+            return json.loads(row.stages_json or '[]') if row else None
+
+        fin = _co_stages('evt-smoke-closeout-season', 'smokedriver')
+        check('close-out: clean finisher untouched',
+              fin is not None and len(fin) == 4
+              and all(int(s.get('race_status', 0) or 0) == 0 for s in fin), str(fin))
+        part = _co_stages('evt-smoke-closeout-season', 'secondpilot')
+        check('close-out: unfinished stages of a started round flagged, clean finish kept, leg 2 blank',
+              part is not None and len(part) == 2
+              and int(part[0].get('time_ms', 0) or 0) == 90000
+              and int(part[0].get('race_status', 0) or 0) == 0
+              and int(part[1].get('race_status', 0) or 0) == 4, str(part))
+        none_ = _co_stages('evt-smoke-closeout-season', 'thirdpilot')
+        check('close-out: non-participant stays blank', none_ == [], str(none_))
+        mid = _co_stages('evt-smoke-closeout-season', 'fourthpilot')
+        check('close-out: mid-stage driver flagged DNF on the round they were in',
+              mid is not None and len(mid) == 2
+              and int(mid[0].get('race_status', 0) or 0) == 4
+              and int(mid[1].get('race_status', 0) or 0) == 4, str(mid))
+        open_ = _co_stages('evt-smoke-closeout-open', 'secondpilot')
+        check('close-out: open window untouched',
+              open_ is not None and len(open_) == 2
+              and int(open_[1].get('race_status', 0) or 0) == 0, str(open_))
+
+        snap = {r.id: (r.stages_json, r.in_progress_json) for r in _CoResult.query.all()}
+        tick2 = run_cron_tick(_now)
+        after = {r.id: (r.stages_json, r.in_progress_json) for r in _CoResult.query.all()}
+    check('close-out: second pass is a no-op',
+          (tick2.get('closed_out') or []) == [] and snap == after, str(tick2))
 
     print()
     if failures:
