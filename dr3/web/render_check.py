@@ -286,6 +286,7 @@ def main() -> int:
           and 'td:has(.driver-dot) { display: flex; justify-content: center; align-items: center; gap: 0.4rem; }' in dash_css
           and 'width: 2rem; height: 2rem; border-radius: 50%;' in dash_css
           and 'th, td { padding: 0.15rem 0.15rem; }' in dash_css
+          and '.table-wrap { overflow-x: auto; background: var(--card); border: 2px solid var(--line); box-shadow: 4px 4px 4px var(--shadow); margin: 1rem 0; }' in dash_css
           and '.table-wrap td { padding: .15rem; vertical-align: middle; }' in dash_css
           and ".table th, .table-wrap th {\n  font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em;\n  font-size: 0.82rem; font-weight: 600; background: var(--bg); color: var(--text);\n  text-align: left; border: 0;\n}" in dash_css
           and '.dot-red { background: #e05252; box-shadow: 0 0 14px rgba(224, 82, 82, 0.75); }' in dash_css
@@ -454,7 +455,8 @@ def main() -> int:
               and "'<td class=\"flag-cell\">'" not in det
               and "'<td>' + flagCell(r.flag_url, r.username) + '<a class=\"driver-link\" href=\"' + root + esc(r.driver_url) + '\">'" in det
               and '.flag { height: .95em; width: auto; vertical-align: -0.18em; margin-right: 0.3em; }' in board_css
-              and '.driver-link { font-weight: 600; color: var(--ink); text-decoration: none; }' in board_css, '')
+              and '.driver-link { font-weight: 600; color: var(--ink); text-decoration: none; }' in board_css
+              and '.driver-link:hover { color: var(--muted); }' in board_css, '')
         check('club detail: input column tooltip lists each shown icon on its own row',
               "tips.push(v.charAt(0).toUpperCase() + v.slice(1));" in det
               and "tips.push('VR');" in det

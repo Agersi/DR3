@@ -49,6 +49,7 @@ body {
 a { color: var(--muted); }
 a:hover { color: var(--text); }
 .driver-link { font-weight: 600; color: var(--ink); text-decoration: none; }
+.driver-link:hover { color: var(--muted); }
 .ink { color: var(--ink); }
 
 main { max-width: var(--page-max); width: 100%; margin: 0 auto; padding: 0 1.25rem 2rem; flex: 1 0 auto; }
@@ -333,7 +334,7 @@ input[type='checkbox'] { width: auto; max-width: none; }
 
 /* ── Tables ─────────────────────────────────────────── */
 
-.table-wrap { overflow-x: auto; background: var(--card); border: 2px solid var(--line); box-shadow: 4px 4px 0 var(--shadow); margin: 1rem 0; }
+.table-wrap { overflow-x: auto; background: var(--card); border: 2px solid var(--line); box-shadow: 4px 4px 4px var(--shadow); margin: 1rem 0; }
 .recent-box { max-height: 360px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }
 .recent-box::-webkit-scrollbar { width: 10px; }
 .recent-box::-webkit-scrollbar-track { background: rgba(24, 28, 20, 0.5); }
