@@ -48,6 +48,8 @@ body {
 
 a { color: var(--muted); }
 a:hover { color: var(--text); }
+.driver-link { font-weight: 600; color: var(--ink); text-decoration: none; }
+.ink { color: var(--ink); }
 
 main { max-width: var(--page-max); width: 100%; margin: 0 auto; padding: 0 1.25rem 2rem; flex: 1 0 auto; }
 

@@ -388,7 +388,7 @@
   }
 
   function tyreCell(tyres) {
-    if (!tyres || !tyres.length) return '<span class="muted">—</span>';
+    if (!tyres || !tyres.length) return '<span class="ink">—</span>';
     return tyres.map(function (t) {
       var slug = TYRE_FILE[t] || '#_unknown';
       var name = esc(tyreName(slug));
@@ -397,7 +397,7 @@
   }
 
   function spareCell(v) {
-    if (v == null) return '<span class="muted">—</span>';
+    if (v == null) return '<span class="ink">—</span>';
     var n = Number(v);
     var tip = n === 0 ? 'No spare tyres' : (n + (n === 1 ? ' spare tyre' : ' spare tyres'));
     return '<span data-tip="' + tip + '">' + n + '</span>';
@@ -425,13 +425,13 @@
       parts.push('<img class="input-icon" src="' + STATIC + 'icons/assist.png" alt="Assists on">');
       tips.push('Assists');
     }
-    if (!parts.length) return '<span class="muted">—</span>';
+    if (!parts.length) return '<span class="ink">—</span>';
     if (!tips.length) return parts.join(' ');
     return '<span class="input-tip" data-tip="' + esc(tips.join('\n')) + '">' + parts.join(' ') + '</span>';
   }
 
   function camCell(v) {
-    if (!v) return '<span class="muted">—</span>';
+    if (!v) return '<span class="ink">—</span>';
     var s = String(v).replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
     return esc(s);
   }
@@ -560,7 +560,7 @@
     body.innerHTML = rows.map(function (r) {
       var cells =
         '<td class="num">' + r.pos + '</td>' +
-        '<td>' + flagCell(r.flag_url, r.username) + '<a href="' + root + esc(r.driver_url) + '">' + esc(r.username) + '</a></td>' +
+        '<td>' + flagCell(r.flag_url, r.username) + '<a class="driver-link" href="' + root + esc(r.driver_url) + '">' + esc(r.username) + '</a></td>' +
         '<td>' + esc(r.vehicle || '') + '</td>' +
         '<td class="tyre-cell">' + tyreCell(r.tyres) + '</td>' +
         '<td class="spare-cell num">' + spareCell(r.spares) + '</td>' +
@@ -589,7 +589,7 @@
   }
 
   function standingsCell(c) {
-    if (!c || (!c.points && !c.bonus)) return '<span class="muted">—</span>';
+    if (!c || (!c.points && !c.bonus)) return '<span class="ink">—</span>';
     var s = String(c.points);
     if (c.bonus) s += ' <span class="ps-bonus">(+' + c.bonus + ')</span>';
     return s;
@@ -613,7 +613,7 @@
     }
     body.innerHTML = rows.map(function (r) {
       var tds = '<td class="num">' + r.pos + '</td>' +
-        '<td>' + flagCell(r.flag_url, r.username) + '<a href="' + root + esc(r.driver_url) + '">' + esc(r.username) + '</a></td>';
+        '<td>' + flagCell(r.flag_url, r.username) + '<a class="driver-link" href="' + root + esc(r.driver_url) + '">' + esc(r.username) + '</a></td>';
       (r.cells || []).forEach(function (c) {
         tds += '<td class="num">' + standingsCell(c) + '</td>';
       });

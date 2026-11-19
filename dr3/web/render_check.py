@@ -440,7 +440,7 @@ def main() -> int:
               and "TYRE_FILE[t] || '#_unknown'" in det
                 and '<span class="tyre-img" data-tip="' in det
                 and ".hover-tip {\n  position: fixed;" in board_css, '')
-        check('club detail: spares column after Tyres shows the count with a tooltip (muted dash when unknown)',
+        check('club detail: spares column after Tyres shows the count with a tooltip (ink dash when unknown)',
               "function spareCell(v) {" in det
               and "<th>Tyres</th><th>Spares</th>" in det
               and "'<td class=\"spare-cell num\">' + spareCell(r.spares) + '</td>'" in det
@@ -451,8 +451,9 @@ def main() -> int:
               '<th>#</th><th>Driver</th>' in det
               and 'colspan="12"' not in det
               and "'<td class=\"flag-cell\">'" not in det
-              and "'<td>' + flagCell(r.flag_url, r.username) + '<a href=\"' + root + esc(r.driver_url) + '\">'" in det
-              and '.flag { height: .95em; width: auto; vertical-align: -0.18em; margin-right: 0.3em; }' in board_css, '')
+              and "'<td>' + flagCell(r.flag_url, r.username) + '<a class=\"driver-link\" href=\"' + root + esc(r.driver_url) + '\">'" in det
+              and '.flag { height: .95em; width: auto; vertical-align: -0.18em; margin-right: 0.3em; }' in board_css
+              and '.driver-link { font-weight: 600; color: var(--ink); text-decoration: none; }' in board_css, '')
         check('club detail: input column tooltip lists each shown icon on its own row',
               "tips.push(v.charAt(0).toUpperCase() + v.slice(1));" in det
               and "tips.push('VR');" in det
@@ -479,6 +480,13 @@ def main() -> int:
         check('club detail: DNF rows use the muted-red --warning color',
               '--warning: #C4635A;' in board_css
               and '.board-row.dnf td { color: var(--warning); }' in board_css, '')
+        check('club detail: empty board/standings cells use an ink dash (no muted)',
+              "if (!tyres || !tyres.length) return '<span class=\"ink\">—</span>';" in det
+              and "if (v == null) return '<span class=\"ink\">—</span>';" in det
+              and "if (!parts.length) return '<span class=\"ink\">—</span>';" in det
+              and "if (!v) return '<span class=\"ink\">—</span>';" in det
+              and "if (!c || (!c.points && !c.bonus)) return '<span class=\"ink\">—</span>';" in det
+              and '.ink { color: var(--ink); }' in board_css, '')
         check('club detail: championship standings table below the board (JS + CSS)',
                 '<h2 class="standings-title">Championship Standings</h2>' in det
                 and 'id="standings-table"' in det
