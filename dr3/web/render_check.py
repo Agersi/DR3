@@ -499,7 +499,7 @@ def main() -> int:
                 and 'table.standings .num { text-align: right; font-variant-numeric: tabular-nums; }' in board_css
                 and 'table.standings th:nth-child(1), table.standings td:nth-child(1) { width: 2rem; text-align: center; }' in board_css
                 and 'table.standings th:nth-child(2) { padding-left: 40px; }' in board_css
-                and '#standings-head { height: 2rem; }' in board_css
+                and 'thead { height: 2rem; }' in board_css
                 and '.ps-bonus { color: var(--accent); font-size: 0.85em; }' in board_css, '')
          # championship builder: create a fresh draft, render edit + preview
         r = client.post(f'/clubs/{club_id}/championship/new', data={'num_events': '2', 'num_stages': '3'}, follow_redirects=False)
