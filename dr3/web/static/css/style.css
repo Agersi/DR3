@@ -340,7 +340,7 @@ input[type='checkbox'] { width: auto; max-width: none; }
 .recent-box::-webkit-scrollbar-track { background: rgba(24, 28, 20, 0.5); }
 .recent-box::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--card); }
 .recent-box::-webkit-scrollbar-thumb:hover { background: var(--muted); }
-.recent-box thead th { position: sticky; top: 0; background: var(--card); z-index: 1; }
+.recent-box thead th { position: sticky; top: 0; z-index: 1; }
 table.table, .table-wrap table { width: 100%; border-collapse: collapse; background: var(--card); margin: 0; font-size: 0.9rem; }
 thead { height: 2rem; }
 th, td { padding: 0.15rem 0.15rem; }
@@ -370,6 +370,18 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .recent-box th:first-child, .recent-box td:first-child { padding-left: .5rem; }
 .recent-box thead th:first-child { padding-left: calc(40px + .5rem); }
 .recent-box th:nth-child(4), .recent-box td:nth-child(4), .recent-box th:nth-child(5), .recent-box td:nth-child(5), .recent-box th:nth-child(6), .recent-box td:nth-child(6) { text-align: center; }
+.recent-box table { table-layout: fixed; }
+.recent-box th, .recent-box td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recent-box tbody tr { height: 1.8rem; }
+.recent-box th:nth-child(1), .recent-box td:nth-child(1) { width: 12rem; }
+.recent-box th:nth-child(2), .recent-box td:nth-child(2) { width: 10rem; }
+.recent-box th:nth-child(3), .recent-box td:nth-child(3) { width: 13rem; }
+.recent-box th:nth-child(4), .recent-box td:nth-child(4) { width: 2.5rem; }
+.recent-box th:nth-child(5), .recent-box td:nth-child(5) { width: 3rem; }
+.recent-box th:nth-child(6), .recent-box td:nth-child(6) { width: 3rem; }
+.recent-box th:nth-child(7), .recent-box td:nth-child(7) { width: 2.5rem; }
+.recent-box th:nth-child(8), .recent-box td:nth-child(8) { width: 5rem; }
+.recent-box th:nth-child(9), .recent-box td:nth-child(9) { width: 4.5rem; }
 .flag { height: .95em; width: auto; vertical-align: -0.18em; margin-right: 0.3em; }
 
 /* ── Profile driving stats: two-column layout ───────── */

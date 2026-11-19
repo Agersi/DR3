@@ -141,8 +141,16 @@ def main() -> int:
           '.recent-box { max-height: 360px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }' in css
           and '.recent-box::-webkit-scrollbar { width: 10px; }' in css
           and '.recent-box::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--card); }' in css
-          and '.recent-box thead th { position: sticky; top: 0; background: var(--card); z-index: 1; }' in css
+          and '.recent-box thead th { position: sticky; top: 0; z-index: 1; }' in css
           and "box.addEventListener('scroll', function () {" in html, '')
+    check('home: recent-times fixed column widths + single-line rows (Vehicle header)',
+          '<th>Vehicle</th>' in html
+          and '.recent-box table { table-layout: fixed; }' in css
+          and '.recent-box th, .recent-box td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }' in css
+          and '.recent-box tbody tr { height: 1.8rem; }' in css
+          and '.recent-box th:nth-child(1), .recent-box td:nth-child(1) { width: 12rem; }' in css
+          and '.recent-box th:nth-child(3), .recent-box td:nth-child(3) { width: 13rem; }' in css
+          and '.recent-box th:nth-child(9), .recent-box td:nth-child(9) { width: 4.5rem; }' in css, '')
     check('home: recent-times board-style hover tips (body-level fixed element on tbody)',
           "tip.className = 'hover-tip';" in html
           and "e.target.closest('[data-tip]')" in html
