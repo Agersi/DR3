@@ -117,8 +117,9 @@
 </div>
 <script>
 (function () {
+  var box = document.getElementById('recent-times-box');
   var tbody = document.getElementById('recent-times-body');
-  if (!tbody) return;
+  if (!box || !tbody) return;
   var url = tbody.dataset.url;
   var offset = parseInt(tbody.dataset.offset, 10);
   var limit = parseInt(tbody.dataset.limit, 10);
@@ -280,8 +281,8 @@
 
   tbody.querySelectorAll('tr').forEach(applyTuning);
 
-  tbody.addEventListener('scroll', function () {
-    if (tbody.scrollTop + tbody.clientHeight >= tbody.scrollHeight - 40) loadMore();
+  box.addEventListener('scroll', function () {
+    if (box.scrollTop + box.clientHeight >= box.scrollHeight - 40) loadMore();
   });
 
   // Board tooltips flow OUT of the scroll container: one fixed-position element
@@ -314,7 +315,7 @@
     if (el) showTip(el); else hideTip();
   });
   tbody.addEventListener('mouseleave', hideTip);
-  tbody.addEventListener('scroll', hideTip, { passive: true });
+  box.addEventListener('scroll', hideTip, { passive: true });
   window.addEventListener('scroll', hideTip, { passive: true });
 })();
 </script>

@@ -335,12 +335,12 @@ input[type='checkbox'] { width: auto; max-width: none; }
 /* ── Tables ─────────────────────────────────────────── */
 
 .table-wrap { overflow-x: auto; background: var(--card); border: 2px solid var(--line); box-shadow: 4px 4px 4px var(--shadow); margin: 1rem 0; }
-.recent-box { max-height: 360px; }
-.recent-box tbody { max-height: calc(360px - 2rem - 6px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }
-.recent-box tbody::-webkit-scrollbar { width: 10px; }
-.recent-box tbody::-webkit-scrollbar-track { background: rgba(24, 28, 20, 0.5); }
-.recent-box tbody::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--card); }
-.recent-box tbody::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.recent-box { max-height: 360px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }
+.recent-box::-webkit-scrollbar { width: 10px; }
+.recent-box::-webkit-scrollbar-track { background: rgba(24, 28, 20, 0.5); }
+.recent-box::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--card); }
+.recent-box::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.recent-box thead th { position: sticky; top: 0; background: var(--card); z-index: 1; }
 table.table, .table-wrap table { width: 100%; border-collapse: collapse; background: var(--card); margin: 0; font-size: 0.9rem; }
 thead { height: 2rem; }
 th, td { padding: 0.15rem 0.15rem; }
