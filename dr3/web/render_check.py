@@ -479,13 +479,16 @@ def main() -> int:
               '--warning: #C4635A;' in board_css
               and '.board-row.dnf td { color: var(--warning); }' in board_css, '')
         check('club detail: championship standings table below the board (JS + CSS)',
-               '<h2 class="standings-title">Championship Standings</h2>' in det
-               and 'id="standings-table"' in det
-               and "function renderStandings(st) {" in det
-               and "' <span class=\"ps-bonus\">(+' + c.bonus + ')</span>'" in det
-               and "root + '/clubs/' + state.club_id + '/championship-standings?'" in det
-               and 'table.standings .num { text-align: right; font-variant-numeric: tabular-nums; }' in board_css
-               and '.ps-bonus { color: var(--accent); font-size: 0.85em; }' in board_css, '')
+                '<h2 class="standings-title">Championship Standings</h2>' in det
+                and 'id="standings-table"' in det
+                and "function renderStandings(st) {" in det
+                and "' <span class=\"ps-bonus\">(+' + c.bonus + ')</span>'" in det
+                and "root + '/clubs/' + state.club_id + '/championship-standings?'" in det
+                and "ths += '<th class=\"num\"' + (r.location ? ' data-tip=\"' + esc(r.location) + '\"' : '') + '>' + esc(r.label) + '</th>';" in det
+                and "['board-table', 'standings-table'].forEach(function (id) {" in det
+                and 'table.standings .num { text-align: right; font-variant-numeric: tabular-nums; }' in board_css
+                and 'table.standings th:nth-child(1), table.standings td:nth-child(1) { width: 2rem; text-align: center; }' in board_css
+                and '.ps-bonus { color: var(--accent); font-size: 0.85em; }' in board_css, '')
          # championship builder: create a fresh draft, render edit + preview
         r = client.post(f'/clubs/{club_id}/championship/new', data={'num_events': '2', 'num_stages': '3'}, follow_redirects=False)
         check('champ new -> redirect to edit', r.status_code == 302, f'status={r.status_code}')

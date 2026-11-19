@@ -697,6 +697,7 @@ table.standings th, table.standings td { padding: 0.3rem 0.7rem; text-align: lef
 table.standings thead th { border-bottom: 2px solid var(--line); color: var(--muted); font-size: 0.78rem; letter-spacing: 0.0em; text-transform: uppercase; }
 table.standings tbody tr + tr td { border-top: 1px solid var(--line); }
 table.standings .num { text-align: right; font-variant-numeric: tabular-nums; }
+table.standings th:nth-child(1), table.standings td:nth-child(1) { width: 2rem; text-align: center; }
 table.standings td.strong { font-weight: 700; color: var(--accent); }
 .ps-bonus { color: var(--accent); font-size: 0.85em; }
 .standings-note { color: var(--muted); font-size: 0.8rem; margin-top: 0.35rem; }

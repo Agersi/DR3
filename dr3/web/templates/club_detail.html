@@ -602,7 +602,7 @@
     var rounds = (st && st.rounds) || [];
     var ths = '<th>#</th><th>Driver</th>';
     rounds.forEach(function (r) {
-      ths += '<th class="num" title="' + esc(r.location || '') + '">' + esc(r.label) + '</th>';
+      ths += '<th class="num"' + (r.location ? ' data-tip="' + esc(r.location) + '"' : '') + '>' + esc(r.label) + '</th>';
     });
     ths += '<th class="num">Total</th>';
     head.innerHTML = '<tr>' + ths + '</tr>';
@@ -744,13 +744,15 @@
     tipTarget = null;
     tip.classList.remove('show');
   }
-  document.getElementById('board-table').addEventListener('mouseover', function (e) {
-    var el = e.target.closest('[data-tip]');
-    if (el === tipTarget) return;
-    tipTarget = el;
-    if (el) showTip(el); else hideTip();
+  ['board-table', 'standings-table'].forEach(function (id) {
+    document.getElementById(id).addEventListener('mouseover', function (e) {
+      var el = e.target.closest('[data-tip]');
+      if (el === tipTarget) return;
+      tipTarget = el;
+      if (el) showTip(el); else hideTip();
+    });
+    document.getElementById(id).addEventListener('mouseleave', hideTip);
   });
-  document.getElementById('board-table').addEventListener('mouseleave', hideTip);
   window.addEventListener('scroll', hideTip, { passive: true });
 
   renderAll();
