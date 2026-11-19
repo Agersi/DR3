@@ -109,7 +109,9 @@ def main() -> int:
           and 'Smoke Driver' in html
           and 'data-url="/api/home/recent-times"' in html
           and "addEventListener('scroll'" in html
-          and '.recent-box .num { text-align: right; font-variant-numeric: tabular-nums; }' in css, '')
+          and '.recent-box .num { text-align: right; font-variant-numeric: tabular-nums; }' in css
+          and '.recent-box th:first-child, .recent-box td:first-child { padding-left: .5rem; }' in css
+          and '.recent-box thead th:first-child { padding-left: calc(40px + .5rem); }' in css, '')
     check('home: recent-times rows link driver + car pages (driver names use driver-link)',
           '<a class="driver-link" href="/profile/smokedriver">Smoke Driver</a>' in html
           and "a.className = 'driver-link';" in html
