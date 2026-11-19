@@ -117,9 +117,8 @@
 </div>
 <script>
 (function () {
-  var box = document.getElementById('recent-times-box');
   var tbody = document.getElementById('recent-times-body');
-  if (!box || !tbody) return;
+  if (!tbody) return;
   var url = tbody.dataset.url;
   var offset = parseInt(tbody.dataset.offset, 10);
   var limit = parseInt(tbody.dataset.limit, 10);
@@ -281,9 +280,42 @@
 
   tbody.querySelectorAll('tr').forEach(applyTuning);
 
-  box.addEventListener('scroll', function () {
-    if (box.scrollTop + box.clientHeight >= box.scrollHeight - 40) loadMore();
+  tbody.addEventListener('scroll', function () {
+    if (tbody.scrollTop + tbody.clientHeight >= tbody.scrollHeight - 40) loadMore();
   });
+
+  // Board tooltips flow OUT of the scroll container: one fixed-position element
+  // on <body>, so nothing inside can clip it or grow its scroll area.
+  var tip = document.createElement('div');
+  tip.className = 'hover-tip';
+  document.body.appendChild(tip);
+  var tipTarget = null;
+  function showTip(el) {
+    var text = el.getAttribute('data-tip') || '';
+    tip.textContent = text;
+    tip.style.whiteSpace = text.indexOf('\n') >= 0 ? 'pre-line' : 'nowrap';
+    tip.classList.add('show');
+    var r = el.getBoundingClientRect();
+    var rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    var left = Math.min(Math.max(8, r.left + r.width / 2 - tip.offsetWidth / 2), window.innerWidth - tip.offsetWidth - 8);
+    var top = r.top - 0.3 * rem - tip.offsetHeight;
+    if (top < 4) top = r.bottom + 0.3 * rem;
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  }
+  function hideTip() {
+    tipTarget = null;
+    tip.classList.remove('show');
+  }
+  tbody.addEventListener('mouseover', function (e) {
+    var el = e.target.closest('[data-tip]');
+    if (el === tipTarget) return;
+    tipTarget = el;
+    if (el) showTip(el); else hideTip();
+  });
+  tbody.addEventListener('mouseleave', hideTip);
+  tbody.addEventListener('scroll', hideTip, { passive: true });
+  window.addEventListener('scroll', hideTip, { passive: true });
 })();
 </script>
 {% endif %}

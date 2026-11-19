@@ -137,10 +137,19 @@ def main() -> int:
     check('car stats page renders name + class',
           r.status_code == 200 and 'Porsche 911 RGT Rally Spec' in r.get_data(as_text=True)
           and 'Rally GT' in r.get_data(as_text=True), f'status={r.status_code}')
-    check('recent-box uses a custom scrollbar matching the palette',
-          '.recent-box { max-height: 360px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }' in css
-          and '.recent-box::-webkit-scrollbar { width: 10px; }' in css
-          and '.recent-box::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--card); }' in css, '')
+    check('recent-times scrollbar sits on tbody (header stays put), palette-matched',
+          '.recent-box { max-height: 360px; }' in css
+          and '.recent-box tbody { max-height: calc(360px - 2rem - 6px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }' in css
+          and '.recent-box tbody::-webkit-scrollbar { width: 10px; }' in css
+          and '.recent-box tbody::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--card); }' in css
+          and 'box.addEventListener' not in html
+          and "tbody.addEventListener('scroll', function () {" in html, '')
+    check('home: recent-times board-style hover tips (body-level fixed element on tbody)',
+          "tip.className = 'hover-tip';" in html
+          and "e.target.closest('[data-tip]')" in html
+          and "tbody.addEventListener('mouseover'" in html
+          and "tbody.addEventListener('mouseleave', hideTip);" in html
+          and ".hover-tip {\n  position: fixed;" in css, '')
     check('home: stat cards link out (drivers + combined clubs card) + terminal-damage card',
           '<a class="stat-card stat-drivers" href="/drivers">' in html
           and '<a class="stat-link" href="/clubs">' in html
