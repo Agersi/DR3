@@ -353,6 +353,7 @@ th, td { padding: 0.15rem 0.15rem; }
 .table-wrap td { padding: .15rem; vertical-align: middle; }
 .table tr:nth-child(even) td, .table-wrap tr:nth-child(even) td { background: rgba(24, 28, 20, 0.25); }
 .table tr:last-child td, .table-wrap tr:last-child td { border-bottom: 0; }
+.live-events th:nth-child(1), .live-events td:nth-child(1) { padding-left: .5rem; }
 .live-events th:nth-child(2), .live-events td:nth-child(2), .live-events th:nth-child(7), .live-events td:nth-child(7) { text-align: center; }
 td:has(.driver-dot) { display: flex; justify-content: center; align-items: center; gap: 0.4rem; }
 .driver-dot {

@@ -286,7 +286,9 @@ def main() -> int:
           'class="live-events"' in dash_html
           and '<thead>' in dash_html and '<tbody>' in dash_html
           and '.live-events td:not(:first-child) { border-left: 1px solid var(--line); }' not in dash_css
+          and '.live-events th:nth-child(1), .live-events td:nth-child(1) { padding-left: .5rem; }' in dash_css
           and '.live-events th:nth-child(2), .live-events td:nth-child(2), .live-events th:nth-child(7), .live-events td:nth-child(7) { text-align: center; }' in dash_css
+          and '<a class="driver-link" href="/clubs/' in dash_html
           and 'td:has(.driver-dot) { display: flex; justify-content: center; align-items: center; gap: 0.4rem; }' in dash_css
           and 'width: 2rem; height: 2rem; border-radius: 50%;' in dash_css
           and 'th, td { padding: 0.15rem 0.15rem; }' in dash_css

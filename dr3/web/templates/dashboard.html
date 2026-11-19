@@ -24,7 +24,7 @@
       <tbody>
       {% for e in active_events %}
       <tr>
-        <td><a href="{{ url_for('clubs.club_detail', club_id=e['club_id']) }}">{{ e['name'] }}</a></td>
+        <td><a class="driver-link" href="{{ url_for('clubs.club_detail', club_id=e['club_id']) }}">{{ e['name'] }}</a></td>
         <td><span class="chip">{{ e.mode_label }}</span></td>
         <td>{{ e.current_end | countdown }}</td>
         <td>{{ e.end_time | countdown }}</td>
