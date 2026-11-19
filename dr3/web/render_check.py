@@ -112,10 +112,10 @@ def main() -> int:
           and '.recent-box .num { text-align: right; font-variant-numeric: tabular-nums; }' in css
           and '.recent-box th:first-child, .recent-box td:first-child { padding-left: .5rem; }' in css
           and '.recent-box thead th:first-child { padding-left: calc(40px + .5rem); }' in css, '')
-    check('home: recent-times rows link driver + car pages (driver names use driver-link)',
+    check('home: recent-times rows link driver + club + vehicle pages (all use driver-link)',
           '<a class="driver-link" href="/profile/smokedriver">Smoke Driver</a>' in html
           and "a.className = 'driver-link';" in html
-          and '<a href="/cars/1">Vehicle 1</a>' in html, '')
+          and '<a class="driver-link" href="/cars/1">Vehicle 1</a>' in html, '')
     check('home: recent-times Time + Posted columns use num class (headers, server + JS rows)',
           '<th class="num">Time</th>' in html and '<th class="num">Posted</th>' in html
           and html.count('<td class="num">') == 2
