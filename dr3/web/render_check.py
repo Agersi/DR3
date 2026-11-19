@@ -121,6 +121,18 @@ def main() -> int:
           and html.count('<td class="num">') == 2
           and "tr.appendChild(cell(row.time_text, 'num'));" in html
           and "tr.appendChild(cell(row.at_text, 'num'));" in html, '')
+    check('home: recent-times Tyres/Spares/Input/Camera columns (data attrs + board-style cell JS)',
+          '<th>Tyres</th>' in html and '<th>Spares</th>' in html
+          and '<th>Input</th>' in html and '<th>Camera</th>' in html
+          and 'class="tyre-cell" data-tyres="[]"' in html
+          and 'class="spare-cell" data-spares=""' in html
+          and 'class="input-cell" data-input=""' in html
+          and 'class="cam-cell" data-camera=""' in html
+          and 'function tyreCell(' in html and 'function spareCell(' in html
+          and 'function inputCell(' in html and 'function camCell(' in html
+          and "tuningCells(row).forEach(function (td) { tr.appendChild(td); });" in html
+          and "tbody.querySelectorAll('tr').forEach(applyTuning);" in html
+          and '.recent-box th:nth-child(4), .recent-box td:nth-child(4)' in css, '')
     r = client.get('/cars/565')
     check('car stats page renders name + class',
           r.status_code == 200 and 'Porsche 911 RGT Rally Spec' in r.get_data(as_text=True)

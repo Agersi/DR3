@@ -93,7 +93,7 @@
 <div class="table-wrap recent-box" id="recent-times-box">
   <table class="table">
     <thead>
-      <tr><th>Driver</th><th>Club</th><th>Car</th><th class="num">Time</th><th class="num">Posted</th></tr>
+      <tr><th>Driver</th><th>Club</th><th>Car</th><th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th class="num">Time</th><th class="num">Posted</th></tr>
     </thead>
     <tbody id="recent-times-body"
            data-url="{{ url_for('pages.home_recent_times') }}"
@@ -104,6 +104,10 @@
         <td>{{ flag_img(row.driver_flag) }}<a class="driver-link" href="{{ url_for('pages.profile', username=row.driver_username) }}">{{ row.driver }}</a></td>
         <td>{% if row.club_id %}<a href="{{ url_for('clubs.club_detail', club_id=row.club_id) }}">{{ row.club }}</a>{% else %}—{% endif %}</td>
         <td>{% if row.vehicle_id %}<a href="{{ url_for('pages.car_stats', vehicle_id=row.vehicle_id) }}">{{ row.car }}</a>{% else %}{{ row.car or '—' }}{% endif %}</td>
+        <td class="tyre-cell" data-tyres="{{ row.tyres|tojson }}"></td>
+        <td class="spare-cell" data-spares="{{ '' if row.spares is none else row.spares }}"></td>
+        <td class="input-cell" data-input="{{ row.input or '' }}" data-vr="{{ '1' if row.vr else '' }}" data-assists="{{ '1' if row.assists else '' }}"></td>
+        <td class="cam-cell" data-camera="{{ row.camera or '' }}"></td>
         <td class="num">{{ row.time_text }}</td>
         <td class="num">{{ row.at|timeago }}</td>
       </tr>
@@ -121,6 +125,95 @@
   var limit = parseInt(tbody.dataset.limit, 10);
   var loading = false;
   var done = false;
+  var STATIC = '{{ request.script_root or '' }}/static/';
+  var INPUT_ICON = { wheel: 'wheel.png', controller: 'controller.png', keyboard: 'keyboard.png' };
+  var TYRE_FILE = {
+    1: '1_soft_gravel', 2: '2_medium_gravel', 3: '3_hard_gravel', 4: '4_wet_tarmac',
+    6: '6_soft_tarmac', 7: '7_medium_tarmac', 8: '8_hard_tarmac', 9: '9_winter',
+    10: '10_snow', 11: '11_wet_rx', 13: '13_dry_rx'
+  };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function tyreName(slug) {
+    if (slug === '#_unknown') return 'Unknown';
+    var s = slug.replace(/^\d+_/, '').replace(/_/g, ' ');
+    return s.replace(/\b\w/g, function (c) { return c.toUpperCase(); }).replace(/\bRx\b/g, 'RX');
+  }
+
+  function tyreCell(tyres) {
+    if (!tyres || !tyres.length) return '<span class="ink">—</span>';
+    return tyres.map(function (t) {
+      var slug = TYRE_FILE[t] || '#_unknown';
+      var name = esc(tyreName(slug));
+      return '<span class="tyre-img" data-tip="' + name + '"><img src="' + STATIC + 'tyres/' + slug + '.png" alt="" aria-label="' + name + '"></span>';
+    }).join(' ');
+  }
+
+  function spareCell(v) {
+    if (v == null) return '<span class="ink">—</span>';
+    var n = Number(v);
+    var tip = n === 0 ? 'No spare tyres' : (n + (n === 1 ? ' spare tyre' : ' spare tyres'));
+    return '<span data-tip="' + tip + '">' + n + '</span>';
+  }
+
+  function inputCell(v, vr, assists) {
+    var parts = [];
+    var tips = [];
+    if (v && INPUT_ICON[v]) {
+      parts.push('<img class="input-icon" src="' + STATIC + 'icons/' + INPUT_ICON[v] + '" alt="' + esc(v) + '">');
+      tips.push(v.charAt(0).toUpperCase() + v.slice(1));
+    } else if (v) {
+      parts.push(esc(v));
+    }
+    if (vr === true) {
+      parts.push('<img class="input-icon" src="' + STATIC + 'icons/vr.png" alt="VR">');
+      tips.push('VR');
+    }
+    if (assists === true) {
+      parts.push('<img class="input-icon" src="' + STATIC + 'icons/assist.png" alt="Assists on">');
+      tips.push('Assists');
+    }
+    if (!parts.length) return '<span class="ink">—</span>';
+    if (!tips.length) return parts.join(' ');
+    return '<span class="input-tip" data-tip="' + esc(tips.join('\n')) + '">' + parts.join(' ') + '</span>';
+  }
+
+  function camCell(v) {
+    if (!v) return '<span class="ink">—</span>';
+    var s = String(v).replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+    return esc(s);
+  }
+
+  function applyTuning(tr) {
+    var t = tr.querySelector('td.tyre-cell');
+    if (t) t.innerHTML = tyreCell(JSON.parse(t.dataset.tyres || '[]'));
+    t = tr.querySelector('td.spare-cell');
+    if (t) t.innerHTML = spareCell(t.dataset.spares === '' ? null : Number(t.dataset.spares));
+    t = tr.querySelector('td.input-cell');
+    if (t) t.innerHTML = inputCell(t.dataset.input || null, t.dataset.vr === '1', t.dataset.assists === '1');
+    t = tr.querySelector('td.cam-cell');
+    if (t) t.innerHTML = camCell(t.dataset.camera || null);
+  }
+
+  function tuningCells(row) {
+    var out = [];
+    function mk(cls, attrs) {
+      var td = document.createElement('td');
+      td.className = cls;
+      for (var k in attrs) td.dataset[k] = attrs[k];
+      out.push(td);
+    }
+    mk('tyre-cell', { tyres: JSON.stringify(row.tyres || []) });
+    mk('spare-cell', { spares: row.spares == null ? '' : String(row.spares) });
+    mk('input-cell', { input: row.input || '', vr: row.vr === true ? '1' : '', assists: row.assists === true ? '1' : '' });
+    mk('cam-cell', { camera: row.camera || '' });
+    return out;
+  }
 
   function cell(text, cls, url) {
     var td = document.createElement('td');
@@ -173,8 +266,10 @@
           tr.appendChild(driverCell(row));
           tr.appendChild(cell(row.club, '', row.club_url));
           tr.appendChild(cell(row.car, '', row.car_url));
+          tuningCells(row).forEach(function (td) { tr.appendChild(td); });
           tr.appendChild(cell(row.time_text, 'num'));
           tr.appendChild(cell(row.at_text, 'num'));
+          applyTuning(tr);
           tbody.appendChild(tr);
         });
         offset += rows.length;
@@ -183,6 +278,8 @@
       .catch(function () { done = true; })
       .then(function () { loading = false; });
   }
+
+  tbody.querySelectorAll('tr').forEach(applyTuning);
 
   box.addEventListener('scroll', function () {
     if (box.scrollTop + box.clientHeight >= box.scrollHeight - 40) loadMore();

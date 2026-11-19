@@ -368,6 +368,7 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .recent-box .num { text-align: right; font-variant-numeric: tabular-nums; }
 .recent-box th:first-child, .recent-box td:first-child { padding-left: .5rem; }
 .recent-box thead th:first-child { padding-left: calc(40px + .5rem); }
+.recent-box th:nth-child(4), .recent-box td:nth-child(4), .recent-box th:nth-child(5), .recent-box td:nth-child(5), .recent-box th:nth-child(6), .recent-box td:nth-child(6) { text-align: center; }
 .flag { height: .95em; width: auto; vertical-align: -0.18em; margin-right: 0.3em; }
 
 /* ── Profile driving stats: two-column layout ───────── */

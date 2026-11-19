@@ -83,7 +83,7 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
     Each row is a single submitted stage slot (the latest submission for that
     stage), so the front page's recent-times box can page through all of them."""
     from ..countries import flag_url
-    from ..results_view import format_ms
+    from ..results_view import _run_attrs, _spare_tyres, format_ms
     from ..scoring import car_label
 
     club_name = {c.id: c.name for c in Club.query.all()}
@@ -92,16 +92,34 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
     country_of = {u.username: (u.country or '') for u in users}
     event_of = {e.id: e for e in Event.query.all()}
 
+    # Latest StageRun per (event, driver, flat stage) — the same source the
+    # club board reads tyre/input/camera/assists from.
+    runs_of = {}
+    for run in StageRun.query.all():
+        key = (run.event_id, run.username, run.flat_stage_index)
+        if None in key:
+            continue
+        cur = runs_of.get(key)
+        if cur is None or (run.received_at, run.id) > (cur.received_at, cur.id):
+            runs_of[key] = run
+    # Tuning blobs per slot — the spares fallback for pre-v0.1.74 clients.
+    tuning_of = {}
+    for st in ClubStageState.query.all():
+        if st.tuning_setup_b64:
+            tuning_of[(st.event_id, st.username, st.flat_stage_index)] = \
+                st.tuning_setup_b64
+
     rows = []
     for r in Result.query.all():
         ev = event_of.get(r.event_id)
         club = club_name.get(ev.club_id, '') if ev and ev.club_id else ''
         car = car_label({'vehicle_id': r.vehicle_id, 'car': r.car})
-        for s in json.loads(r.stages_json or '[]'):
+        for i, s in enumerate(json.loads(r.stages_json or '[]')):
             t = int(s.get('time_ms', 0) or 0)
             sa = s.get('submitted_at')
             if t <= 0 or not sa:
                 continue
+            a = _run_attrs(runs_of.get((r.event_id, r.username, i)))
             rows.append({
                 'driver': display_name.get(r.username, r.username),
                 'driver_username': r.username,
@@ -112,6 +130,16 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
                 'vehicle_id': r.vehicle_id,
                 'time_text': format_ms(t),
                 'at': sa,
+                'tyres': [a['tyre']] if a['tyre'] is not None else [],
+                'spares': _spare_tyres({
+                    'spare_tyres': s.get('spare_tyres'),
+                    'tuning_setup_b64':
+                        tuning_of.get((r.event_id, r.username, i)),
+                }),
+                'input': a['input'],
+                'vr': a['vr'],
+                'camera': a['camera'],
+                'assists': a['assists'],
             })
     rows.sort(key=lambda x: x['at'], reverse=True)
     if limit is not None:
@@ -209,6 +237,12 @@ def home_recent_times():
             'car_url': url_for('pages.car_stats', vehicle_id=row['vehicle_id']) if row['vehicle_id'] else '',
             'time_text': row['time_text'],
             'at_text': _timeago(dt) if dt else '',
+            'tyres': row['tyres'],
+            'spares': row['spares'],
+            'input': row['input'],
+            'vr': row['vr'],
+            'camera': row['camera'],
+            'assists': row['assists'],
         })
     return jsonify({'ok': True, 'rows': rows})
 

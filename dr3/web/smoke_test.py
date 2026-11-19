@@ -1098,6 +1098,11 @@ def main() -> int:
           and rows[0].get('driver') == 'Smoke Driver'
           and rows[0].get('time_text')
           and rows[0].get('at_text'), str(j)[:300])
+    check('recent-times row carries tuning fields (null without a run detail)',
+          rows[0].get('tyres') == [] and rows[0].get('spares') is None
+          and rows[0].get('input') is None and rows[0].get('vr') is None
+          and rows[0].get('camera') is None and rows[0].get('assists') is None,
+          str(rows)[:300])
     check('recent-times row carries driver/car links (no club on this event)',
           rows[0].get('driver_url') == '/profile/smokedriver'
           and rows[0].get('car_url') == '/cars/1'
@@ -1111,7 +1116,7 @@ def main() -> int:
     # stats page is a super-simple name+class panel for now.
     with app.app_context():
         from datetime import timedelta
-        from app.models import Club, ClubMember, Event, Result
+        from app.models import Club, ClubMember, Event, Result, StageRun
         u = db.session.query(User).filter_by(username='smokedriver').first()
         db.session.add(Club(id='smoke-link-club', name='Smoke Link Club',
                             created_by=u.id))
@@ -1136,8 +1141,13 @@ def main() -> int:
         db.session.add(Result(
             event_id='smoke-link-event', username='smokedriver', vehicle_id=565,
             total_time_ms=200000, stages_json=json.dumps([
-                {'time_ms': 200000, 'submitted_at': (utcnow() - timedelta(minutes=1)).isoformat()}]),
+                {'time_ms': 200000, 'spare_tyres': 2,
+                 'submitted_at': (utcnow() - timedelta(minutes=1)).isoformat()}]),
         ))
+        db.session.add(StageRun(
+            username='smokedriver', event_id='smoke-link-event',
+            flat_stage_index=0, time_ms=200000, player_finished=True,
+            tyre_compound=2, input_method='wheel', camera_position='chase_close'))
         db.session.commit()
 
     r = client.get('/api/home/recent-times?offset=0&limit=25')
@@ -1149,6 +1159,12 @@ def main() -> int:
           and link['club_url'] == '/clubs/smoke-link-club'
           and link['car_url'] == '/cars/565'
           and link['car'] == 'Porsche 911 RGT Rally Spec', str(link or rows)[:300])
+    check('recent-times row carries tuning fields (run detail + stage entry)',
+          link is not None
+          and link['tyres'] == [2] and link['spares'] == 2
+          and link['input'] == 'wheel' and link['camera'] == 'chase_close'
+          and link['vr'] is False and link['assists'] is False,
+          str(link or rows)[:300])
 
     r = client.get('/cars/565')
     check('car stats page shows name + class',
@@ -1160,8 +1176,9 @@ def main() -> int:
           f'status={r.status_code}')
 
     with app.app_context():
-        from app.models import Club, ClubMember, Event, Result
+        from app.models import Club, ClubMember, Event, Result, StageRun
         db.session.query(Result).filter_by(event_id='smoke-link-event').delete()
+        db.session.query(StageRun).filter_by(event_id='smoke-link-event').delete()
         db.session.query(Event).filter_by(id='smoke-link-event').delete()
         db.session.query(ClubMember).filter_by(club_id='smoke-link-club').delete()
         db.session.query(Club).filter_by(id='smoke-link-club').delete()
