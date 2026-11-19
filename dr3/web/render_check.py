@@ -290,7 +290,7 @@ def main() -> int:
           and '.live-events th:nth-child(2), .live-events td:nth-child(2), .live-events th:nth-child(7), .live-events td:nth-child(7) { text-align: center; }' in dash_css
           and '<a class="driver-link" href="/clubs/' in dash_html
           and 'td:has(.driver-dot) { display: flex; justify-content: center; align-items: center; gap: 0.4rem; }' in dash_css
-          and 'width: 2rem; height: 2rem; border-radius: 50%;' in dash_css
+          and 'width: 1.5rem; height: 1.5rem; border-radius: 50%;' in dash_css
           and 'th, td { padding: 0.15rem 0.15rem; }' in dash_css
           and '.table-wrap { overflow-x: auto; background: var(--card); border: 2px solid var(--line); box-shadow: 4px 4px 4px var(--shadow); margin: 1rem 0; }' in dash_css
           and 'table.table, .table-wrap table { width: 100%; border-collapse: collapse; background: var(--card); margin: 0; font-size: 0.9rem; }' in dash_css

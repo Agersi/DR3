@@ -358,8 +358,8 @@ th, td { padding: 0.15rem 0.15rem; }
 td:has(.driver-dot) { display: flex; justify-content: center; align-items: center; gap: 0.4rem; }
 .driver-dot {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 2rem; height: 2rem; border-radius: 50%;
-  font-family: var(--display); font-weight: 600; font-size: 0.82rem; color: var(--bg);
+  width: 1.5rem; height: 1.5rem; border-radius: 50%;
+  font-weight: 600; font-size: 0.65rem; color: var(--bg); font-family: var(--body);
 }
 .dot-red { background: #e05252; box-shadow: 0 0 14px rgba(224, 82, 82, 0.75); }
 .dot-yellow { background: #e8c33f; box-shadow: 0 0 14px rgba(232, 195, 63, 0.75); }
