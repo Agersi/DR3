@@ -344,7 +344,7 @@ table.table, .table-wrap table { width: 100%; border-collapse: collapse; backgro
   padding: 0.55rem 0.7rem; text-align: left; border: 0;
 }
 .table td { padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
-.table-wrap td { padding: 0.5rem 0.7rem; vertical-align: middle; }
+.table-wrap td { padding: .15rem; vertical-align: middle; }
 .table tr:nth-child(even) td, .table-wrap tr:nth-child(even) td { background: rgba(24, 28, 20, 0.25); }
 .table tr:last-child td, .table-wrap tr:last-child td { border-bottom: 0; }
 .live-events td:not(:first-child) { border-left: 1px solid var(--line); }
@@ -698,6 +698,8 @@ table.standings thead th { border-bottom: 2px solid var(--line); color: var(--mu
 table.standings tbody tr + tr td { border-top: 1px solid var(--line); }
 table.standings .num { text-align: right; font-variant-numeric: tabular-nums; }
 table.standings th:nth-child(1), table.standings td:nth-child(1) { width: 2rem; text-align: center; }
+table.standings th:nth-child(2) { padding-left: 40px; }
+#standings-head { height: 2rem; }
 table.standings td.strong { font-weight: 700; color: var(--accent); }
 .ps-bonus { color: var(--accent); font-size: 0.85em; }
 .standings-note { color: var(--muted); font-size: 0.8rem; margin-top: 0.35rem; }

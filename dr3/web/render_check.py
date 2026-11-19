@@ -285,7 +285,7 @@ def main() -> int:
           and '.live-events td:not(:first-child) { border-left: 1px solid var(--line); }' in dash_css
           and 'td:has(.driver-dot) { display: flex; justify-content: center; align-items: center; gap: 0.4rem; }' in dash_css
           and 'width: 2rem; height: 2rem; border-radius: 50%;' in dash_css
-          and '.table-wrap td { padding: 0.5rem 0.7rem; vertical-align: middle; }' in dash_css
+          and '.table-wrap td { padding: .15rem; vertical-align: middle; }' in dash_css
           and '.dot-red { background: #e05252; box-shadow: 0 0 14px rgba(224, 82, 82, 0.75); }' in dash_css
           and '.dot-yellow { background: #e8c33f; box-shadow: 0 0 14px rgba(232, 195, 63, 0.75); }' in dash_css
             and '.dot-green { background: #71b348; box-shadow: 0 0 14px rgba(113, 179, 72, 0.75); }' in dash_css, '')
@@ -488,6 +488,8 @@ def main() -> int:
                 and "['board-table', 'standings-table'].forEach(function (id) {" in det
                 and 'table.standings .num { text-align: right; font-variant-numeric: tabular-nums; }' in board_css
                 and 'table.standings th:nth-child(1), table.standings td:nth-child(1) { width: 2rem; text-align: center; }' in board_css
+                and 'table.standings th:nth-child(2) { padding-left: 40px; }' in board_css
+                and '#standings-head { height: 2rem; }' in board_css
                 and '.ps-bonus { color: var(--accent); font-size: 0.85em; }' in board_css, '')
          # championship builder: create a fresh draft, render edit + preview
         r = client.post(f'/clubs/{club_id}/championship/new', data={'num_events': '2', 'num_stages': '3'}, follow_redirects=False)
