@@ -222,11 +222,14 @@ class ClubStageState(db.Model):
 
 
 class TimeTrialEntry(db.Model):
-    """A driver's personal best on a given car at a given track + conditions —
-    one row per user + car + track + conditions, updated by ANY run type (club
-    stages, official dailies/weeklies/monthlies and time trials all post a
-    PostTime carrying the run's ghost). category is stored alongside the key
-    (not part of it) as the game's leaderboard-type flag of the best run;
+    """A driver's personal best on a given car at a given track + conditions +
+    tyre compound — one row per user + car + track + conditions + compound,
+    updated by ANY run type (club stages, official dailies/weeklies/monthlies
+    and time trials all post a PostTime carrying the run's ghost). The compound
+    comes from the StageEnded snapshot (the only channel that reports it); a
+    PostTime that lands before its snapshot files a compound=0 placeholder row
+    that the stage-detail follow-up resolves. category is stored alongside the
+    key (not part of it) as the game's leaderboard-type flag of the best run;
     vclass likewise for future class-based UI. The ghost belongs to the
     current best run — every new best replaces it with its own."""
     __tablename__ = 'best_times'
@@ -240,7 +243,8 @@ class TimeTrialEntry(db.Model):
     stage_time_ms: int = db.Column(db.BigInteger, nullable=False)
     vehicle_id: int = db.Column(db.Integer, nullable=False)
     livery_id: int | None = db.Column(db.Integer)
-    nationality_id: int | None = db.Column(db.Integer)
+    # 0 = unknown (a PostTime placeholder not yet resolved by its snapshot).
+    tyre_compound: int = db.Column(db.Integer, nullable=False, default=0)
     using_wheel: bool | None = db.Column(db.Boolean)
     using_assists: bool | None = db.Column(db.Boolean)
     # MEDIUMTEXT on MySQL (16 MiB): a long stage's base64 ghost can exceed the
@@ -252,7 +256,7 @@ class TimeTrialEntry(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint('vehicle_id', 'track', 'conditions', 'username',
-                            name='uq_best_times_key'),
+                            'tyre_compound', name='uq_best_times_key'),
         db.Index('ix_best_times_username', 'username'),
     )
 

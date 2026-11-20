@@ -210,6 +210,7 @@ def _create_schema(db) -> None:
     _ensure_tt_ghost_column(db)
     _ensure_tt_vehicle_key(db)
     _ensure_best_times_key(db)
+    _ensure_best_times_compound(db)
     _ensure_stage_run_columns(db)
     _ensure_club_stage_states(db)
 
@@ -633,6 +634,114 @@ def _ensure_best_times_key(db) -> None:
                         'TO ix_best_times_username'))
             except OperationalError:
                 pass  # lost the boot race; another worker renamed it
+
+
+def _ensure_best_times_compound(db) -> None:
+    """Tyre-compound re-key of best_times: personal bests are now tracked per
+    tyre compound, so the unique key gains tyre_compound and the never-read
+    nationality_id column goes away.
+
+    Steps (each idempotent — a partially migrated DB finishes on next boot):
+    1. add the tyre_compound column (0 = unknown);
+    2. one-shot backfill from stage_runs — the StageEnded snapshot is the only
+       channel that reports the compound: prefer the run whose time matches the
+       stored best exactly, else the most recent same car + track + conditions
+       run with a known compound;
+    3. re-key uq_best_times_key from 4 to 5 columns (no dedupe needed — adding
+       a column to a unique key cannot create collisions);
+    4. drop nationality_id (MySQL only — SQLite dev DBs are scratch).
+
+    No-ops on a fresh database (create_all already builds the new schema).
+
+    Note: on the FIRST boot after the column is added, every gunicorn worker
+    backfills the full zero-row set concurrently and InnoDB may deadlock one of
+    them (1213) — that worker fails to boot, systemd restarts the service, and
+    the retry finishes the job (observed in production 2026-11-20). Afterwards
+    only unresolvable rows stay at 0 and emit no UPDATEs, so the race cannot
+    recur."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+
+    from .models import StageRun, TimeTrialEntry
+
+    insp = db.inspect(db.engine)
+    dialect = db.engine.dialect.name
+    cols = {c['name'] for c in insp.get_columns('best_times')}
+
+    if 'tyre_compound' not in cols:
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text(
+                    'ALTER TABLE best_times ADD COLUMN tyre_compound '
+                    'INTEGER NOT NULL DEFAULT 0'))
+        except OperationalError as e:
+            # Lost the boot race to another worker adding the same column.
+            if '1060' not in str(e) and 'duplicate column' not in str(e):
+                raise
+
+    # Rows still at 0 (freshly added column, or a placeholder left behind when
+    # the client died between PostTime and its StageEnded snapshot).
+    zero = db.session.query(TimeTrialEntry).filter_by(tyre_compound=0).all()
+    if zero:
+        pool: dict = {}
+        for sr_username, sr_vehicle, sr_track, sr_cond, sr_ms, sr_compound, sr_at in \
+                db.session.query(StageRun.username, StageRun.vehicle_id,
+                                 StageRun.track_model_id, StageRun.conditions_id,
+                                 StageRun.time_ms, StageRun.tyre_compound,
+                                 StageRun.received_at).all():
+            if not sr_compound or not sr_vehicle or sr_track is None:
+                continue
+            key = (sr_username, sr_vehicle, str(sr_track)[:8],
+                   str(sr_cond)[:8] if sr_cond is not None else '0')
+            pool.setdefault(key, []).append((sr_ms or 0, sr_compound, sr_at))
+        for b in zero:
+            candidates = pool.get(
+                (b.username, b.vehicle_id, str(b.track)[:8], str(b.conditions)[:8])) \
+                or []
+            pick = next(((ms, c, at) for ms, c, at in candidates
+                         if ms == (b.stage_time_ms or 0)), None)
+            if pick is None and candidates:
+                pick = max(candidates, key=lambda t: t[2] or datetime.min)
+            if pick is not None:
+                b.tyre_compound = int(pick[1])
+        db.session.commit()
+
+    indexes = db.inspect(db.engine).get_indexes('best_times')
+    old_ix = next((ix for ix in indexes
+                   if set(ix['column_names']) == {'vehicle_id', 'track',
+                                                  'conditions', 'username'}), None)
+    if old_ix is not None:
+        try:
+            with db.engine.begin() as conn:
+                if dialect == 'mysql':
+                    conn.execute(text('SET SESSION lock_wait_timeout = 30'))
+                    conn.execute(
+                        text(f'ALTER TABLE best_times DROP INDEX `{old_ix["name"]}`'))
+                    conn.execute(text(
+                        'ALTER TABLE best_times ADD CONSTRAINT uq_best_times_key '
+                        'UNIQUE (vehicle_id, track, conditions, username, '
+                        'tyre_compound)'))
+                else:  # sqlite (only reachable on a stale dev DB)
+                    conn.execute(text(f'DROP INDEX IF EXISTS {old_ix["name"]}'))
+                    conn.execute(text(
+                        'CREATE UNIQUE INDEX uq_best_times_key ON best_times '
+                        '(vehicle_id, track, conditions, username, tyre_compound)'))
+        except OperationalError as e:
+            # Lost the boot race to another worker doing the same re-key.
+            if not ('1091' in str(e) or '1061' in str(e)
+                    or 'no such index' in str(e).lower()
+                    or 'already exists' in str(e).lower()):
+                raise
+
+    if dialect == 'mysql' and 'nationality_id' in {
+            c['name'] for c in db.inspect(db.engine).get_columns('best_times')}:
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text('SET SESSION lock_wait_timeout = 30'))
+                conn.execute(text(
+                    'ALTER TABLE best_times DROP COLUMN nationality_id'))
+        except OperationalError:
+            pass  # lost the boot race; another worker dropped it
 
 
 def _ensure_stage_run_columns(db) -> None:

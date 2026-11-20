@@ -365,6 +365,71 @@ def main() -> int:
     check('bests: per car + track + conditions rows (unit)',
           n == 4, f'n={n}')
 
+    # The key gains the tyre compound: distinct compounds on the same
+    # car + track + conditions keep their own bests, and a slower time on one
+    # compound never touches another's row.
+    with app.app_context():
+        _upsert_best('smokedriver', 12, '21', '9', 300000, category=1, vclass=97,
+                     ghost_b64='Y29tcA==', splits=[50.0], tyre_compound=2)
+        _upsert_best('smokedriver', 12, '21', '9', 290000, category=1, vclass=97,
+                     ghost_b64='Y29tVA==', splits=[49.0], tyre_compound=5)
+        # slower time on compound 2 — must not touch either row
+        _upsert_best('smokedriver', 12, '21', '9', 350000, category=1, vclass=97,
+                     ghost_b64='bG93', tyre_compound=2)
+        crows = db.session.query(_Best).filter_by(
+            username='smokedriver', vehicle_id=12, track='21', conditions='9').all()
+        _c_by_compound = {r.tyre_compound: r for r in crows}
+        _c2_ms = _c_by_compound.get(2).stage_time_ms if 2 in _c_by_compound else None
+        _c2_gh = _c_by_compound.get(2).ghost_data_b64 if 2 in _c_by_compound else None
+        _c5_ms = _c_by_compound.get(5).stage_time_ms if 5 in _c_by_compound else None
+        db.session.commit()
+    check('bests: per tyre compound rows, slower on one leaves the other (unit)',
+          len(crows) == 2 and _c2_ms == 300000 and _c2_gh == 'Y29tcA=='
+          and _c5_ms == 290000,
+          f'rows={len(crows)} c2={_c2_ms}/{_c2_gh} c5={_c5_ms}')
+
+    # Two-step landing: the PostTime (no compound) files a compound=0
+    # placeholder; the stage-detail follow-up (compound known, same ms) adopts
+    # it — one row, this run's ghost kept, splits absorbed.
+    with app.app_context():
+        _upsert_best('smokedriver', 13, '22', '9', 500000, category=1, vclass=97,
+                     ghost_b64='Z3dob3N0')
+        _upsert_best('smokedriver', 13, '22', '9', 500000, category=1, vclass=97,
+                     splits=[60.0], tyre_compound=8)
+        arows = db.session.query(_Best).filter_by(
+            username='smokedriver', vehicle_id=13, track='22', conditions='9').all()
+        _a = arows[0] if arows else None
+        _a_ms = _a.stage_time_ms if _a else None
+        _a_comp = _a.tyre_compound if _a else None
+        _a_gh = _a.ghost_data_b64 if _a else None
+        _a_splits = json.loads(_a.splits_json) if _a and _a.splits_json else None
+        db.session.commit()
+    check('bests: placeholder adopted by its stage-detail follow-up (unit)',
+          len(arows) == 1 and _a_ms == 500000 and _a_comp == 8
+          and _a_gh == 'Z3dob3N0' and _a_splits == [60.0],
+          f'rows={len(arows)} ms={_a_ms} comp={_a_comp} gh={_a_gh}')
+
+    # New best on a known compound: the PostTime placeholder's ghost must ride
+    # along into the replace (the stage-detail channel itself carries no ghost),
+    # and the placeholder is dropped.
+    with app.app_context():
+        _upsert_best('smokedriver', 13, '22', '9', 490000, category=1, vclass=97,
+                     ghost_b64='bmV3YmVzdA==')
+        _upsert_best('smokedriver', 13, '22', '9', 490000, category=1, vclass=97,
+                     splits=[59.0], tyre_compound=8)
+        mrows = db.session.query(_Best).filter_by(
+            username='smokedriver', vehicle_id=13, track='22', conditions='9').all()
+        _m = mrows[0] if mrows else None
+        _m_ms = _m.stage_time_ms if _m else None
+        _m_comp = _m.tyre_compound if _m else None
+        _m_gh = _m.ghost_data_b64 if _m else None
+        _m_splits = json.loads(_m.splits_json) if _m and _m.splits_json else None
+        db.session.commit()
+    check('bests: faster known-compound run merges placeholder ghost (unit)',
+          len(mrows) == 1 and _m_ms == 490000 and _m_comp == 8
+          and _m_gh == 'bmV3YmVzdA==' and _m_splits == [59.0],
+          f'rows={len(mrows)} ms={_m_ms} comp={_m_comp} gh={_m_gh}')
+
     # stats-record retired (#56): the endpoint is a no-op (proxied runs now land
     # in stage_runs via /api/game/stage-detail); snapshot the baseline first so
     # the deltas are deterministic regardless of earlier submissions.

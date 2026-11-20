@@ -301,42 +301,75 @@ def api_game_stage_begin():
 
 def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
                  category=None, vclass=None, livery_id=None,
-                 nationality_id=None, using_wheel=None, using_assists=None,
-                 ghost_b64=None, splits=None) -> None:
+                 using_wheel=None, using_assists=None,
+                 ghost_b64=None, splits=None, tyre_compound=None) -> None:
     """Update the driver's personal best (best_times) for car + track +
-    conditions. Every run type posts here — club/official/TT PostTimes (with the
-    run's ghost) and clean stage-detail finishes (splits, no ghost).
+    conditions + tyre compound. Every run type posts here — club/official/TT
+    PostTimes (with the run's ghost, no compound) and clean stage-detail
+    finishes (splits + the compound from the StageEnded snapshot, no ghost).
 
-    Rules: a missing row is created; a strictly faster time replaces it (the
-    ghost belongs to the best run, so it is replaced too when carried); an
-    EQUAL-ms submission is the same run arriving over the second channel — it
-    only fills in pieces the first one lacked (ghost / splits / category); a
-    slower time never touches the record. Missing key pieces skip entirely."""
+    The compound is only known once the snapshot arrives, so a run lands in two
+    steps: its PostTime files a compound=0 placeholder row, and the stage-detail
+    follow-up resolves it — adopting the placeholder when the times match (its
+    ghost/splits are this run's) or merging them into the real row. Within a
+    known compound: a missing row is created; a strictly faster time replaces
+    it (the ghost belongs to the best run, so it is replaced too when carried);
+    an EQUAL-ms submission is the same run arriving over the second channel —
+    it only fills in pieces the first one lacked (ghost / splits / category);
+    a slower time never touches the record. Missing key pieces skip entirely."""
     if not username or not vehicle_id or not track or not time_ms or time_ms <= 0:
         return
-    entry = db.session.query(TimeTrialEntry).filter_by(
+    tm = int(time_ms)
+    compound = int(tyre_compound or 0)
+    rows = db.session.query(TimeTrialEntry).filter_by(
         vehicle_id=vehicle_id, track=str(track)[:8],
-        conditions=str(conditions)[:8], username=username).first()
+        conditions=str(conditions)[:8], username=username).all()
     splits_json = json.dumps(splits) if isinstance(splits, list) and splits else None
+
+    vessel = None  # this run's unresolved compound=0 placeholder, if any
+    if compound > 0:
+        entry = next((r for r in rows if r.tyre_compound == compound), None)
+        vessel = next((r for r in rows
+                       if r.tyre_compound == 0 and r.stage_time_ms == tm), None)
+        if vessel is not None:
+            if entry is None:
+                # First record of this run with a known compound — adopt the
+                # placeholder as the real row; its ghost/splits are this run's.
+                vessel.tyre_compound = compound
+                entry = vessel
+            else:
+                # The placeholder holds this run's payload (the PostTime that
+                # filed it) — merge it into the call vars so the branches below
+                # store it, then drop the placeholder.
+                if not ghost_b64 and vessel.ghost_data_b64:
+                    ghost_b64 = vessel.ghost_data_b64
+                if splits_json is None and vessel.splits_json:
+                    splits_json = vessel.splits_json
+    else:
+        # Unknown compound (a PostTime): land on this run's row when it exists
+        # (channel inversion), else reuse the 4-tuple's placeholder — at most
+        # one, since pre-compound rows were keyed without it — else create it.
+        entry = next((r for r in rows if r.stage_time_ms == tm), None) \
+            or next((r for r in rows if r.tyre_compound == 0), None)
+
     if entry is None:
         db.session.add(TimeTrialEntry(
             vclass=str(vclass or '0')[:8], track=str(track)[:8],
             conditions=str(conditions)[:8], category=int(category or 0),
-            username=username, stage_time_ms=int(time_ms), vehicle_id=vehicle_id,
-            livery_id=livery_id, nationality_id=nationality_id,
+            username=username, stage_time_ms=tm, vehicle_id=vehicle_id,
+            livery_id=livery_id, tyre_compound=compound,
             using_wheel=using_wheel, using_assists=using_assists,
             ghost_data_b64=ghost_b64 or None, splits_json=splits_json))
         return
-    if int(time_ms) < (entry.stage_time_ms or 0):
-        entry.stage_time_ms = int(time_ms)
+
+    if tm < (entry.stage_time_ms or 0):
+        entry.stage_time_ms = tm
         if vclass:
             entry.vclass = str(vclass)[:8]
         if category:
             entry.category = int(category)
         if livery_id is not None:
             entry.livery_id = livery_id
-        if nationality_id is not None:
-            entry.nationality_id = nationality_id
         if using_wheel is not None:
             entry.using_wheel = using_wheel
         if using_assists is not None:
@@ -347,7 +380,7 @@ def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
         entry.ghost_data_b64 = ghost_b64 or None
         entry.splits_json = splits_json
         entry.submitted_at = utcnow()
-    elif int(time_ms) == (entry.stage_time_ms or 0):
+    elif tm == (entry.stage_time_ms or 0):
         # Same run, second channel: absorb only what the stored row lacks.
         changed = False
         if ghost_b64 and not entry.ghost_data_b64:
@@ -361,6 +394,9 @@ def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
             changed = True
         if changed:
             entry.submitted_at = utcnow()
+
+    if vessel is not None and vessel is not entry:
+        db.session.delete(vessel)
 
 
 @game_api_bp.route('/api/game/stage-complete', methods=['POST'])
@@ -756,6 +792,7 @@ def api_game_stage_detail():
             livery_id=data.get('livery_id') or None,
             using_wheel=data.get('using_wheel'),
             using_assists=data.get('using_assists'),
+            tyre_compound=fields['tyre_compound'],
             splits=json.loads(fields['splits_json']) if fields['splits_json'] else None)
     db.session.commit()
 
@@ -772,9 +809,12 @@ def api_game_time_trial_submit():
     car + track + conditions on this site — every distinct car keeps its own
     row, with the vehicle class stored alongside). The game fires a PostTime
     after EVERY completed stage (club, official and time trials alike), so this
-    is the primary best-recording path; the run's ghost rides along. Rules in
-    _upsert_best: strictly faster replaces (ghost included), equal-ms absorbs
-    missing pieces, slower is ignored."""
+    is the primary best-recording path; the run's ghost rides along. The
+    compound is unknown here (the PostTime never carries one) unless the client
+    sends it, so this usually files a compound=0 placeholder that the run's
+    stage-detail follow-up resolves. Rules in _upsert_best: strictly faster
+    replaces (ghost included), equal-ms absorbs missing pieces, slower is
+    ignored."""
     data = request.get_json(silent=True) or {}
     user = g.game_user
     try:
@@ -794,10 +834,10 @@ def api_game_time_trial_submit():
         user.username, vehicle_id, track, conditions, time_ms,
         category=category, vclass=data.get('vehicle_class_id'),
         livery_id=int(data.get('livery_id') or 0),
-        nationality_id=int(data.get('nationality_id') or 0),
         using_wheel=bool(data.get('using_wheel')),
         using_assists=bool(data.get('using_assists')),
-        ghost_b64=data.get('ghost_data_b64'), splits=data.get('splits'))
+        ghost_b64=data.get('ghost_data_b64'), splits=data.get('splits'),
+        tyre_compound=data.get('tyre_compound'))
     db.session.commit()
     return jsonify({'ok': True})
 
