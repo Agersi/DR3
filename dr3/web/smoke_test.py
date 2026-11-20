@@ -2175,16 +2175,17 @@ def main() -> int:
                   and [s['label'] for s in bs.get('stages_bar') or []] == ['S1'],
                   f"bar={bs.get('stages_bar')}")
 
-        # Whole-event medals: one set per multi event, clean finishers only.
+        # Whole-event medals: one set per multi event; a DNF takes up its
+        # classification position and still earns the medal.
         from app.results_view import club_podium_counts
         from app.events import get_event as _get_ev, entries_for_event as _entries_for
         with app.app_context():
             m_ev = _get_ev('evt-smoke-board-multi')
             med = club_podium_counts([(m_ev, _entries_for('evt-smoke-board-multi'))]) \
                 if m_ev else {}
-        check('club medals: multi event awards one whole-event set (clean finishers only)',
+        check('club medals: multi event awards one whole-event set (DNFs keep their podium spot)',
               med.get('smokedriver') == {'gold': 1, 'silver': 0, 'bronze': 0}
-              and 'secondpilot' not in med,
+              and med.get('secondpilot') == {'gold': 0, 'silver': 1, 'bronze': 0},
               f"medals={med}")
         api_mst = client.get(
             f'/clubs/{club_id}/championship-standings?event=evt-smoke-board-multi')
@@ -2541,6 +2542,33 @@ def main() -> int:
             _set_admins(managed, ['smokedriver'])
         db.session.commit()
         order_club_ids = [alpha.id, beta.id, season.id]
+    # Season medals: one set per round; a DNF takes up its classification
+    # position and still earns the medal. Synthetic entries — the stored
+    # season event stays untouched for the drivers-column fixture above.
+    from app.results_view import club_podium_counts as _pc
+    from app.events import get_event as _gev
+    with app.app_context():
+        s_ev = _gev('evt-smoke-season')
+        s_med = _pc([(s_ev, [
+            {'username': 'smokedriver',
+             'stages': [{'time_ms': 60000, 'penalties_ms': 0},
+                        {'time_ms': 900000, 'penalties_ms': 0, 'race_status': 5},
+                        {'time_ms': 70000, 'penalties_ms': 0}]},
+            {'username': 'secondpilot',
+             'stages': [{'time_ms': 61000, 'penalties_ms': 0},
+                        {'time_ms': 62000, 'penalties_ms': 0},
+                        {'time_ms': 71000, 'penalties_ms': 0},
+                        {},
+                        {'time_ms': 80000, 'penalties_ms': 0}]},
+            {'username': 'thirdgear',
+             'stages': [{'time_ms': 65000, 'penalties_ms': 0},
+                        {'time_ms': 900000, 'penalties_ms': 0, 'race_status': 4}]},
+        ])]) if s_ev else {}
+    check('club medals: season rounds award per-round sets (DNFs keep their podium spot)',
+          s_med.get('smokedriver') == {'gold': 1, 'silver': 1, 'bronze': 0}
+          and s_med.get('secondpilot') == {'gold': 2, 'silver': 1, 'bronze': 0}
+          and s_med.get('thirdgear') == {'gold': 0, 'silver': 0, 'bronze': 1},
+          f"medals={s_med}")
     r = client.get('/clubs')
     html = r.get_data(as_text=True)
     check('club list renders with ordering fixtures', r.status_code == 200, f'status={r.status_code}')

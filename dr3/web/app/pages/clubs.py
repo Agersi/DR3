@@ -390,9 +390,13 @@ def club_detail(club_id: str):
         abort(404)
 
     members = []
-    for m in sorted(club.members, key=lambda m: (m.user.id if m.user else 0)):
+    for m in club.members:
         if m.user is not None:
-            members.append({'user': m.user, 'role': club_role(club, m.user.username)})
+            members.append({
+                'user': m.user,
+                'role': club_role(club, m.user.username),
+                'member_id': m.id,
+            })
 
     events = sort_events([e for e in get_all_events() if e.get('club_id') == club_id])
     live_event = next((e for e in events if event_is_active(e)), None)
@@ -419,6 +423,16 @@ def club_detail(club_id: str):
         })
         podium_items.append((e, entries))
     podiums = club_podium_counts(podium_items)
+
+    # Members ranked by medal haul (gold, then silver, then bronze); the join
+    # order breaks ties — ClubMember ids are autoincrement, so a lower id
+    # joined earlier.
+    members.sort(key=lambda x: (
+        -podiums.get(x['user'].username, {}).get('gold', 0),
+        -podiums.get(x['user'].username, {}).get('silver', 0),
+        -podiums.get(x['user'].username, {}).get('bronze', 0),
+        x['member_id'],
+    ))
 
     uname = user.username if user else None
     is_admin = user_is_admin(club, uname)

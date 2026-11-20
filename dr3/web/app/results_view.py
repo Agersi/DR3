@@ -388,12 +388,12 @@ def club_podium_counts(items: list[tuple[dict, list[dict]]]) -> dict[str, dict]:
 
     ``items`` is one ``(event, entries)`` pair per championship the club has run.
     Multi-Location rallies (and legacy events) award ONE set of medals for the
-    whole event: drivers who finished every stage of every leg cleanly (a real
-    time and no DNF race_status on each flat stage) are ranked by bogey-adjusted
-    total across the whole championship, top three earn gold / silver / bronze.
-    Rally Seasons keep one set per round — the drivers who finished that round
-    cleanly are ranked by round time. Counts accumulate across all events, so
-    each member's totals reflect their whole history with the club."""
+    whole event: every driver with at least one real stage time is classified by
+    bogey-adjusted total across the whole championship — a DNF takes up its
+    position, exactly like the points classification — and the top three earn
+    gold / silver / bronze. Rally Seasons keep one set per round, classified the
+    same way over each leg. Counts accumulate across all events, so each
+    member's totals reflect their whole history with the club."""
     counts: dict[str, dict] = {}
     medals = ('gold', 'silver', 'bronze')
     for event, entries in items:
@@ -404,25 +404,16 @@ def club_podium_counts(items: list[tuple[dict, list[dict]]]) -> dict[str, dict]:
             total = sum(r['count'] for r in rallies)
             if not total:
                 continue
-            bogeys = flat_stage_bogeys_ms(event)
-            finishers = []
-            for e in entries:
-                seg = (e.get('stages') or [])[:total]
-                clean = len(seg) == total and all(
-                    s and int(s.get('time_ms', 0) or 0) > 0
-                    and int(s.get('race_status', 0) or 0) == 0
-                    for s in seg)
-                if not clean:
-                    continue
-                finishers.append((adjusted_total_ms(e, bogeys), e.get('username') or ''))
-            finishers.sort()
-            for i, (_t, name) in enumerate(finishers[:3]):
-                bucket = counts.setdefault(name, {'gold': 0, 'silver': 0, 'bronze': 0})
+            rows = [r for r in overall_standings(event, entries)
+                    if r['stages_done'] > 0]
+            for i, row in enumerate(rows[:3]):
+                bucket = counts.setdefault(
+                    row['username'], {'gold': 0, 'silver': 0, 'bronze': 0})
                 bucket[medals[i]] += 1
             continue
         for rally in rallies:
             finishers = [r for r in rally_standings(entries, rally)
-                         if _ran_any_stage(r) and r['dnf_stages'] == 0]
+                         if _ran_any_stage(r)]
             for i, row in enumerate(finishers[:3]):
                 bucket = counts.setdefault(
                     row['username'], {'gold': 0, 'silver': 0, 'bronze': 0})
