@@ -388,7 +388,11 @@ def main() -> int:
               and '</tbody>' in det
               and '.club-members .num, .club-champs .num { text-align: right; font-variant-numeric: tabular-nums; }' in board_css
               and '.club-members th:first-child, .club-champs th:first-child, .club-members td:first-child, .club-champs td:first-child { padding-left: .5rem; }' in board_css
-              and '.club-members th:last-child, .club-champs th:last-child, .club-members td:last-child, .club-champs td:last-child { padding-right: .5rem; }' in board_css, '')
+              and '.club-members th:last-child, .club-champs th:last-child, .club-members td:last-child, .club-champs td:last-child { padding-right: .5rem; }' in board_css
+              and '.club-members thead th:first-child { padding-left: calc(40px + .5rem); }' in board_css
+              and '.club-members th:nth-child(2), .club-members td:nth-child(2) { text-align: center; }' in board_css
+              and '.club-members form.inline { float: right; margin: .1rem; }' in board_css
+              and '.club-members button.small { padding: .25rem; font-size: .75rem; }' in board_css, '')
         check('club detail: championships table — Ended chip, centered status col, delete button style',
               '<span class="chip">Ended</span>' in det
               and '<td class="num"><time class="js-local"' in det

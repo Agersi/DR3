@@ -450,6 +450,10 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .club-champs .btn.danger.small { padding: .25rem; margin: .1rem; font-size: .75rem; float: right; }
 .club-members th:first-child, .club-champs th:first-child, .club-members td:first-child, .club-champs td:first-child { padding-left: .5rem; }
 .club-members th:last-child, .club-champs th:last-child, .club-members td:last-child, .club-champs td:last-child { padding-right: .5rem; }
+.club-members thead th:first-child { padding-left: calc(40px + .5rem); }
+.club-members th:nth-child(2), .club-members td:nth-child(2) { text-align: center; }
+.club-members form.inline { float: right; margin: .1rem; }
+.club-members button.small { padding: .25rem; font-size: .75rem; }
 
 /* ── Flash messages ─────────────────────────────────── */
 
