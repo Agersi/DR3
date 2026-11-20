@@ -119,14 +119,13 @@
     <div class="table-wrap">
       <table class="table club-members">
         <thead>
-        <tr><th>User</th><th>Display name</th><th>Role</th><th class="num">Gold</th><th class="num">Silver</th><th class="num">Bronze</th>{% if is_owner %}<th></th>{% endif %}</tr>
+        <tr><th>Driver</th><th>Role</th><th class="num">Gold</th><th class="num">Silver</th><th class="num">Bronze</th>{% if is_owner %}<th></th>{% endif %}</tr>
         </thead>
         <tbody>
         {% for m in members %}
           {% set p = podiums.get(m.user.username) or {'gold': 0, 'silver': 0, 'bronze': 0} %}
         <tr>
-          <td><a href="{{ url_for('pages.profile', username=m.user.username) }}">{{ flag_img(flag_url(m.user.country)) }}{{ m.user.username }}</a></td>
-          <td>{% if m.user.display_name %}<a href="{{ url_for('pages.profile', username=m.user.username) }}">{{ m.user.display_name }}</a>{% endif %}</td>
+          <td>{{ flag_img(flag_url(m.user.country)) }}<a class="driver-link" href="{{ url_for('pages.profile', username=m.user.username) }}">{{ m.user.display_name or m.user.username }}</a></td>
           <td>
             {% if m.role == 'owner' %}<span class="chip chip-accent">Owner</span>
             {% elif m.role == 'admin' %}<span class="chip chip-warn">Admin</span>

@@ -382,7 +382,8 @@ def main() -> int:
         check('club detail: members + championships tables use the site table style (thead/tbody, right-aligned nums)',
               '<table class="table club-members">' in det
               and '<table class="table club-champs">' in det
-              and '<thead>\n        <tr><th>User</th>' in det
+              and '<thead>\n        <tr><th>Driver</th>' in det
+              and '<a class="driver-link" href="/profile/' in det
               and '<thead>\n        <tr><th>Championship</th><th>Status</th><th class="num">Start</th><th class="num">End</th>' in det
               and '</tbody>' in det
               and '.club-members .num, .club-champs .num { text-align: right; font-variant-numeric: tabular-nums; }' in board_css, '')
