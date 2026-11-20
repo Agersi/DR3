@@ -25,7 +25,7 @@ from .models import (
     Reward, Stage, StageBeginRequest, StageCompleteRequest, TierReward, _val,
 )
 from .stage_limits import split_count_for_limit, stage_limit_ms
-from .telemetry import scale_segments_to_total
+from .telemetry import StageRun, scale_segments_to_total
 
 
 Handler = Callable[[Dict[str, Any]], Union[Dict[str, Any], bytes]]
@@ -3626,17 +3626,30 @@ class RpcDispatcher:
         # telemetry is off/unavailable or the stage's split count is unknown).
         # Computed once, BEFORE the detail merge feed, so both the merged row
         # and the club submission carry them regardless of half arrival order;
-        # the flat ordinal correlates the row with results.stages_json.
+        # the flat ordinal correlates the row with results.stages_json. The
+        # same run yields the penalties the game baked into the reported time
+        # (in-run clock jumps + report-time service additions); those are
+        # stored separately so scoring can add them back to the raw driving
+        # time it submits.
         splits = None
         flat_index = None
+        penalties_ms = 0
         if event_id and self.api_client is not None and finished_cleanly:
+            run = (self.telemetry.take_run_since(self._telemetry_arm_wall)
+                   if self.telemetry is not None else None)
+            if run is None and self.telemetry is not None:
+                self._warn_no_telemetry()
             try:
                 splits = self._compute_stage_splits(
-                    event_id, sub_index, req.stage_index, time_ms)
+                    event_id, sub_index, req.stage_index, time_ms, run)
             except Exception as exc:
                 print(f"[STAGE] split computation raised: {exc}")
             flat_index = (self._stage_offset(event_id, sub_index)
                           + req.stage_index)
+            try:
+                penalties_ms = self._stage_penalty_ms(run, time_ms)
+            except Exception as exc:
+                print(f"[STAGE] penalty detection raised: {exc}")
 
         # Per-stage run detail: feed the RPC half of the merge (the StageEnded
         # snapshot half arrives from httpd under the same key). Clean finishes
@@ -3674,7 +3687,12 @@ class RpcDispatcher:
                     username="",  # server uses g.game_user from token
                     stage_index=req.stage_index,
                     event_index=sub_index,
-                    time_ms=time_ms,
+                    # Raw driving time: the reported StageTime minus the
+                    # penalties detected above. Scoring/display add
+                    # penalties_ms back, so the official total is unchanged;
+                    # the penalty column now shows what was actually applied.
+                    time_ms=time_ms - penalties_ms,
+                    penalties_ms=penalties_ms,
                     vehicle_id=req.vehicle_id if req.vehicle_id else None,
                     meters_driven=req.meters_driven,
                     distance_driven=req.distance_driven,
@@ -3690,7 +3708,8 @@ class RpcDispatcher:
                     splits=splits,
                 )
                 print(f"[STAGE] Submitted to API: event={event_id} "
-                      f"stage={req.stage_index} time_ms={time_ms} "
+                      f"stage={req.stage_index} time_ms={time_ms - penalties_ms} "
+                      f"penalties_ms={penalties_ms} "
                       f"splits={'yes' if splits else 'no'}")
             except Exception as exc:
                 print(f"[STAGE] api_client.submit_stage() raised: {exc}")
@@ -4041,24 +4060,48 @@ class RpcDispatcher:
             f"output to this port (see the install page) or set "
             f'"telemetry_port" in config.json to a free port.')
 
+    def _stage_penalty_ms(self, run: Optional[StageRun], time_ms: int) -> int:
+        """Total penalty (ms) the game baked into this stage's reported
+        StageTime. Two sources, both already inside the reported value:
+          1. In-run clock jumps (jump start / car reset / on-stage repair):
+             the game advances the stage clock instantly mid-stage; telemetry
+             measures each as clock advance beyond real elapsed time
+             (run.penalty_s). These are also in the run's finish clock.
+          2. Report-time additions (service/repair over-time): applied after
+             the clock stops, so the reported StageTime exceeds the run's
+             finish clock by exactly that amount.
+        Returns 0 when telemetry is unavailable or no penalty was detected; a
+        sub-500ms report-time excess is measurement jitter (the run ends a few
+        metres before the line), not a penalty."""
+        if run is None or time_ms <= 0:
+            return 0
+        in_run_ms = int(round(run.penalty_s * 1000))
+        report_time_ms = max(0, time_ms - int(round(run.total_time_s * 1000)))
+        if report_time_ms < 500:
+            report_time_ms = 0
+        total = in_run_ms + report_time_ms
+        if total > 0:
+            print(f"[STAGE] penalties {total}ms (in-run jumps {in_run_ms}ms, "
+                  f"report-time {report_time_ms}ms; finish clock "
+                  f"{run.total_time_s:.3f}s vs reported {time_ms / 1000.0:.3f}s)")
+        return total
+
     def _compute_stage_splits(self, event_id: str, sub_index: int,
-                              stage_index: int, time_ms: int) -> Optional[List[float]]:
+                              stage_index: int, time_ms: int,
+                              run: Optional[StageRun]) -> Optional[List[float]]:
         """Real per-segment splits for a just-driven clean finish, from the UDP
-        telemetry run that matches this stage. Returns a list of ``n`` segment
-        times (seconds) summing to ``time_ms/1000``, or None when no matching
-        completed run is available, the split count is unknown, or the run has
-        too few samples to resolve every split point.
+        telemetry run that matches this stage. ``run`` is the claimed telemetry
+        run (None when telemetry is off/unavailable). Returns a list of ``n``
+        segment times (seconds) summing to ``time_ms/1000``, or None when no
+        matching completed run is available, the split count is unknown, or the
+        run has too few samples to resolve every split point.
         """
-        if self.telemetry is None or time_ms <= 0:
+        if run is None or time_ms <= 0:
             return None
         profile = self._stage_split_profile(event_id, sub_index, stage_index)
         if profile is None:
             return None
         _legs, _limit, n = profile
-        run = self.telemetry.take_run_since(self._telemetry_arm_wall)
-        if run is None:
-            self._warn_no_telemetry()
-            return None
         if run.has_wrap():
             # Multi-lap circuit whose distance resets each lap — per-segment split
             # points can't be resolved from a wrapping distance, so fall back to

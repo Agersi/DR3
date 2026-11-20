@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.77**
+- Stage penalties are now shown on your club event results.
+
 **v0.1.76**
 - The streaming overlay now shows your club and stage number as soon as an event starts, with the correct total for multi-location rallies.
 

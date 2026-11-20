@@ -61,6 +61,12 @@ _STRUCT_FMT = "<%df" % _NUM_FLOATS
 START_THRESH = 10.0         # "at the start line" when dist < this
 FINISH_THRESH = 10.0        # "finished" when dist > track_len - this
 
+# A penalty jump is an instantaneous forward advance of the stage clock beyond
+# real elapsed time between consecutive samples (the clock otherwise runs at
+# 1x). DR2 penalties are all multi-second, so a sub-second floor keeps float
+# jitter from registering as one.
+PENALTY_JUMP_S = 0.5
+
 # Keep only the most recent completed runs. A run is claimed by take_*() right
 # after its stage closes, so a small ring is enough; it bounds memory if a run
 # goes unclaimed (e.g. a DNF that never produces a clean StageComplete).
@@ -271,6 +277,11 @@ class StageRun:
     total_time_s: float          # stage clock at the finish crossing
     track_length_m: float        # track length used for the split points
     samples: List[Tuple[float, ...]] = field(default_factory=list)
+    # In-run stage-clock jumps beyond real elapsed time (s): the jump-start /
+    # car-reset / on-stage-repair penalties the game applies live mid-stage.
+    # Report-time additions (service over-time) are NOT in this — the
+    # dispatcher derives those from reported-vs-finish-clock.
+    penalty_s: float = 0.0
 
     def segment_times(self, n: int) -> Optional[List[float]]:
         """Per-segment times (seconds) for ``n`` evenly-spaced (by distance)
@@ -418,6 +429,12 @@ class TelemetryListener:
         self._prev_at_start = False
         self._prev_at_finish = False
         self._track_len = 0.0
+        # Penalty-jump detection (see PENALTY_JUMP_S): previous sample's stage
+        # clock + wall time, and the in-run penalty accumulated for the buffer
+        # being built.
+        self._prev_clock: Optional[float] = None
+        self._prev_wall: Optional[float] = None
+        self._buffer_penalty_s = 0.0
         self.packets_seen = 0
         # time.time() of the last valid packet (0.0 until the first arrives) —
         # lets the GUI tell "connected" (fresh data) from "listening, silent".
@@ -521,8 +538,21 @@ class TelemetryListener:
         if at_start and not self._prev_at_start:
             self._buffer = [sample]
             self._run_start_wall = wall
+            self._buffer_penalty_s = 0.0
         elif self._buffer is not None:
             self._buffer.append(sample)
+
+        # Penalty detection: the stage clock runs at 1x real time except when
+        # the game applies a penalty, which advances it instantly (jump start,
+        # car reset, on-stage repair). Any advance beyond real elapsed time
+        # between consecutive samples is that penalty; accumulate it into the
+        # run being built. The comparison uses the previous sample even across
+        # the buffer-open edge, so a jump landing on the first buffered sample
+        # still counts.
+        if self._buffer is not None and self._prev_clock is not None:
+            excess = (clock - self._prev_clock) - (wall - self._prev_wall)
+            if excess > PENALTY_JUMP_S:
+                self._buffer_penalty_s += excess
 
         if (at_finish and not self._prev_at_finish and self._buffer is not None):
             run = StageRun(
@@ -531,12 +561,15 @@ class TelemetryListener:
                 total_time_s=clock,
                 track_length_m=length,
                 samples=list(self._buffer),
+                penalty_s=self._buffer_penalty_s,
             )
             self._push_completed(run)
             self._buffer = None
 
         self._prev_at_start = at_start
         self._prev_at_finish = at_finish
+        self._prev_clock = clock
+        self._prev_wall = wall
 
     def _push_completed(self, run: StageRun) -> None:
         with self._lock:
