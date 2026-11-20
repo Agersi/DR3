@@ -370,7 +370,7 @@ def main() -> int:
               and '<a href="#tab-members" data-tab="members">Members</a>' in det
               and 'id="tab-members" hidden' in det, f'status={r.status_code}')
         check('club detail: members tab carries Gold/Silver/Bronze podium columns',
-              '<th>Gold</th><th>Silver</th><th>Bronze</th>' in det, f'status={r.status_code}')
+              '<th class="num">Gold</th><th class="num">Silver</th><th class="num">Bronze</th>' in det, f'status={r.status_code}')
         check('club detail: champ arrows step left=N-1 (older) / right=N+1 (newer)',
               "document.getElementById('champ-prev').addEventListener('click', function () {\n"
               '    if (state.champ_index < state.selectors.length - 1) {\n'
@@ -379,6 +379,13 @@ def main() -> int:
               '    if (state.champ_index > 0) {\n'
               '      state.champ_index -= 1;' in det, f'status={r.status_code}')
         board_css = client.get('/static/css/style.css').get_data(as_text=True)
+        check('club detail: members + championships tables use the site table style (thead/tbody, right-aligned nums)',
+              '<table class="table club-members">' in det
+              and '<table class="table club-champs">' in det
+              and '<thead>\n        <tr><th>User</th>' in det
+              and '<thead>\n        <tr><th>Championship</th><th>Status</th><th class="num">Window</th>' in det
+              and '</tbody>' in det
+              and '.club-members .num, .club-champs .num { text-align: right; font-variant-numeric: tabular-nums; }' in board_css, '')
         check('club detail: champ selector CSS (centered row, square arrows, tight margins)',
               '.champ-selector { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.3rem; }' in board_css
               and '.champ-arrow { flex: none; width: 2.8rem; height: 2.8rem; display: flex; align-items: center; justify-content: center; background: var(--card); border: 2px solid var(--line); color: var(--text); cursor: pointer; font-size: 0.9rem; margin: 0; }' in board_css

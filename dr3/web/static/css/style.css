@@ -445,6 +445,7 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 
 .club-tab[hidden] { display: none; }
 .table-wrap td.dim { color: var(--line); }
+.club-members .num, .club-champs .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ── Flash messages ─────────────────────────────────── */
 

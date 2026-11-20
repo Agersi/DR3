@@ -1309,7 +1309,7 @@ def main() -> int:
           and b'id="tab-members" hidden' in r.data
           and b'id="tab-management" hidden' in r.data, f'status={r.status_code}')
     check('club detail: members table has Gold/Silver/Bronze podium columns',
-          b'<th>Gold</th><th>Silver</th><th>Bronze</th>' in r.data, f'status={r.status_code}')
+          b'<th class="num">Gold</th><th class="num">Silver</th><th class="num">Bronze</th>' in r.data, f'status={r.status_code}')
     check('club detail: status merged into chips-row (no separate Your status panel)',
           b'class="chips-row club-status"' in r.data and b'Your status' not in r.data, f'status={r.status_code}')
     owner_actions = ('/clubs/%s/leave' % club_id).encode()
@@ -2202,7 +2202,7 @@ def main() -> int:
 
         mem = det[det.index('id="tab-members"'):]
         check('members tab: Gold/Silver/Bronze columns populated from clean finishes',
-              '<th>Gold</th><th>Silver</th><th>Bronze</th>' in mem
+              '<th class="num">Gold</th><th class="num">Silver</th><th class="num">Bronze</th>' in mem
               and '<td class="num "' in mem      # at least one earned (non-dim) medal cell
               and '<td class="num dim">' in mem,  # unearned medals dimmed
               '')

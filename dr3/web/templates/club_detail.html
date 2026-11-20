@@ -117,8 +117,11 @@
   <section class="club-tab" data-tab="members" id="tab-members" hidden>
     <h2>Members ({{ members|length }})</h2>
     <div class="table-wrap">
-      <table>
-        <tr><th>User</th><th>Display name</th><th>Role</th><th>Gold</th><th>Silver</th><th>Bronze</th>{% if is_owner %}<th></th>{% endif %}</tr>
+      <table class="table club-members">
+        <thead>
+        <tr><th>User</th><th>Display name</th><th>Role</th><th class="num">Gold</th><th class="num">Silver</th><th class="num">Bronze</th>{% if is_owner %}<th></th>{% endif %}</tr>
+        </thead>
+        <tbody>
         {% for m in members %}
           {% set p = podiums.get(m.user.username) or {'gold': 0, 'silver': 0, 'bronze': 0} %}
         <tr>
@@ -149,6 +152,7 @@
           {% endif %}
         </tr>
         {% endfor %}
+        </tbody>
       </table>
     </div>
   </section>
@@ -182,8 +186,11 @@
     {% if champ_selectors %}
     <h2>Championships</h2>
     <div class="table-wrap">
-      <table>
-        <tr><th>Championship</th><th>Status</th><th>Window</th><th></th></tr>
+      <table class="table club-champs">
+        <thead>
+        <tr><th>Championship</th><th>Status</th><th class="num">Window</th><th></th></tr>
+        </thead>
+        <tbody>
         {% for s in champ_selectors %}
         <tr>
           <td>{{ s.name }}</td>
@@ -198,6 +205,7 @@
           </td>
         </tr>
         {% endfor %}
+        </tbody>
       </table>
     </div>
     {% endif %}
