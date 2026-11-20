@@ -188,7 +188,7 @@
     <div class="table-wrap">
       <table class="table club-champs">
         <thead>
-        <tr><th>Championship</th><th>Status</th><th class="num">Window</th><th></th></tr>
+        <tr><th>Championship</th><th>Status</th><th class="num">Start</th><th class="num">End</th><th></th></tr>
         </thead>
         <tbody>
         {% for s in champ_selectors %}
@@ -197,9 +197,10 @@
           <td>
             {% if s.status == 'live' %}<span class="chip chip-ok">Live</span>
             {% elif s.status == 'upcoming' %}<span class="chip chip-warn">Upcoming</span>
-            {% else %}<span class="muted">Ended</span>{% endif %}
+            {% else %}<span class="chip">Ended</span>{% endif %}
           </td>
-          <td class="num">{% if s.window_start or s.window_end %}{{ s.window_start | local_dt }} → {{ s.window_end | local_dt }}{% endif %}</td>
+          <td class="num">{{ s.window_start | local_dt }}</td>
+          <td class="num">{{ s.window_end | local_dt }}</td>
           <td>
             <a class="btn danger small" href="{{ url_for('clubs.championship_delete_confirm', club_id=club.id, event_id=s.event_id) }}">Delete</a>
           </td>

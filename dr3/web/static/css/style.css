@@ -446,6 +446,10 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .club-tab[hidden] { display: none; }
 .table-wrap td.dim { color: var(--line); }
 .club-members .num, .club-champs .num { text-align: right; font-variant-numeric: tabular-nums; }
+.club-champs th:nth-child(2), .club-champs td:nth-child(2) { text-align: center; }
+.club-champs .btn.danger.small { padding: .25rem; margin: .1rem; font-size: .75rem; float: right; }
+.club-champs th:first-child, .club-champs td:first-child { padding-left: .5rem; }
+.club-champs th:last-child, .club-champs td:last-child { padding-right: .5rem; }
 
 /* ── Flash messages ─────────────────────────────────── */
 

@@ -383,9 +383,16 @@ def main() -> int:
               '<table class="table club-members">' in det
               and '<table class="table club-champs">' in det
               and '<thead>\n        <tr><th>User</th>' in det
-              and '<thead>\n        <tr><th>Championship</th><th>Status</th><th class="num">Window</th>' in det
+              and '<thead>\n        <tr><th>Championship</th><th>Status</th><th class="num">Start</th><th class="num">End</th>' in det
               and '</tbody>' in det
               and '.club-members .num, .club-champs .num { text-align: right; font-variant-numeric: tabular-nums; }' in board_css, '')
+        check('club detail: championships table — Ended chip, centered status col, delete button style + edge padding',
+              '<span class="chip">Ended</span>' in det
+              and '<td class="num"><time class="js-local"' in det
+              and '.club-champs th:nth-child(2), .club-champs td:nth-child(2) { text-align: center; }' in board_css
+              and '.club-champs .btn.danger.small { padding: .25rem; margin: .1rem; font-size: .75rem; float: right; }' in board_css
+              and '.club-champs th:first-child, .club-champs td:first-child { padding-left: .5rem; }' in board_css
+              and '.club-champs th:last-child, .club-champs td:last-child { padding-right: .5rem; }' in board_css, '')
         check('club detail: champ selector CSS (centered row, square arrows, tight margins)',
               '.champ-selector { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.3rem; }' in board_css
               and '.champ-arrow { flex: none; width: 2.8rem; height: 2.8rem; display: flex; align-items: center; justify-content: center; background: var(--card); border: 2px solid var(--line); color: var(--text); cursor: pointer; font-size: 0.9rem; margin: 0; }' in board_css
