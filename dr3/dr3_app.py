@@ -2060,6 +2060,7 @@ def run_gui():
                 api_token=getattr(args, "api_token", None),
                 proxy_default_except_clubs=bool(args.upstream_ip),
                 capturing=bool(verbose_logging_var.get()),
+                app_version=VERSION,
             )
             app_holder["instance"] = app
             if api_client:

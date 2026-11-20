@@ -4,6 +4,7 @@ import argparse
 import base64
 import http.client
 import json
+import re
 import secrets
 import socket
 import ssl
@@ -20,6 +21,39 @@ from .api_client import UpstreamClient
 from .dispatcher import RpcDispatcher
 from .egonet import Int64, Timestamp, UInt16, UInt32, UInt8, decode_stream, encode_stream
 from .stage_detail import StageDetailBuffer
+
+
+# RPC methods whose captures are never saved — noisy heartbeat/inventory calls
+# plus credential-bearing Login.Login. Only applies when "Verbose logging" is on.
+SKIP_CAPTURE_METHODS = {
+    "Login.Login",
+    "RaceNetInventory.GetRewards",
+    "Esports.SeasonActivityCheck",
+    "Season.Get",
+    "RaceNetInventory.GetInventory",
+    "Login.Tick",
+    "Status.GetNextStatusEvent",
+    "RaceNetInventory.GetStore",
+    "Staff.GetStaff",
+    "VanityFlags.GetVanityFlags",
+    "Advertising.EnabledCheck",
+    "Announcements.GetAnnouncements",
+    "Login.GetCurrentVersion",
+}
+
+# DataMining.DataEvent sub-events (payload Statistics.Data.event) that are never
+# saved — high-frequency input/profile noise.
+SKIP_DATAMINING_EVENTS = {
+    "MouseInputDetected",
+    "ProfileLoaded",
+    "InputDeviceConnected",
+}
+
+# Retention for request captures: files older than this are pruned (hours).
+CAPTURE_RETENTION_HOURS = 72.0
+# Minimum seconds between capture-dir scans while pruning, so a busy session does
+# not re-scan the directory on every request.
+_CAPTURE_PRUNE_INTERVAL_S = 300.0
 
 
 class _UpstreamHTTPSConnection(http.client.HTTPSConnection):
@@ -118,6 +152,7 @@ class App:
         api_token: Optional[str] = None,
         proxy_default_except_clubs: bool = False,
         capturing: bool = True,
+        app_version: str = "unknown",
     ) -> None:
         self.account_store = AccountStore(data_root / "accounts")
         api_client: Optional[UpstreamClient] = None
@@ -141,11 +176,16 @@ class App:
             self.stage_detail = StageDetailBuffer(self._emit_stage_detail)
             self.dispatcher.stage_detail = self.stage_detail
         self.capture_root = capture_root
+        # Client version baked into capture filenames (date_appVersion_captureType).
+        self.app_version = app_version
         # Request-capture saving — driven by the GUI's "Verbose logging"
         # checkbox (toggled live); standalone usage defaults to on.
         self.capturing = capturing
         if capturing:
             self.capture_root.mkdir(parents=True, exist_ok=True)
+        # Rate-limited pruning of old capture files (see prune_old_captures).
+        self._prune_lock = Lock()
+        self._last_capture_prune = 0.0
         self.upstream_ip = upstream_ip
         self.proxy_methods: Set[str] = proxy_methods if proxy_methods is not None else set()
         self.proxy_default_except_clubs = proxy_default_except_clubs
@@ -162,14 +202,17 @@ class App:
             return {"blob_base64": base64.b64encode(obj).decode("ascii"), "size": len(obj)}
         raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
-    def capture(self, request: Dict[str, Any], *, skip: bool = False) -> Path:
+    def capture(self, request: Dict[str, Any], *, skip: bool = False,
+                capture_type: Optional[str] = None) -> Path:
+        self.prune_old_captures()
         if not self.capturing or skip:
             # No file written; the placeholder keeps every call site (and the
             # capture_file metadata fields) working unchanged.
             return self.capture_root / "(captures-disabled)"
         self.capture_root.mkdir(parents=True, exist_ok=True)
         stamp = time.strftime("%Y%m%d-%H%M%S")
-        path = self.capture_root / f"{stamp}-{time.time_ns()}.json"
+        ctype = re.sub(r"[^A-Za-z0-9._-]", "_", str(capture_type or "request"))
+        path = self.capture_root / f"{stamp}_{self.app_version}_{ctype}.json"
         path.write_text(json.dumps(request, indent=2, default=self._json_default), encoding="utf-8")
         return path
 
@@ -180,6 +223,36 @@ class App:
             return
         existing["response"] = response
         capture_path.write_text(json.dumps(existing, indent=2, default=self._json_default), encoding="utf-8")
+
+    def prune_old_captures(self) -> int:
+        """Delete request-capture files older than CAPTURE_RETENTION_HOURS.
+
+        Rate-limited to one directory scan per _CAPTURE_PRUNE_INTERVAL_S (even
+        under load) and safe to call from any thread; a missing/empty capture
+        dir is a no-op. Returns the number of files removed."""
+        now = time.time()
+        with self._prune_lock:
+            if now - self._last_capture_prune < _CAPTURE_PRUNE_INTERVAL_S:
+                return 0
+            self._last_capture_prune = now
+        cutoff = now - CAPTURE_RETENTION_HOURS * 3600.0
+        try:
+            entries = list(self.capture_root.iterdir())
+        except OSError:
+            return 0
+        removed = 0
+        for entry in entries:
+            if not entry.name.endswith(".json"):
+                continue
+            try:
+                if entry.stat().st_mtime < cutoff:
+                    entry.unlink()
+                    removed += 1
+            except OSError:
+                continue
+        if removed:
+            print(f"[CAPTURE] pruned {removed} capture(s) older than {CAPTURE_RETENTION_HOURS:g}h")
+        return removed
 
     # Fields of the StageEnded snapshot that hold the game's per-camera
     # distance counters (cumulative across same-setup TT repeats — see
@@ -295,6 +368,21 @@ class RequestHandler(BaseHTTPRequestHandler):
     def app(self) -> App:
         return self.server.app  # type: ignore[attr-defined]
 
+    @staticmethod
+    def _datamining_subevent(parsed_body: Any) -> Optional[str]:
+        """Return the DataMining.DataEvent sub-event name (Statistics.Data.event)
+        or None — used to skip / name specific data events."""
+        if not isinstance(parsed_body, dict):
+            return None
+        stats = parsed_body.get("Statistics")
+        if not isinstance(stats, dict):
+            return None
+        data = stats.get("Data")
+        if not isinstance(data, dict):
+            return None
+        event = data.get("event")
+        return str(event) if event else None
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         capture_path = self.app.capture(
@@ -305,7 +393,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "headers": dict(self.headers.items()),
                 "body_text": "",
                 "decoded_body": {},
-            }
+            },
+            capture_type=parsed.path.strip("/").replace("/", ".") or "request",
         )
         if parsed.path == "/":
             return self._send_html(HTML_HOME)
@@ -326,6 +415,26 @@ class RequestHandler(BaseHTTPRequestHandler):
         parsed_body = self._decode_body(raw_body)
         header_map = {key.lower(): value for key, value in self.headers.items()}
         egonet_function = header_map.get("x-egonet-function", "")
+        sub_event = (self._datamining_subevent(parsed_body)
+                     if egonet_function == "DataMining.DataEvent" else None)
+
+        # Skip noisy/credential-bearing captures: whole methods, or specific
+        # DataMining.DataEvent sub-events. Everything else is captured.
+        if egonet_function in SKIP_CAPTURE_METHODS:
+            skip = True
+        elif sub_event is not None and sub_event in SKIP_DATAMINING_EVENTS:
+            skip = True
+        else:
+            skip = False
+
+        # captureType for the filename: DataMining.DataEvent uses its specific
+        # event name (e.g. StageEnded); everything else uses the method name.
+        if egonet_function == "DataMining.DataEvent" and sub_event:
+            capture_type = sub_event
+        elif egonet_function:
+            capture_type = egonet_function
+        else:
+            capture_type = parsed.path.strip("/").replace("/", ".") or "request"
 
         capture_path = self.app.capture(
             {
@@ -337,7 +446,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "body_base64": base64.b64encode(raw_body).decode("ascii"),
                 "decoded_body": parsed_body,
             },
-            skip=egonet_function == "Login.Login",
+            skip=skip,
+            capture_type=capture_type,
         )
 
         if egonet_function:

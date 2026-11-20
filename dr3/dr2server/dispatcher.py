@@ -318,8 +318,8 @@ class RpcDispatcher:
             # Monthly events).  The stage results themselves still go through
             # RaceNetChallenges.StageBegin/StageComplete above; these bracket
             # the attempt and only need a success ack.
-            "RaceNetChallenges.StartChallenge": self._accepted,
-            "RaceNetChallenges.ResumeChallenge": self._accepted,
+            "RaceNetChallenges.StartChallenge": self._challenge_start,
+            "RaceNetChallenges.ResumeChallenge": self._challenge_start,
             "RaceNetChallenges.AbortChallenge": self._accepted,
             # "My Team" career-ladder stage results (Career Rally / Career
             # Rallycross).  That mode keeps progress client-side, so the
@@ -422,6 +422,36 @@ class RpcDispatcher:
 
     @staticmethod
     def _accepted(params: Dict[str, Any]) -> Dict[str, Any]:
+        return {"ok": True, "Accepted": True}
+
+    def _challenge_start(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Event start/resume ack (StartChallenge / ResumeChallenge).
+
+        The game fires this when the player presses Start on a club event —
+        before the first stage begins.  Stamp the streaming overlay's current
+        club here so Current Club.txt appears at event start instead of waiting
+        for the first StageBegin.  Purely additive: if the challenge can't be
+        resolved to a known club we leave the state untouched and still return
+        the success ack the game expects.
+        """
+        raw = params.get("ChallengeId") or params.get("ChallengeID") or params.get("challenge_id")
+        try:
+            challenge_id = int(getattr(raw, "value", raw) or 0)
+        except (TypeError, ValueError):
+            challenge_id = 0
+        event_id = self._resolve_event_id(challenge_id, "Start") if challenge_id else None
+        if event_id:
+            self._current_event_id = event_id
+            for evt in self._clubs_snapshot.get("events", []) or []:
+                if evt.get("id") == event_id:
+                    club_id = evt.get("club_id")
+                    if club_id:
+                        self._current_club_id = club_id
+                    break
+            if self.verbose_logging:
+                print(f"[STREAM] dispatcher: challenge_start set "
+                      f"event_id={self._current_event_id!r} "
+                      f"club_id={self._current_club_id!r}")
         return {"ok": True, "Accepted": True}
 
     def _get_current_version(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -3165,6 +3195,54 @@ class RpcDispatcher:
                 n = stages[stage_index].get("name")
                 name = str(n) if n else None
         return name, (counts[sub_index] if sub_index < len(counts) else 0), sum(counts)
+
+    def event_stage_progress(self, event_id: Optional[str]) -> Optional[tuple[int, int]]:
+        """Authoritative ``(total_stages, current_1based)`` for an event from the
+        web API. ``total`` sums every leg's stages (so multi-location rallies
+        report the full championship length); ``current`` is the player's resume
+        position — the first flat stage index they have not yet completed, +1,
+        clamped to ``total`` (a fresh event is 1; a finished one is ``total``).
+        Returns None when the event or its total can't be resolved. Called by the
+        streaming writer thread only — never on the RPC path."""
+        if not event_id or self.api_client is None:
+            return None
+        try:
+            ev = self.api_client.get_event(event_id) or {}
+        except Exception as exc:
+            print(f"[STREAM] get_event({event_id}) for stage progress raised: {exc}")
+            return None
+        legs = ev.get("events") or []
+        if legs:
+            total = sum(len(leg.get("stages") or []) for leg in legs)
+        else:
+            total = len(ev.get("stages") or [])
+        if total <= 0:
+            return None
+
+        current = 1
+        try:
+            prog = self.api_client.get_my_progress() or {}
+        except Exception as exc:
+            print(f"[STREAM] get_my_progress for stage progress raised: {exc}")
+            prog = {}
+        entry = next(
+            (e for e in (prog.get("events") or []) if e.get("event_id") == event_id),
+            None,
+        )
+        if entry:
+            done = set()
+            for s in entry.get("completed_stages") or []:
+                try:
+                    idx = int(s.get("stage_index"))
+                except (TypeError, ValueError):
+                    continue
+                if 0 <= idx < total:
+                    done.add(idx)
+            i = 0
+            while i < total and i in done:
+                i += 1
+            current = min(i + 1, total)
+        return total, current
 
     def _stage_begin(self, params: Dict[str, Any]) -> Dict[str, Any]:
         import base64

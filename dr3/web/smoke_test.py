@@ -2807,7 +2807,7 @@ def main() -> int:
           and all(f'href="/profile/{u.username}"' in dhtml for u in all_users),
           f'status={r.status_code}')
     check('drivers page: Stages completed column, no Clubs column',
-          '<th>Stages driven</th><th>Stages completed</th><th>Distance</th>' in dhtml
+          '<th class="num">Stages driven</th><th class="num">Stages completed</th><th class="num">Distance</th>' in dhtml
           and '<th>Clubs</th>' not in dhtml, '')
 
     # 24. club delete: confirm page, owner-only, destructive cascade

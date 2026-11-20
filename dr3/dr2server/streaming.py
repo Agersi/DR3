@@ -30,8 +30,9 @@ FILES: Dict[str, str] = {
     "club":         "Current Club.txt",
     "club_owner":   "Club Owner.txt",
     "members":      "Number of members.txt",
-    # Championship-wide live stage counter ("3 of 12") — the dispatcher tracks
-    # the flat ordinal across all sub-events on every StageBegin.
+    # Championship-wide stage counter ("3 of 12"). The live StageBegin drives it
+    # once driving starts; before that the web API supplies the player's resume
+    # position + the authoritative total (correct for multi-location rallies).
     "stages":       "Number of Stages.txt",
     "stage_name":   "Stage Name.txt",
     "location":     "Location.txt",
@@ -55,6 +56,12 @@ DEFAULT_EXIT_BEHAVIOR = EXIT_BEHAVIOR_CLEAR
 # tick interval doesn't hammer the server with one request per user every 2s.
 LEADERBOARD_MIN_REFRESH_SECONDS = 10.0
 LEADERBOARD_TOP_N = 10
+
+# Stage-progress (resume position + authoritative total) also hits the web API;
+# throttle it separately. The value only changes when a stage is completed, and
+# once driving starts the live StageBegin ordinal takes over anyway, so a slow
+# refresh is plenty — but an event change always forces an immediate fetch.
+STAGE_PROGRESS_MIN_REFRESH_SECONDS = 30.0
 
 
 def _atomic_write(path: Path, content: str) -> None:
@@ -112,6 +119,13 @@ class StreamingWriter:
         self._lb_cache_text: Optional[str] = None
         self._lb_cache_ts: float = 0.0
         self._lb_cache_event_id: Optional[str] = None
+        # Cached (total, current) stage progress for the current event; see
+        # _maybe_fetch_stage_progress. Filled from the web API so Number of
+        # Stages can show the resume position before the first StageBegin.
+        self._sp_cache_event_id: Optional[str] = None
+        self._sp_cache_ts: float = 0.0
+        self._sp_cache_total: int = 0
+        self._sp_cache_current: int = 0
 
     def _vlog(self, msg: str) -> None:
         """Verbose log — only emits when the verbose flag is on."""
@@ -300,6 +314,33 @@ class StreamingWriter:
         self._lb_cache_ts = now
         return self._lb_cache_text
 
+    def _maybe_fetch_stage_progress(self, event_id: str) -> Optional[tuple[int, int]]:
+        """Return ``(total_stages, current_1based)`` for the event, fetching from
+        the web API when the cache is stale (event changed or older than the
+        refresh cap). Returns None when nothing is available to write."""
+        client = getattr(self._dispatcher, "api_client", None)
+        if client is None or not event_id:
+            return None
+        now = time.time()
+        stale = (
+            self._sp_cache_event_id != event_id
+            or (now - self._sp_cache_ts) >= STAGE_PROGRESS_MIN_REFRESH_SECONDS
+        )
+        cached = (self._sp_cache_total, self._sp_cache_current) if self._sp_cache_total else None
+        if not stale:
+            return cached
+        try:
+            result = self._dispatcher.event_stage_progress(event_id)
+        except Exception as exc:
+            self._log(f"[STREAM] event_stage_progress({event_id}) failed: {exc}")
+            return cached  # serve stale rather than blank
+        if result:
+            self._sp_cache_total, self._sp_cache_current = result
+            self._sp_cache_event_id = event_id
+            self._sp_cache_ts = now
+            return result
+        return cached
+
     def _tick(self, tick_n: int = 0) -> None:
         state = self._dispatcher.get_streaming_state()
         # Official dailies and time trials have no clubs_snapshot entry, so the
@@ -347,10 +388,23 @@ class StreamingWriter:
                 members = club.get("members") or []
                 values["members"] = f"{len(members)} members"
 
-        ordinal = state.get("stage_ordinal")
+        live_ordinal = state.get("stage_ordinal")
         total = int(state.get("total_stages") or 0)
-        if "stages" in enabled and ordinal is not None and total > 0:
-            values["stages"] = f"{int(ordinal) + 1} of {total}"
+        # Authoritative (total, resume position) from the web API — lets the file
+        # show "N of X" as soon as the event is known, before any StageBegin.
+        sp = (self._maybe_fetch_stage_progress(event_id)
+              if (event_id and "stages" in enabled) else None)
+        if sp:
+            total = sp[0] or total
+        if "stages" in enabled:
+            if live_ordinal is not None:
+                n = int(live_ordinal) + 1   # stage actually being driven
+            elif sp:
+                n = int(sp[1])              # resume position (pre-stage)
+            else:
+                n = None
+            if n is not None and total > 0:
+                values["stages"] = f"{n} of {total}"
         if "stage_name" in enabled:
             sname = state.get("stage_name")
             if sname:

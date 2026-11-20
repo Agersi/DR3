@@ -5,19 +5,23 @@
   <h1>Drivers</h1>
   <p class="meta">{{ rows|length }} registered driver{{ 's' if rows|length != 1 else '' }}</p>
 </div>
-<div class="table-wrap">
-<table>
-  <tr><th>Driver</th><th>Stages driven</th><th>Stages completed</th><th>Distance</th></tr>
+<div class="table-wrap recent-box drivers-box">
+<table class="table">
+  <thead>
+  <tr><th>Driver</th><th class="num">Stages driven</th><th class="num">Stages completed</th><th class="num">Distance</th></tr>
+  </thead>
+  <tbody>
   {% for d in rows %}
   <tr>
-    <td>{{ flag_img(flag_url(d.country)) }}<a href="{{ url_for('pages.profile', username=d.username) }}">{{ d.display_name }}</a></td>
-    <td>{{ d.stages }}</td>
-    <td>{{ d.completed }}</td>
-    <td>{{ '%.1f'|format(d.distance_km) }} km</td>
+    <td>{{ flag_img(flag_url(d.country)) }}<a class="driver-link" href="{{ url_for('pages.profile', username=d.username) }}">{{ d.display_name }}</a></td>
+    <td class="num">{{ d.stages }}</td>
+    <td class="num">{{ d.completed }}</td>
+    <td class="num">{{ '%.1f'|format(d.distance_km) }} km</td>
   </tr>
   {% else %}
   <tr><td colspan="4" class="meta">No drivers registered yet.</td></tr>
   {% endfor %}
+  </tbody>
 </table>
 </div>
 {% endblock %}

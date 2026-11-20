@@ -2,8 +2,9 @@
 """Reconstruct the EgoNet request sequence from capture files and flag
 mid-event rejoins.
 
-Capture filenames are ``YYYYMMDD-HHMMSS-<seq>.json``; each file holds one
-request (method, path, decoded_body) plus optionally the server response.
+Capture filenames start with a ``YYYYMMDD-HHMMSS`` timestamp (older files end
+``-<seq>.json``, newer ones ``_<appVersion>_<captureType>.json``); each file
+holds one request (method, path, decoded_body) plus optionally the response.
 NOTE: every capture's ``path`` is the generic proxy endpoint
 (``/RP17/1.18.0/STEAM/``), so message type is classified from the
 ``decoded_body`` key set instead:
@@ -102,7 +103,7 @@ def main():
     parsed = []
     n_resp = 0
     for fn in files:
-        m = re.match(r"(\d{8})-(\d{6})-", fn)
+        m = re.match(r"(\d{8})-(\d{6})", fn)
         if not m:
             continue
         try:

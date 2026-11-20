@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.76**
+- The streaming overlay now shows your club and stage number as soon as an event starts, with the correct total for multi-location rallies.
+
 **v0.1.75**
 - Fixed the token prefix shown in the command line help (dr3_ instead of df_).
 

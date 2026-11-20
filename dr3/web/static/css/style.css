@@ -379,9 +379,14 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .recent-box th:nth-child(4), .recent-box td:nth-child(4) { width: 2.5rem; }
 .recent-box th:nth-child(5), .recent-box td:nth-child(5) { width: 3rem; }
 .recent-box th:nth-child(6), .recent-box td:nth-child(6) { width: 3rem; }
-.recent-box th:nth-child(7), .recent-box td:nth-child(7) { width: 2.5rem; }
+.recent-box th:nth-child(7), .recent-box td:nth-child(7) { width: 3.5rem; }
 .recent-box th:nth-child(8), .recent-box td:nth-child(8) { width: 5rem; }
 .recent-box th:nth-child(9), .recent-box td:nth-child(9) { width: 4.5rem; }
+.drivers-box { max-height: none; overflow-y: visible; }
+.drivers-box th:nth-child(2), .drivers-box td:nth-child(2) { width: 6rem; }
+.drivers-box th:nth-child(3), .drivers-box td:nth-child(3) { width: 6rem; }
+.drivers-box th:nth-child(4), .drivers-box td:nth-child(4) { width: 7rem; padding-right: .5rem; }
+.recent-box.drivers-box .num { text-align: right; }
 .flag { height: .95em; width: auto; vertical-align: -0.18em; margin-right: 0.3em; }
 
 /* ── Profile driving stats: two-column layout ───────── */

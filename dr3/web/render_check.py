@@ -201,7 +201,7 @@ def main() -> int:
     drv_html = r.get_data(as_text=True)
     check('drivers page renders with the smoke driver',
           r.status_code == 200 and 'Smoke Driver' in drv_html
-          and '<th>Stages driven</th><th>Stages completed</th><th>Distance</th>' in drv_html,
+          and '<th class="num">Stages driven</th><th class="num">Stages completed</th><th class="num">Distance</th>' in drv_html,
           f'status={r.status_code}')
     # #56: /drivers stats are computed from stage_runs (the stored users
     # counters are retired) — the smoke driver's clean rows (48210 + 1200 m)
@@ -211,7 +211,7 @@ def main() -> int:
     # Stages completed is a % (4 of the smoke driver's 7 runs finished — the
     # board-cum fixture adds two clean rows for the car-resolution check).
     check('drivers page: stages completed shown as a percentage',
-          '<td>57%</td>' in drv_html, '')
+           '<td class="num">57%</td>' in drv_html, '')
     prof = client.get('/profile/smokedriver').get_data(as_text=True)
     check('profile: per-device distance list (#57)',
           'Input devices' in prof and 'Simucube 2 Pro (100%)' in prof, '')
