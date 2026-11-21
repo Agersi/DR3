@@ -5,7 +5,7 @@ Feeds every packet of a tools/capture_dr2_udp.py dump into
 dr2server.telemetry.TelemetryListener._on_sample (no socket involved), collects
 the completed runs it segments, then applies the same formula as
 dispatcher.Dispatcher._stage_penalty_ms (in-run clock jumps + report-time
-excess over the finish clock, 500ms jitter floor) and compares the totals with
+excess over the finish clock, 4s jitter floor) and compares the totals with
 the penalties known to have been applied in that session.
 
 Usage:
@@ -29,13 +29,13 @@ from pathlib import Path
 DR3_DIR = Path(__file__).resolve().parent.parent / "dr3"
 sys.path.insert(0, str(DR3_DIR))
 
-from dr2server.telemetry import TelemetryListener  # noqa: E402
+from dr2server.telemetry import PENALTY_JUMP_S, TelemetryListener  # noqa: E402
 
 PACKET_SIZE = 264
 NUM_FLOATS = PACKET_SIZE // 4
 FMT = "<%df" % NUM_FLOATS
 
-REPORT_TIME_FLOOR_MS = 500  # mirrors dispatcher._stage_penalty_ms
+REPORT_TIME_FLOOR_MS = int(PENALTY_JUMP_S * 1000)  # mirrors dispatcher._stage_penalty_ms
 
 
 def load_packets(jsonl_path: Path):

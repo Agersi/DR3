@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.78**
+- Fixed penalty detection showing tiny false penalties (like +0.6s) on clean stages.
+
 **v0.1.77**
 - Stage penalties are now shown on your club event results.
 

@@ -25,10 +25,14 @@ from .models import (
     Reward, Stage, StageBeginRequest, StageCompleteRequest, TierReward, _val,
 )
 from .stage_limits import split_count_for_limit, stage_limit_ms
-from .telemetry import StageRun, scale_segments_to_total
+from .telemetry import PENALTY_JUMP_S, StageRun, scale_segments_to_total
 
 
 Handler = Callable[[Dict[str, Any]], Union[Dict[str, Any], bytes]]
+
+# Same floor as the in-run jump detection (telemetry.PENALTY_JUMP_S), in ms —
+# one constant governs both penalty sources.
+PENALTY_FLOOR_MS = int(PENALTY_JUMP_S * 1000)
 
 # Sentinel to indicate the handler returned raw EgoNet binary bytes
 # that should be sent directly without re-encoding.
@@ -4071,13 +4075,14 @@ class RpcDispatcher:
              the clock stops, so the reported StageTime exceeds the run's
              finish clock by exactly that amount.
         Returns 0 when telemetry is unavailable or no penalty was detected; a
-        sub-500ms report-time excess is measurement jitter (the run ends a few
-        metres before the line), not a penalty."""
+        sub-4s report-time excess is measurement jitter (the run ends up to 10m
+        before the line, i.e. ~0.6s of clock at rally speeds), not a penalty —
+        the smallest DR2 penalty is the 8-second car reset."""
         if run is None or time_ms <= 0:
             return 0
         in_run_ms = int(round(run.penalty_s * 1000))
         report_time_ms = max(0, time_ms - int(round(run.total_time_s * 1000)))
-        if report_time_ms < 500:
+        if report_time_ms < PENALTY_FLOOR_MS:
             report_time_ms = 0
         total = in_run_ms + report_time_ms
         if total > 0:

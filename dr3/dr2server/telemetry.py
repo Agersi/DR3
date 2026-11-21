@@ -63,9 +63,11 @@ FINISH_THRESH = 10.0        # "finished" when dist > track_len - this
 
 # A penalty jump is an instantaneous forward advance of the stage clock beyond
 # real elapsed time between consecutive samples (the clock otherwise runs at
-# 1x). DR2 penalties are all multi-second, so a sub-second floor keeps float
-# jitter from registering as one.
-PENALTY_JUMP_S = 0.5
+# 1x). The smallest DR2 penalty is the 8-second car reset, while sample
+# jitter/finish-zone hysteresis produces spurious excesses of up to ~0.6s —
+# so the floor sits midway: below it is noise, a real jump (>= 8s measured at
+# ~±0.1s) always clears it.
+PENALTY_JUMP_S = 4.0
 
 # Keep only the most recent completed runs. A run is claimed by take_*() right
 # after its stage closes, so a small ring is enough; it bounds memory if a run
