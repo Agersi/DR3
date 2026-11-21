@@ -334,13 +334,23 @@ input[type='checkbox'] { width: auto; max-width: none; }
 }
 .cselect-list { list-style: none; margin: 0; padding: 0; }
 .cselect-item {
-  padding: 0.4rem 0.8rem; cursor: pointer; color: var(--text); font-size: 1rem;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 0.15rem 0.65rem;
+  cursor: pointer;
+  color: var(--text);
+  font-size: .95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cselect-item:hover, .cselect-item:focus, .cselect-item.cselect-focus { background: var(--accent); color: var(--bg); }
 .cselect-group {
-  padding: 0.45rem 0.8rem 0.2rem; font-size: 0.78rem; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); cursor: default;
+  padding: 0.15rem 0.4rem 0.15rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--surface);
+  cursor: default;
 }
 .duration-row .cselect { flex: 1; min-width: 120px; max-width: none; }
 
@@ -503,7 +513,9 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 
 .car-pick { display: flex; gap: 0.8rem; align-items: center; }
 .car-pick label { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.82rem; font-weight: 600; color: var(--muted); }
-.car-pick .cselect { max-width: 22rem; }
+.car-pick .cselect {
+  width: 22rem;
+}
 .car-header { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }
 .car-img { max-width: 300px; width: 60%; height: auto; }
 .car-head-body { flex: 1; min-width: 16rem; }
