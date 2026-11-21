@@ -257,8 +257,6 @@ if (document.querySelector('.flash.error')) window.scrollTo(0, 0);
   function closeMenu(wrap) {
     if (!wrap) return;
     wrap.classList.remove('open');
-    var menu = wrap.querySelector('.cselect-menu');
-    if (menu) menu.hidden = true;
     if (openWrap === wrap) openWrap = null;
   }
 
@@ -268,7 +266,6 @@ if (document.querySelector('.flash.error')) window.scrollTo(0, 0);
     buildMenu(sel, wrap);
     syncLabel(sel, wrap);
     wrap.classList.add('open');
-    wrap.querySelector('.cselect-menu').hidden = false;
     openWrap = wrap;
   }
 
@@ -292,7 +289,6 @@ if (document.querySelector('.flash.error')) window.scrollTo(0, 0);
     btn.appendChild(label);
     var menu = document.createElement('div');
     menu.className = 'cselect-menu';
-    menu.hidden = true;
     sel.parentNode.insertBefore(wrap, sel);
     wrap.appendChild(btn);
     wrap.appendChild(menu);

@@ -331,7 +331,11 @@ input[type='checkbox'] { width: auto; max-width: none; }
   scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5);
   background: var(--accent-deep); box-shadow: 4px 4px 4px var(--shadow);
   border-radius: .3rem;
+  opacity: 0; visibility: hidden; transform: translateY(-4px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+  pointer-events: none;
 }
+.cselect.open .cselect-menu { opacity: 1; visibility: visible; transform: none; pointer-events: auto; }
 .cselect-list { list-style: none; margin: 0; padding: 0; }
 .cselect-item {
   padding: 0.15rem 0.65rem;
@@ -532,7 +536,15 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .car-fastest tbody tr.fastest-row { cursor: pointer; font-weight: 600; user-select: none; }
 .car-fastest tbody tr.fastest-row:hover td { background: rgba(24, 28, 20, 0.18); }
 .car-fastest tr:nth-child(even) td { background: transparent; }
-.car-fastest tr.fastest-detail td { padding: 0.2rem 0.5rem 0.2rem 1rem; color: var(--accent); font-size: 0.82rem; background: rgba(24, 28, 20, 0.35); text-align: left; }
+.car-fastest tr.fastest-detail td { padding: 0; border-bottom: 0; }
+.fd-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.15s ease; }
+.car-fastest tr.fastest-detail.open .fd-wrap { grid-template-rows: 1fr; }
+.fd-inner {
+  overflow: hidden; min-height: 0;
+  padding: 0.2rem 0.5rem 0.2rem 1rem; color: var(--accent); font-size: 0.82rem;
+  background: rgba(24, 28, 20, 0.35); box-shadow: inset 0 -1px 0 var(--line);
+}
+.car-fastest tr.fastest-detail:last-child .fd-inner { box-shadow: none; }
 
 /* ── Flash messages ─────────────────────────────────── */
 

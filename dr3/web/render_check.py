@@ -66,6 +66,7 @@ def main() -> int:
           and 'max-height: 500px;' in css
           and 'scrollbar-color: var(--line) rgba(24, 28, 20, 0.5);' in css
           and '.cselect-item:hover, .cselect-item:focus, .cselect-item.cselect-focus { background: var(--accent); color: var(--bg); }' in css
+          and '.cselect.open .cselect-menu { opacity: 1; visibility: visible; transform: none; pointer-events: auto; }' in css
           and "stroke='%23ECDFCC'" in css
           and 'color-scheme: dark;' in css
           and 'function enhance(sel)' in html
@@ -166,12 +167,13 @@ def main() -> int:
           and '.car-distance th:first-child, .car-distance td:first-child { padding-left: .5rem; }' in css
           and '.car-distance thead th:first-child { padding-left: calc(40px + .5rem); }' in css
           and '.car-distance th:last-child, .car-distance td:last-child { text-align: right; padding-right: .5rem; }' in css, '')
-    check('car page fastest tables: rows expand to stage names (one row per stage)',
+    check('car page fastest tables: rows expand to stage names (one row per stage, animated)',
           'class="fastest-row"' in r.get_data(as_text=True)
-          and '<tr class="fastest-detail" hidden><td colspan="2">Tolt Valley Sprint Forward</td></tr>' in r.get_data(as_text=True)
+          and '<tr class="fastest-detail"><td colspan="2"><div class="fd-wrap"><div class="fd-inner">Tolt Valley Sprint Forward</div></div></td></tr>' in r.get_data(as_text=True)
           and '.car-fastest tbody tr.fastest-row { cursor: pointer; font-weight: 600; user-select: none; }' in css
           and '.car-fastest tr:nth-child(even) td { background: transparent; }' in css
-          and '.car-fastest tr.fastest-detail td { padding: 0.2rem 0.5rem 0.2rem 1rem; color: var(--accent); font-size: 0.82rem; background: rgba(24, 28, 20, 0.35); text-align: left; }' in css
+          and '.fd-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.15s ease; }' in css
+          and '.car-fastest tr.fastest-detail.open .fd-wrap { grid-template-rows: 1fr; }' in css
           and '.stage-name' not in css, '')
     check('car page CSS (selector row + header flex + stats grid)',
           '.car-pick { display: flex; gap: 0.8rem; align-items: center; }' in css

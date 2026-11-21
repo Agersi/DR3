@@ -1324,7 +1324,7 @@ def main() -> int:
           and 'id="car-fastest-overall-body"' in html
           and 'Fastest in class' in html and 'Fastest overall' in html
           and 'class="fastest-row"' in html
-          and 'class="fastest-detail" hidden' in html, '')
+          and '<tr class="fastest-detail"><td colspan="2"><div class="fd-wrap"><div class="fd-inner">' in html, '')
     # (exact totals are not asserted: earlier fixtures also drive car 565 —
     # cardriver's 5.2 km is exact because only our row uses that username)
     check('car page distance table: Smoke Driver first, Car Driver exactly 5.2 km',

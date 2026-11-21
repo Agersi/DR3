@@ -45,7 +45,7 @@
             {% for row in fastest_class %}
             <tr class="fastest-row"><td>{{ row.location }}</td><td class="num">{{ row.count }}</td></tr>
             {% for s in row.stages %}
-            <tr class="fastest-detail" hidden><td colspan="2">{{ s }}</td></tr>
+            <tr class="fastest-detail"><td colspan="2"><div class="fd-wrap"><div class="fd-inner">{{ s }}</div></div></td></tr>
             {% endfor %}
             {% else %}
             <tr><td colspan="2" class="dim">No stages yet.</td></tr>
@@ -62,7 +62,7 @@
             {% for row in fastest_overall %}
             <tr class="fastest-row"><td>{{ row.location }}</td><td class="num">{{ row.count }}</td></tr>
             {% for s in row.stages %}
-            <tr class="fastest-detail" hidden><td colspan="2">{{ s }}</td></tr>
+            <tr class="fastest-detail"><td colspan="2"><div class="fd-wrap"><div class="fd-inner">{{ s }}</div></div></td></tr>
             {% endfor %}
             {% else %}
             <tr><td colspan="2" class="dim">No stages yet.</td></tr>
@@ -173,10 +173,15 @@
       (r.stages || []).forEach(function (s) {
         var dtr = document.createElement('tr');
         dtr.className = 'fastest-detail';
-        dtr.hidden = true;
         var dtd = document.createElement('td');
         dtd.colSpan = 2;
-        dtd.textContent = s;
+        var wrapDiv = document.createElement('div');
+        wrapDiv.className = 'fd-wrap';
+        var innerDiv = document.createElement('div');
+        innerDiv.className = 'fd-inner';
+        innerDiv.textContent = s;
+        wrapDiv.appendChild(innerDiv);
+        dtd.appendChild(wrapDiv);
         dtr.appendChild(dtd);
         tbody.appendChild(dtr);
       });
@@ -195,8 +200,8 @@
         sib = sib.nextElementSibling;
       }
       if (!details.length) return;
-      var show = details[0].hidden;
-      details.forEach(function (d) { d.hidden = !show; });
+      var show = !details[0].classList.contains('open');
+      details.forEach(function (d) { d.classList.toggle('open', show); });
     });
   });
 
