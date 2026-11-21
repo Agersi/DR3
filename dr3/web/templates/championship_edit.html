@@ -29,7 +29,12 @@
     {% else %}
     <select name="events[{{ ei }}][car_class]" required>
       <option value="">Select class...</option>
-      {% for cls in car_classes %}<option value="{{ cls }}" {% if event.car_class == cls %}selected{% endif %}>{{ cls }}</option>{% endfor %}
+      <optgroup label="Rally">
+        {% for cls in rally_car_classes %}<option value="{{ cls }}" {% if event.car_class == cls %}selected{% endif %}>{{ cls }}</option>{% endfor %}
+      </optgroup>
+      <optgroup label="Rallycross">
+        {% for cls in rx_car_classes %}<option value="{{ cls }}" {% if event.car_class == cls %}selected{% endif %}>{{ cls }}</option>{% endfor %}
+      </optgroup>
     </select>
     {% endif %}
 

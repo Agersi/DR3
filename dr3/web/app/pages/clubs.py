@@ -99,7 +99,8 @@ from ..results_view import (
 )
 from ..scoring import SCORING_SYSTEMS, SCORING_WRC, duration_label, power_stage_enabled
 from ..tables import (
-    ALL_CAR_CLASSES,
+    CAR_CLASS_ORDER,
+    CAR_CLASSES,
     CHAMP_MODE_MULTI,
     CHAMP_MODE_SEASON,
     CHAMP_MODES,
@@ -113,6 +114,7 @@ from ..tables import (
     MAX_RX_LAPS,
     MAX_STAGES_PER_EVENT,
     MIN_RX_LAPS,
+    RX_CAR_CLASSES,
     RX_LOCATIONS,
     SERVICE_AREA_OPTIONS,
     STAGE_CAPS,
@@ -184,8 +186,10 @@ def _championship_edit_context(club: Club, draft: dict) -> dict:
         club=club, draft=draft,
         rally_locs=sorted(loc for loc in STAGES if loc not in RX_LOCATIONS),
         rx_locs=sorted(loc for loc in STAGES if loc in RX_LOCATIONS),
-        # All classes (rally + rallycross) are selectable for every event.
-        car_classes=list(ALL_CAR_CLASSES.keys()),
+        # All classes (rally + rallycross) are selectable for every event; the
+        # editor lists them in Rally / Rallycross optgroups like locations.
+        rally_car_classes=[c for c in CAR_CLASS_ORDER if c in CAR_CLASSES],
+        rx_car_classes=[c for c in CAR_CLASS_ORDER if c in RX_CAR_CLASSES],
         conditions_by_location=CONDITIONS_BY_LOCATION,
         # Per-location fallback pick for the conditions dropdown (closest to
         # Daytime / Clear / Dry that the location ships lighting for).
