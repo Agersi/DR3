@@ -25,7 +25,7 @@
 
     <label>Vehicle class</label>
     {% if draft.mode != 'season' and ei > 0 %}
-    <p class="meta">Same as Event 1 — car damage and tyre state carry over between rallies, so the whole championship runs one vehicle class.</p>
+    <p class="meta flush-top">Same as Event 1 — car damage and tyre state carry over between rallies, so the whole championship runs one vehicle class.</p>
     {% else %}
     <select name="events[{{ ei }}][car_class]" required>
       <option value="">Select class...</option>
