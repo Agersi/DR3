@@ -61,6 +61,13 @@ def main() -> int:
           and client.get('/static/css/style.css').get_data(as_text=True)
           .find('.filters { position: sticky; top: 0') != -1, '')
     css = client.get('/static/css/style.css').get_data(as_text=True)
+    check('global select popup styling (picker icon, 500px cap, scrollbar, option hover/focus)',
+          'select::picker-icon { color: var(--accent); transition: 0.4s rotate; }' in css
+          and 'select:open::picker-icon { rotate: 180deg; }' in css
+          and 'max-height: 500px;' in css
+          and 'scrollbar-color: var(--line) transparent;' in css
+          and '::picker(select) option:hover, ::picker(select) option:focus {' in css
+          and 'background: var(--accent);' in css, '')
     check('clubs: filter tile styling scoped to .filters (builder page untouched)',
           '.filters { position: sticky; top: 0; z-index: 20; padding: 0.9rem; }' in css
           and '.filters .opt-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin: 0.6rem 0 0 0; }' in css

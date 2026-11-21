@@ -300,6 +300,23 @@ input:focus, select:focus, textarea:focus {
 }
 input[type='checkbox'] { width: auto; max-width: none; }
 
+/* Global native <select> popup (Chromium ::picker menu) — integrated look */
+select::picker-icon { color: var(--accent); transition: 0.4s rotate; }
+select:open::picker-icon { rotate: 180deg; }
+::picker(select) {
+  border: none;
+  background: var(--card);
+  max-height: 500px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+::picker(select) option { color: var(--text); }
+::picker(select) option:hover, ::picker(select) option:focus {
+  background: var(--accent);
+  color: var(--bg);
+}
+
 .checkrow { display: flex; align-items: center; gap: 0.55rem; margin: 0.45rem 0; font-weight: 600; }
 .checkrow input { margin: 0; }
 
