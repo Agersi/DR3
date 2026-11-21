@@ -271,7 +271,7 @@ a.stat-card:hover {
   letter-spacing: 0.07em; font-size: 0.95rem; font-weight: 600;
   padding: 0.55rem 1.2rem; margin-top: 0.8rem;
   background: var(--accent); color: var(--bg); border: 2px solid var(--line);
-  box-shadow: 3px 3px 0 var(--shadow); cursor: pointer; text-decoration: none;
+  box-shadow: 3px 3px 3px var(--shadow); cursor: pointer; text-decoration: none;
 }
 .btn:hover, button:hover { transform: translate(1px, 1px); box-shadow: 2px 2px 0 var(--shadow); background: var(--accent-deep); color: var(--bg); }
 .btn:active, button:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--shadow); }
@@ -319,8 +319,8 @@ input[type='checkbox'] { width: auto; max-width: none; }
   box-shadow: 3px 3px 0 rgba(236, 223, 204, 0.25);
 }
 .cselect-btn::after {
-  content: ''; position: absolute; right: 0.7rem; top: 50%;
-  width: 14px; height: 14px; transform: translateY(-50%);
+  content: ''; position: absolute; right: 0.7rem; top: 30%;
+  width: 24px; height: 24px;
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23ECDFCC' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat center / contain;
   transition: rotate 0.3s;
 }
@@ -516,7 +516,7 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .car-distance th:first-child, .car-distance td:first-child { padding-left: .5rem; }
 .car-distance thead th:first-child { padding-left: calc(40px + .5rem); }
 .car-distance th:last-child, .car-distance td:last-child { text-align: right; padding-right: .5rem; }
-.car-fastest tbody tr.fastest-row { cursor: pointer; font-weight: 600; }
+.car-fastest tbody tr.fastest-row { cursor: pointer; font-weight: 600; user-select: none; }
 .car-fastest tbody tr.fastest-row:hover td { background: rgba(24, 28, 20, 0.18); }
 .car-fastest tr:nth-child(even) td { background: transparent; }
 .car-fastest tr.fastest-detail td { padding: 0.2rem 0.5rem 0.2rem 1rem; color: var(--accent); font-size: 0.82rem; background: rgba(24, 28, 20, 0.35); text-align: left; }
