@@ -473,6 +473,11 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .car-distance th:first-child, .car-distance td:first-child { padding-left: .5rem; }
 .car-distance thead th:first-child { padding-left: calc(40px + .5rem); }
 .car-distance th:last-child, .car-distance td:last-child { text-align: right; padding-right: .5rem; }
+.car-fastest tbody tr.fastest-row { cursor: pointer; }
+.car-fastest tbody tr.fastest-row:hover td { background: rgba(24, 28, 20, 0.18); }
+.car-fastest tr:nth-child(even) td { background: transparent; }
+.car-fastest .fastest-detail td { padding: 0.25rem 0.5rem 0.5rem 1rem; color: var(--muted); font-size: 0.82rem; background: rgba(24, 28, 20, 0.35); }
+.car-fastest .stage-name { display: inline-block; margin: 0.1rem 0.7rem 0.1rem 0; white-space: nowrap; }
 
 /* ── Flash messages ─────────────────────────────────── */
 

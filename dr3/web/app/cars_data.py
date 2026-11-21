@@ -56,11 +56,22 @@ def location_name(location_id: int | None) -> str:
         return f'Location {location_id}' if location_id is not None else 'Unknown location'
 
 
+def stage_name(track_model_id: int | None) -> str:
+    """Display name for a TrackModelId; unknown ids get a generic label."""
+    from dr2server.game_data import Track
+
+    try:
+        return Track(int(track_model_id)).display_name
+    except (TypeError, ValueError, KeyError):
+        return f'Stage {track_model_id}' if track_model_id is not None else 'Unknown stage'
+
+
 def fastest_stages_by_location(vid: int) -> dict[str, list[dict]]:
     """Per location, how many distinct stages this car holds the best clean
     time on — overall (fastest of any car) and in-class (fastest among cars
     sharing this car's class). A stage is one route (location + track model);
-    the best is the fastest clean finish posted by any driver in any run type."""
+    the best is the fastest clean finish posted by any driver in any run type.
+    Each row carries the stage names it wins ('stages')."""
     from dr2server.game_data import VEHICLES
 
     from .db import db
@@ -90,11 +101,15 @@ def fastest_stages_by_location(vid: int) -> dict[str, list[dict]]:
                 in_class[key] = (ms, vehicle)
 
     def summarize(best_map: dict[tuple, tuple]) -> list[dict]:
-        counts: dict[int, int] = {}
-        for (loc, _track), (_ms, vehicle) in best_map.items():
+        by_loc: dict[int, list[str]] = {}
+        for (loc, track), (_ms, vehicle) in best_map.items():
             if vehicle == vid:
-                counts[loc] = counts.get(loc, 0) + 1
-        out = [{'location': location_name(loc), 'count': n} for loc, n in counts.items()]
+                by_loc.setdefault(loc, []).append(stage_name(track))
+        out = []
+        for loc, names in by_loc.items():
+            names.sort(key=lambda s: s.lower())
+            out.append({'location': location_name(loc), 'count': len(names),
+                        'stages': names})
         out.sort(key=lambda r: (-r['count'], r['location'].lower()))
         return out
 

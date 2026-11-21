@@ -1319,10 +1319,12 @@ def main() -> int:
           and 'id="car-select"' in html
           and 'Leaderboards' in html and 'Tunes' in html and 'Liveries' in html,
           f'status={r.status_code}')
-    check('car page shows both fastest-stage tables (in class + overall)',
+    check('car page shows both fastest-stage tables (in class + overall, expandable rows)',
           'id="car-fastest-class-body"' in html
           and 'id="car-fastest-overall-body"' in html
-          and 'Fastest in class' in html and 'Fastest overall' in html, '')
+          and 'Fastest in class' in html and 'Fastest overall' in html
+          and 'class="fastest-row"' in html
+          and 'class="fastest-detail" hidden' in html, '')
     # (exact totals are not asserted: earlier fixtures also drive car 565 —
     # cardriver's 5.2 km is exact because only our row uses that username)
     check('car page distance table: Smoke Driver first, Car Driver exactly 5.2 km',
@@ -1339,15 +1341,18 @@ def main() -> int:
     wales_c = next((x for x in fs_class if x.get('location') == 'Wales'), None)
     sweden_c = next((x for x in fs_class if x.get('location') == 'Sweden'), None)
     card = next((x for x in dist if x.get('username') == 'cardriver'), None)
-    check('cars data API: overall fastest stages — Wales 2, Sweden lost to a faster car',
+    check('cars data API: overall fastest stages — Wales 2 (stage names), Sweden lost to a faster car',
           r.status_code == 200 and j.get('ok') is True
           and j.get('title') == 'Porsche 911 RGT Rally Spec'
           and j.get('class_label') == 'Rally GT'
           and wales_o is not None and wales_o.get('count') == 2
+          and wales_o.get('stages') == ['Stage 700', 'Stage 701']
           and sweden_o is None, str(j)[:300])
-    check('cars data API: in-class fastest stages — Wales 2 + Sweden 1 (H1 FWD car excluded)',
+    check('cars data API: in-class fastest stages — Wales 2 + Sweden 1 (H1 FWD car excluded), stage names',
           wales_c is not None and wales_c.get('count') == 2
-          and sweden_c is not None and sweden_c.get('count') == 1, str(fs_class)[:300])
+          and wales_c.get('stages') == ['Stage 700', 'Stage 701']
+          and sweden_c is not None and sweden_c.get('count') == 1
+          and sweden_c.get('stages') == ['Stage 702'], str(fs_class)[:300])
     check('cars data API: distance table — Smoke Driver first, Car Driver exactly 5.2 km',
           dist and dist[0].get('username') == 'smokedriver'
           and card is not None and card.get('km') == 5.2
