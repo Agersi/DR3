@@ -331,6 +331,13 @@ def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
         entry = next((r for r in rows if r.tyre_compound == compound), None)
         vessel = next((r for r in rows
                        if r.tyre_compound == 0 and r.stage_time_ms == tm), None)
+        if vessel is None and entry is None:
+            # The snapshot's ms can differ from the PostTime's by a millisecond,
+            # so the exact match above misses. At most one placeholder exists per
+            # 4-tuple (the unique key includes compound), so any zero row in this
+            # group is this run's — adopt it instead of filing a second row that
+            # would orphan it and later crash the boot backfill.
+            vessel = next((r for r in rows if r.tyre_compound == 0), None)
         if vessel is not None:
             if entry is None:
                 # First record of this run with a known compound — adopt the

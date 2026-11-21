@@ -202,8 +202,10 @@ def scope_participation(entry: dict, offset: int, count: int) -> tuple[int, int,
 def event_profile(event: dict | None, now: datetime) -> dict | None:
     """Filterable profile of a championship for the club list page.
 
-    Drivetrain comes from the active leg's car class — seasons switch legs,
-    Multi-Location rallies run one class throughout (the first leg's)."""
+    Drivetrain and location come from the active leg — seasons switch legs
+    (and venues) over time, Multi-Location rallies run one class throughout
+    (the first leg's) but every round at once, so their location lists all
+    venues in round order (deduped)."""
     if not event:
         return None
     champ = normalize_championship(event)
@@ -211,12 +213,22 @@ def event_profile(event: dict | None, now: datetime) -> dict | None:
     legs = champ['events']
     idx = current_leg_index(event, now) if champ['mode'] == CHAMP_MODE_SEASON else 0
     car_class = (legs[idx].get('car_class') or '') if legs else ''
+    if champ['mode'] == CHAMP_MODE_SEASON:
+        location = (legs[idx].get('location') or '') if legs else ''
+    else:
+        venues = []
+        for leg in legs:
+            loc = leg.get('location') or ''
+            if loc and loc not in venues:
+                venues.append(loc)
+        location = ' - '.join(venues)
     return {
         'mode': champ['mode'],
         'hardcore_damage': bool(settings.get('hardcore_damage')),
         'external_cameras': not bool(settings.get('force_cockpit_camera')),
         'allow_assists': bool(settings.get('allow_assists')),
         'car_class': car_class,
+        'location': location,
         'drivetrains': drivetrains_for_class(car_class),
     }
 

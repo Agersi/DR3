@@ -623,6 +623,9 @@ def dashboard():
             'current_end': effective_end(e, now),
             # Class of the currently active leg, not the first stored one.
             'car_class': prof.get('car_class') or e.get('car_class'),
+            # Same for location: the active leg's venue (seasons) or all
+            # venues (multi/legacy), not the first stored one.
+            'location': prof.get('location') or e.get('location'),
             'driver_status': driver_status,
             'start_status': start_status,
             'drivers_done': drivers_done,

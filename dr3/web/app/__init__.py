@@ -657,8 +657,10 @@ def _ensure_best_times_compound(db) -> None:
     backfills the full zero-row set concurrently and InnoDB may deadlock one of
     them (1213) — that worker fails to boot, systemd restarts the service, and
     the retry finishes the job (observed in production 2026-11-20). Afterwards
-    only unresolvable rows stay at 0 and emit no UPDATEs, so the race cannot
-    recur."""
+    only unresolvable rows stay at 0 and emit no UPDATEs. A second failure mode
+    (production 2026-11-21): a placeholder orphaned by a 1 ms channel skew
+    resolves onto a compound its group already has — the backfill now merges it
+    into the sibling instead of crashing the boot with a unique-key violation."""
     from sqlalchemy import text
     from sqlalchemy.exc import OperationalError
 
@@ -694,6 +696,14 @@ def _ensure_best_times_compound(db) -> None:
             key = (sr_username, sr_vehicle, str(sr_track)[:8],
                    str(sr_cond)[:8] if sr_cond is not None else '0')
             pool.setdefault(key, []).append((sr_ms or 0, sr_compound, sr_at))
+        # Per-compound sibling rows indexed by the 4-tuple — a placeholder whose
+        # resolved compound already exists in its group must be merged into that
+        # row, not re-keyed onto it (unique-key violation).
+        sibs: dict = {}
+        for s in db.session.query(TimeTrialEntry).filter(
+                TimeTrialEntry.tyre_compound != 0).all():
+            sibs.setdefault((s.vehicle_id, str(s.track)[:8],
+                             str(s.conditions)[:8], s.username), []).append(s)
         for b in zero:
             candidates = pool.get(
                 (b.username, b.vehicle_id, str(b.track)[:8], str(b.conditions)[:8])) \
@@ -702,8 +712,46 @@ def _ensure_best_times_compound(db) -> None:
                          if ms == (b.stage_time_ms or 0)), None)
             if pick is None and candidates:
                 pick = max(candidates, key=lambda t: t[2] or datetime.min)
-            if pick is not None:
-                b.tyre_compound = int(pick[1])
+            if pick is None:
+                continue
+            target = int(pick[1])
+            sib = next((s for s in sibs.get(
+                    (b.vehicle_id, str(b.track)[:8], str(b.conditions)[:8],
+                     b.username), []) if s.tyre_compound == target), None)
+            if sib is not None:
+                # Orphaned placeholder — its snapshot filed a second row because
+                # the channels' ms differed (observed in production 2026-11-21).
+                # Fold it into the sibling instead of re-keying onto it: keep the
+                # strictly faster time, fill payload the sibling lacks.
+                if (b.stage_time_ms or 0) < (sib.stage_time_ms or 0):
+                    sib.stage_time_ms = b.stage_time_ms
+                    sib.vclass = b.vclass
+                    if b.category:
+                        sib.category = b.category
+                    if b.livery_id is not None:
+                        sib.livery_id = b.livery_id
+                    if b.using_wheel is not None:
+                        sib.using_wheel = b.using_wheel
+                    if b.using_assists is not None:
+                        sib.using_assists = b.using_assists
+                    if b.ghost_data_b64:
+                        sib.ghost_data_b64 = b.ghost_data_b64
+                    if b.splits_json:
+                        sib.splits_json = b.splits_json
+                else:
+                    if sib.livery_id is None and b.livery_id is not None:
+                        sib.livery_id = b.livery_id
+                    if sib.using_wheel is None and b.using_wheel is not None:
+                        sib.using_wheel = b.using_wheel
+                    if sib.using_assists is None and b.using_assists is not None:
+                        sib.using_assists = b.using_assists
+                    if not sib.ghost_data_b64 and b.ghost_data_b64:
+                        sib.ghost_data_b64 = b.ghost_data_b64
+                    if sib.splits_json is None and b.splits_json:
+                        sib.splits_json = b.splits_json
+                db.session.delete(b)
+            else:
+                b.tyre_compound = target
         db.session.commit()
 
     indexes = db.inspect(db.engine).get_indexes('best_times')

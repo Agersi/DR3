@@ -409,6 +409,57 @@ def main() -> int:
           and _a_gh == 'Z3dob3N0' and _a_splits == [60.0],
           f'rows={len(arows)} ms={_a_ms} comp={_a_comp} gh={_a_gh}')
 
+    # A 1 ms skew between the PostTime and its snapshot must still adopt the
+    # placeholder (production 2026-11-21: the exact-ms match missed, filed a
+    # second row, and the orphaned placeholder later crashed the boot backfill).
+    with app.app_context():
+        _upsert_best('smokedriver', 14, '23', '9', 500000, category=1, vclass=97,
+                     ghost_b64='c2tldw==')
+        _upsert_best('smokedriver', 14, '23', '9', 500001, category=1, vclass=97,
+                     splits=[61.0], tyre_compound=8)
+        srows = db.session.query(_Best).filter_by(
+            username='smokedriver', vehicle_id=14, track='23', conditions='9').all()
+        _s = srows[0] if srows else None
+        _s_ms = _s.stage_time_ms if _s else None
+        _s_comp = _s.tyre_compound if _s else None
+        _s_gh = _s.ghost_data_b64 if _s else None
+        db.session.commit()
+    check('bests: 1 ms channel skew still adopts the placeholder (unit)',
+          len(srows) == 1 and _s_ms == 500000 and _s_comp == 8
+          and _s_gh == 'c2tldw==',
+          f'rows={len(srows)} ms={_s_ms} comp={_s_comp} gh={_s_gh}')
+
+    # The boot backfill must merge an orphaned placeholder into its existing
+    # per-compound sibling (the production 2026-11-21 crash loop) instead of
+    # violating the unique key: keep the strictly faster time, one row remains.
+    from app.models import StageRun as _SR
+    from app import _ensure_best_times_compound as _ebtc
+    with app.app_context():
+        db.session.add(_SR(username='smokedriver', vehicle_id=15, track_model_id=24,
+                           conditions_id=9, time_ms=500000, tyre_compound=8))
+        db.session.add(_Best(vclass='97', track='24', conditions='9', category=1,
+                             username='smokedriver', stage_time_ms=500000,
+                             vehicle_id=15, livery_id=1, tyre_compound=0))
+        db.session.add(_Best(vclass='97', track='24', conditions='9', category=1,
+                             username='smokedriver', stage_time_ms=500001,
+                             vehicle_id=15, livery_id=1, tyre_compound=8))
+        db.session.commit()
+        _ebtc(db)
+        orows = db.session.query(_Best).filter_by(
+            username='smokedriver', vehicle_id=15, track='24', conditions='9').all()
+        _o = orows[0] if orows else None
+        _o_ms = _o.stage_time_ms if _o else None
+        _o_comp = _o.tyre_compound if _o else None
+        # Clean the fixture rows so later sections' global counts stay exact.
+        for _r in orows:
+            db.session.delete(_r)
+        db.session.query(_SR).filter_by(
+            username='smokedriver', vehicle_id=15).delete()
+        db.session.commit()
+    check('bests: boot backfill merges orphaned placeholder into sibling (unit)',
+          len(orows) == 1 and _o_ms == 500000 and _o_comp == 8,
+          f'rows={len(orows)} ms={_o_ms} comp={_o_comp}')
+
     # New best on a known compound: the PostTime placeholder's ghost must ride
     # along into the replace (the stage-detail channel itself carries no ghost),
     # and the placeholder is dropped.
@@ -2543,20 +2594,31 @@ def main() -> int:
         beta = Club.query.filter_by(name='Order Beta').first()
         season = Club.query.filter_by(name='Order Season').first()
         # Stages on the two single-window events give the dashboard Drivers
-        # column a real scope to count against.
+        # column a real scope to count against.  Alpha carries the real
+        # Multi-Location shape: top-level location/stages hold the FIRST leg
+        # (what the old dashboard code wrongly displayed) while legs_json holds
+        # every round — the Location column must list all venues.
         db.session.add(Event(id='evt-smoke-alpha', name='Order Alpha', club_id=alpha.id,
-                             start_time=now - _td(hours=1), end_time=now + _td(days=5),
-                             stages_json=json.dumps([{'id': 'sa1', 'name': 'Stage A'},
-                                                     {'id': 'sa2', 'name': 'Stage B'}]),
-                             active=True))
+                              start_time=now - _td(hours=1), end_time=now + _td(days=5),
+                              location='Loc A',
+                              settings_json=json.dumps({'mode': 'multi'}),
+                              stages_json=json.dumps([{'id': 'sa1', 'name': 'Stage A'}]),
+                              legs_json=json.dumps([
+                                  {'location': 'Loc A', 'car_class': '',
+                                   'stages': [{'id': 'sa1', 'name': 'Stage A'}]},
+                                  {'location': 'Loc B', 'car_class': '',
+                                   'stages': [{'id': 'sa2', 'name': 'Stage B'}]}]),
+                              active=True))
         db.session.add(Event(id='evt-smoke-beta', name='Order Beta', club_id=beta.id,
                              start_time=now - _td(hours=1), end_time=now + _td(hours=2),
                              stages_json=json.dumps([{'id': 'sb1', 'name': 'Stage B'},
                                                      {'id': 'sb2', 'name': 'Stage C'}]),
                              active=True))
-        # Rally Season: three back-to-back 4-day legs. The stored end_time is
-        # the LAST leg's end (+11d23h) but the current leg ends in +3d23h, so
-        # ordering must use the current leg — it sorts before Alpha (+5d).
+        # Rally Season: three back-to-back 4-day legs, already in round 2. The
+        # stored end_time is the LAST leg's end (+6d23h) but the current leg
+        # ends in +2d23h, so ordering must use the current leg — it sorts
+        # before Alpha (+5d). Top-level location/car_class still hold round 1
+        # (the stale values a first-leg-only dashboard would display).
         season_legs = [
             {'name': f'Round {i + 1}', 'location': f'Loc {i + 1}',
              'car_class': f'class_{i + 1}',
@@ -2566,9 +2628,10 @@ def main() -> int:
             for i in range(3)
         ]
         db.session.add(Event(id='evt-smoke-season', name='Order Season', club_id=season.id,
-                             start_time=now - _td(hours=1), end_time=now + _td(days=12, hours=-1),
-                             settings_json=json.dumps({'mode': 'season'}),
-                             legs_json=json.dumps(season_legs), active=True))
+                              start_time=now - _td(days=5, hours=1), end_time=now + _td(days=6, hours=23),
+                              location='Loc 1', car_class='class_1',
+                              settings_json=json.dumps({'mode': 'season'}),
+                              legs_json=json.dumps(season_legs), active=True))
         # Drivers-column fixture: a second member.  On Alpha smokedriver has a
         # genuine finish + a terminal DNF marker (all closed -> green, and the
         # DNF must NOT block "done"); on Beta smokedriver is mid-leg (yellow);
@@ -2646,9 +2709,9 @@ def main() -> int:
     check('live chip shows countdown on club card', 'Live — ends in' in html)
     s_pos = html.find('>Order Season<')
     season_card = html[s_pos:s_pos + 600] if s_pos >= 0 else ''
-    # Render happens seconds after the fixture `now`, so +3d23h shows as "3d 22h".
+    # Render happens seconds after the fixture `now`, so +2d23h shows as "2d 22h".
     check('season card counts down to current leg end, not last leg end',
-          '3d 2' in season_card and '11d' not in season_card, season_card[:400])
+          '2d 2' in season_card and '6d' not in season_card, season_card[:400])
 
     # 21e. club list: filters + join/leave buttons + membership tint
     with app.app_context():
@@ -2797,14 +2860,22 @@ def main() -> int:
     check('dashboard live-events show current-event + championship countdowns',
           'Current event' in html and 'Championship' in html
           and 'Time left' not in html and '4d 23h' in html)
-    # Season's stored end_time is the LAST leg (+11d23h): Championship counts down
+    # Season's stored end_time is the LAST leg (+6d23h): Championship counts down
     # to the full championship end while Current event shows the current leg's
-    # end (+3d23h → "3d 2x" a few seconds later).
+    # (round 2) end (+2d23h → "2d 2x" a few seconds later).
     check('dashboard season columns: current leg vs full championship end',
-          '11d' in html and '3d 2' in html)
-    # Class column carries the CURRENTLY active leg's class (season leg 1 here,
-    # not whatever was stored first).
-    check('dashboard class column uses the current leg\'s class', 'class_1' in html)
+          '6d' in html and '2d 2' in html)
+    # Class column carries the CURRENTLY active leg's class (season round 2
+    # here, not the stale first-round one stored at the top level).
+    check('dashboard class column uses the current leg\'s class', 'class_2' in html)
+    # Location column: a season shows ONLY the current round's venue — the
+    # stored top-level location (round 1) must not leak through.
+    check('dashboard location: season shows the current round\'s venue only',
+          'Loc 2' in html and 'Loc 1' not in html)
+    # A Multi-Location rally lists every venue in round order, not just the
+    # first leg's stored location.
+    check('dashboard location: multi lists all venues joined',
+          'Loc A - Loc B' in html)
     # Drivers column: two dots per row — started/total first, done/total
     # second. Alpha: both members touched a stage (2/2) but only smokedriver is
     # closed (1/2); Beta: 1/1 started, 0/1 done; Season: untouched, 0/1 + 0/1.
