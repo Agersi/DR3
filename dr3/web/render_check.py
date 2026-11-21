@@ -149,6 +149,14 @@ def main() -> int:
           and 'Fastest overall' in r.get_data(as_text=True)
           and '.car-fastest-duo { display: flex; gap: 1rem; flex-wrap: wrap; }' in css
           and '.car-fastest-col { flex: 1 1 240px; min-width: 0; }' in css, '')
+    check('car page column padding/alignment + "Distance by User" heading (meta removed)',
+          '<h2>Distance by User</h2>' in r.get_data(as_text=True)
+          and 'Total distance driven in this car, per driver.' not in r.get_data(as_text=True)
+          and '.car-fastest th:first-child, .car-fastest td:first-child { padding-left: .5rem; }' in css
+          and '.car-fastest th:last-child, .car-fastest td:last-child { text-align: center; padding-right: .5rem; }' in css
+          and '.car-distance th:first-child, .car-distance td:first-child { padding-left: .5rem; }' in css
+          and '.car-distance thead th:first-child { padding-left: calc(40px + .5rem); }' in css
+          and '.car-distance th:last-child, .car-distance td:last-child { text-align: right; padding-right: .5rem; }' in css, '')
     check('car page CSS (selector row + header flex + stats grid)',
           '.car-pick { display: flex; gap: 0.8rem; align-items: center; }' in css
           and '.car-header { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }' in css
