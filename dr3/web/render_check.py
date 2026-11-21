@@ -66,7 +66,7 @@ def main() -> int:
           and 'max-height: 500px;' in css
           and 'scrollbar-color: var(--line) rgba(24, 28, 20, 0.5);' in css
           and '.cselect-item:hover, .cselect-item:focus, .cselect-item.cselect-focus { background: var(--accent); color: var(--bg); }' in css
-          and '.cselect.open .cselect-menu { opacity: 1; visibility: visible; transform: none; pointer-events: auto; }' in css
+          and '.cselect.open .cselect-menu { transform: scaleY(1); visibility: visible; pointer-events: auto; }' in css
           and "stroke='%23ECDFCC'" in css
           and 'color-scheme: dark;' in css
           and 'function enhance(sel)' in html
