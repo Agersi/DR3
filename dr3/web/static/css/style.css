@@ -330,7 +330,7 @@ input[type='checkbox'] { width: auto; max-width: none; }
 }
 .cselect.open .cselect-btn::after { rotate: 180deg; }
 .cselect-menu {
-  position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0;
+  position: fixed; z-index: 30;
   max-height: 500px; overflow-y: auto;
   scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5);
   background: var(--accent-deep); box-shadow: 4px 4px 4px var(--shadow);

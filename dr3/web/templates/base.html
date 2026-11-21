@@ -265,6 +265,13 @@ if (document.querySelector('.flash.error')) window.scrollTo(0, 0);
     var sel = wrap.querySelector('select');
     buildMenu(sel, wrap);
     syncLabel(sel, wrap);
+    var btn = wrap.querySelector('.cselect-btn');
+    var menu = wrap.querySelector('.cselect-menu');
+    var r = btn.getBoundingClientRect();
+    menu.style.top = (r.bottom + 4) + 'px';
+    menu.style.left = r.left + 'px';
+    menu.style.width = r.width + 'px';
+    menu.style.maxHeight = Math.max(60, Math.min(500, window.innerHeight - r.bottom - 8)) + 'px';
     wrap.classList.add('open');
     openWrap = wrap;
   }
@@ -353,6 +360,8 @@ if (document.querySelector('.flash.error')) window.scrollTo(0, 0);
   document.addEventListener('mousedown', function (e) {
     if (openWrap && !openWrap.contains(e.target)) closeMenu(openWrap);
   });
+  window.addEventListener('scroll', function () { if (openWrap) closeMenu(openWrap); }, true);
+  window.addEventListener('resize', function () { if (openWrap) closeMenu(openWrap); });
 })();
 </script>
 </body>
