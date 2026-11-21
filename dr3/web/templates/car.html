@@ -2,7 +2,6 @@
 {% block title %}{{ title }} — DR3{% endblock %}
 {% block content %}
 <div class="panel car-pick">
-  <label for="car-select">Car</label>
   <select id="car-select">
     {% for label, cars in car_groups %}
     <optgroup label="{{ label }}">

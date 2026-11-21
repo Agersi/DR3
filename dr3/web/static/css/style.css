@@ -312,7 +312,7 @@ input[type='checkbox'] { width: auto; max-width: none; }
   position: relative; width: 100%; padding: 0.5rem 2.1rem 0.5rem 0.6rem;
   border: 2px solid var(--line); background: var(--bg);
   font-family: var(--body); font-size: 1rem; color: var(--text);
-  text-align: left; cursor: pointer;
+  text-align: left; cursor: pointer; margin-top: 0;
 }
 .cselect-btn:hover, .cselect-btn:focus {
   outline: none; border-color: var(--accent);
@@ -329,7 +329,8 @@ input[type='checkbox'] { width: auto; max-width: none; }
   position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0;
   max-height: 500px; overflow-y: auto;
   scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5);
-  background: var(--card); box-shadow: 4px 4px 0 var(--shadow);
+  background: var(--accent-deep); box-shadow: 4px 4px 4px var(--shadow);
+  border-radius: .3rem;
 }
 .cselect-list { list-style: none; margin: 0; padding: 0; }
 .cselect-item {
@@ -502,7 +503,7 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 
 .car-pick { display: flex; gap: 0.8rem; align-items: center; }
 .car-pick label { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.82rem; font-weight: 600; color: var(--muted); }
-.car-pick select { max-width: 24rem; }
+.car-pick .cselect { max-width: 22rem; }
 .car-header { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }
 .car-img { max-width: 300px; width: 60%; height: auto; }
 .car-head-body { flex: 1; min-width: 16rem; }
