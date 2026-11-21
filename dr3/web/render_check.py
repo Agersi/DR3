@@ -157,14 +157,13 @@ def main() -> int:
           and '.car-distance th:first-child, .car-distance td:first-child { padding-left: .5rem; }' in css
           and '.car-distance thead th:first-child { padding-left: calc(40px + .5rem); }' in css
           and '.car-distance th:last-child, .car-distance td:last-child { text-align: right; padding-right: .5rem; }' in css, '')
-    check('car page fastest tables: rows expand to show stage names',
+    check('car page fastest tables: rows expand to stage names (one row per stage)',
           'class="fastest-row"' in r.get_data(as_text=True)
-          and 'class="fastest-detail" hidden' in r.get_data(as_text=True)
-          and 'stage-name' in r.get_data(as_text=True)
+          and '<tr class="fastest-detail" hidden><td colspan="2">Tolt Valley Sprint Forward</td></tr>' in r.get_data(as_text=True)
           and '.car-fastest tbody tr.fastest-row { cursor: pointer; }' in css
           and '.car-fastest tr:nth-child(even) td { background: transparent; }' in css
-          and '.car-fastest .fastest-detail td { padding: 0.25rem 0.5rem 0.5rem 1rem; color: var(--muted); font-size: 0.82rem; background: rgba(24, 28, 20, 0.35); }' in css
-          and '.car-fastest .stage-name { display: inline-block; margin: 0.1rem 0.7rem 0.1rem 0; white-space: nowrap; }' in css, '')
+          and '.car-fastest tr.fastest-detail td { padding: 0.2rem 0.5rem 0.2rem 1rem; color: var(--muted); font-size: 0.82rem; background: rgba(24, 28, 20, 0.35); }' in css
+          and '.stage-name' not in css, '')
     check('car page CSS (selector row + header flex + stats grid)',
           '.car-pick { display: flex; gap: 0.8rem; align-items: center; }' in css
           and '.car-header { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }' in css

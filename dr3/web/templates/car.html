@@ -45,7 +45,9 @@
           <tbody id="car-fastest-class-body">
             {% for row in fastest_class %}
             <tr class="fastest-row"><td>{{ row.location }}</td><td class="num">{{ row.count }}</td></tr>
-            <tr class="fastest-detail" hidden><td colspan="2">{% for s in row.stages %}<span class="stage-name">{{ s }}</span>{% endfor %}</td></tr>
+            {% for s in row.stages %}
+            <tr class="fastest-detail" hidden><td colspan="2">{{ s }}</td></tr>
+            {% endfor %}
             {% else %}
             <tr><td colspan="2" class="dim">No stages yet.</td></tr>
             {% endfor %}
@@ -60,7 +62,9 @@
           <tbody id="car-fastest-overall-body">
             {% for row in fastest_overall %}
             <tr class="fastest-row"><td>{{ row.location }}</td><td class="num">{{ row.count }}</td></tr>
-            <tr class="fastest-detail" hidden><td colspan="2">{% for s in row.stages %}<span class="stage-name">{{ s }}</span>{% endfor %}</td></tr>
+            {% for s in row.stages %}
+            <tr class="fastest-detail" hidden><td colspan="2">{{ s }}</td></tr>
+            {% endfor %}
             {% else %}
             <tr><td colspan="2" class="dim">No stages yet.</td></tr>
             {% endfor %}
@@ -167,19 +171,16 @@
       tr.appendChild(td1);
       tr.appendChild(td2);
       tbody.appendChild(tr);
-      var dtr = document.createElement('tr');
-      dtr.className = 'fastest-detail';
-      dtr.hidden = true;
-      var dtd = document.createElement('td');
-      dtd.colSpan = 2;
       (r.stages || []).forEach(function (s) {
-        var span = document.createElement('span');
-        span.className = 'stage-name';
-        span.textContent = s;
-        dtd.appendChild(span);
+        var dtr = document.createElement('tr');
+        dtr.className = 'fastest-detail';
+        dtr.hidden = true;
+        var dtd = document.createElement('td');
+        dtd.colSpan = 2;
+        dtd.textContent = s;
+        dtr.appendChild(dtd);
+        tbody.appendChild(dtr);
       });
-      dtr.appendChild(dtd);
-      tbody.appendChild(dtr);
     });
   }
 
@@ -188,10 +189,15 @@
     tbody.addEventListener('click', function (e) {
       var row = e.target.closest ? e.target.closest('tr.fastest-row') : null;
       if (!row || row.parentElement !== tbody) return;
-      var detail = row.nextElementSibling;
-      if (detail && detail.classList.contains('fastest-detail')) {
-        detail.hidden = !detail.hidden;
+      var details = [];
+      var sib = row.nextElementSibling;
+      while (sib && sib.classList.contains('fastest-detail')) {
+        details.push(sib);
+        sib = sib.nextElementSibling;
       }
+      if (!details.length) return;
+      var show = details[0].hidden;
+      details.forEach(function (d) { d.hidden = !show; });
     });
   });
 
