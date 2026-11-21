@@ -360,7 +360,12 @@ if (document.querySelector('.flash.error')) window.scrollTo(0, 0);
   document.addEventListener('mousedown', function (e) {
     if (openWrap && !openWrap.contains(e.target)) closeMenu(openWrap);
   });
-  window.addEventListener('scroll', function () { if (openWrap) closeMenu(openWrap); }, true);
+  window.addEventListener('scroll', function (e) {
+    if (!openWrap) return;
+    var menu = openWrap.querySelector('.cselect-menu');
+    if (menu && e.target && menu.contains(e.target)) return;
+    closeMenu(openWrap);
+  }, true);
   window.addEventListener('resize', function () { if (openWrap) closeMenu(openWrap); });
 })();
 </script>
