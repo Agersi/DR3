@@ -309,10 +309,18 @@ input[type='checkbox'] { width: auto; max-width: none; }
 .cselect { position: relative; display: block; }
 .cselect > select { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
 .cselect-btn {
-  position: relative; width: 100%; padding: 0.5rem 2.1rem 0.5rem 0.6rem;
-  border: 2px solid var(--line); background: var(--bg);
-  font-family: var(--body); font-size: 1rem; color: var(--text);
-  text-align: left; cursor: pointer; margin-top: 0;
+  position: relative;
+  width: 100%;
+  padding: 0.5rem 2.1rem 0.5rem 0.6rem;
+  border: none;
+  background: var(--bg);
+  font-family: var(--body);
+  font-size: 1rem;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  margin-top: 0;
+  outline: none;
 }
 .cselect-btn::after {
   content: ''; position: absolute; right: 0.7rem; top: 30%;
