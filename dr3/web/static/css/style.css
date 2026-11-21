@@ -314,10 +314,6 @@ input[type='checkbox'] { width: auto; max-width: none; }
   font-family: var(--body); font-size: 1rem; color: var(--text);
   text-align: left; cursor: pointer; margin-top: 0;
 }
-.cselect-btn:hover, .cselect-btn:focus {
-  outline: none; border-color: var(--accent);
-  box-shadow: 3px 3px 0 rgba(236, 223, 204, 0.25);
-}
 .cselect-btn::after {
   content: ''; position: absolute; right: 0.7rem; top: 30%;
   width: 24px; height: 24px;
