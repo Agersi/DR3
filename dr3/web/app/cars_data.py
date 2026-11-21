@@ -56,12 +56,18 @@ def location_name(location_id: int | None) -> str:
         return f'Location {location_id}' if location_id is not None else 'Unknown location'
 
 
-def fastest_stages_by_location(vid: int) -> list[dict]:
-    """Per location, how many distinct stages this car holds the site-best
-    clean time on. A stage is one route (location + track model); the best is
-    the fastest clean finish posted by any driver in any run type."""
+def fastest_stages_by_location(vid: int) -> dict[str, list[dict]]:
+    """Per location, how many distinct stages this car holds the best clean
+    time on — overall (fastest of any car) and in-class (fastest among cars
+    sharing this car's class). A stage is one route (location + track model);
+    the best is the fastest clean finish posted by any driver in any run type."""
+    from dr2server.game_data import VEHICLES
+
     from .db import db
     from .models import StageRun
+
+    vid = int(vid)
+    target_class = VEHICLES.get(vid, {}).get('class')
 
     rows = (db.session.query(StageRun.location_id, StageRun.track_model_id,
                              StageRun.vehicle_id, StageRun.time_ms)
@@ -70,19 +76,29 @@ def fastest_stages_by_location(vid: int) -> list[dict]:
                     StageRun.location_id.isnot(None),
                     StageRun.track_model_id.isnot(None))
             .all())
-    best: dict[tuple, tuple] = {}
+    overall: dict[tuple, tuple] = {}
+    in_class: dict[tuple, tuple] = {}
     for loc, track, vehicle, ms in rows:
         key = (loc, track)
-        cur = best.get(key)
+        cur = overall.get(key)
         if cur is None or ms < cur[0]:
-            best[key] = (ms, vehicle)
-    counts: dict[int, int] = {}
-    for (loc, _track), (_ms, vehicle) in best.items():
-        if vehicle == int(vid):
-            counts[loc] = counts.get(loc, 0) + 1
-    out = [{'location': location_name(loc), 'count': n} for loc, n in counts.items()]
-    out.sort(key=lambda r: (-r['count'], r['location'].lower()))
-    return out
+            overall[key] = (ms, vehicle)
+        if target_class is not None \
+                and VEHICLES.get(vehicle, {}).get('class') == target_class:
+            cur2 = in_class.get(key)
+            if cur2 is None or ms < cur2[0]:
+                in_class[key] = (ms, vehicle)
+
+    def summarize(best_map: dict[tuple, tuple]) -> list[dict]:
+        counts: dict[int, int] = {}
+        for (loc, _track), (_ms, vehicle) in best_map.items():
+            if vehicle == vid:
+                counts[loc] = counts.get(loc, 0) + 1
+        out = [{'location': location_name(loc), 'count': n} for loc, n in counts.items()]
+        out.sort(key=lambda r: (-r['count'], r['location'].lower()))
+        return out
+
+    return {'overall': summarize(overall), 'in_class': summarize(in_class)}
 
 
 def distance_driven_by_user(vid: int) -> list[dict]:

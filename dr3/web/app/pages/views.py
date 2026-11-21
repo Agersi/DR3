@@ -898,13 +898,15 @@ def _car_page_data(vid: int) -> dict:
     distance = distance_driven_by_user(vid)
     for row in distance:
         row['km_text'] = f"{row['km']:,.1f}"
+    fastest = fastest_stages_by_location(vid)
     return {
         'vehicle_id': int(vid),
         'title': title,
         'class_label': class_label,
         'image_url': car_image_url(vid),
         'stats': [list(s) for s in info.get('stats', [])],
-        'fastest_stages': fastest_stages_by_location(vid),
+        'fastest_class': fastest['in_class'],
+        'fastest_overall': fastest['overall'],
         'distance': distance,
     }
 

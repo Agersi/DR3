@@ -36,11 +36,27 @@
 <div id="car-tab-content">
   <section class="club-tab" data-tab="leaderboards" id="tab-leaderboards">
     <h2>Fastest stages by location</h2>
-    <p class="meta">Distinct stages where this car holds the fastest posted time on the site.</p>
+    <p class="meta">Distinct stages (routes) where this car posts the fastest clean time.</p>
+
+    <h3>Fastest in class</h3>
+    <p class="meta">Fastest among cars sharing this car's class.</p>
     <div class="table-wrap"><table class="table car-fastest">
       <thead><tr><th>Location</th><th class="num">Stages</th></tr></thead>
-      <tbody id="car-fastest-body">
-        {% for row in fastest_stages %}
+      <tbody id="car-fastest-class-body">
+        {% for row in fastest_class %}
+        <tr><td>{{ row.location }}</td><td class="num">{{ row.count }}</td></tr>
+        {% else %}
+        <tr><td colspan="2" class="dim">No stages yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+
+    <h3>Fastest overall</h3>
+    <p class="meta">Fastest of any car on the site.</p>
+    <div class="table-wrap"><table class="table car-fastest">
+      <thead><tr><th>Location</th><th class="num">Stages</th></tr></thead>
+      <tbody id="car-fastest-overall-body">
+        {% for row in fastest_overall %}
         <tr><td>{{ row.location }}</td><td class="num">{{ row.count }}</td></tr>
         {% else %}
         <tr><td colspan="2" class="dim">No stages yet.</td></tr>
@@ -116,7 +132,8 @@
   var titleEl = document.getElementById('car-title');
   var classEl = document.getElementById('car-class');
   var statsEl = document.getElementById('car-stats');
-  var fastestBody = document.getElementById('car-fastest-body');
+  var fastestClassBody = document.getElementById('car-fastest-class-body');
+  var fastestOverallBody = document.getElementById('car-fastest-overall-body');
   var distanceBody = document.getElementById('car-distance-body');
   var DATA_URL = '{{ url_for("pages.cars_data") }}';
   var PAGE_BASE = '{{ url_for("pages.cars_index") }}';
@@ -132,9 +149,9 @@
     tbody.appendChild(tr);
   }
 
-  function renderFastest(rows) {
-    fastestBody.innerHTML = '';
-    if (!rows.length) { emptyRow(fastestBody, 'No stages yet.'); return; }
+  function renderFastest(tbody, rows) {
+    tbody.innerHTML = '';
+    if (!rows.length) { emptyRow(tbody, 'No stages yet.'); return; }
     rows.forEach(function (r) {
       var tr = document.createElement('tr');
       var td1 = document.createElement('td');
@@ -144,7 +161,7 @@
       td2.textContent = r.count;
       tr.appendChild(td1);
       tr.appendChild(td2);
-      fastestBody.appendChild(tr);
+      tbody.appendChild(tr);
     });
   }
 
@@ -212,7 +229,8 @@
           img.remove();
         }
         renderStats(d.stats);
-        renderFastest(d.fastest_stages || []);
+        renderFastest(fastestClassBody, d.fastest_class || []);
+        renderFastest(fastestOverallBody, d.fastest_overall || []);
         renderDistance(d.distance || []);
         document.title = d.title + ' — DR3';
         history.replaceState(null, '', PAGE_BASE + '?car=' + select.value);

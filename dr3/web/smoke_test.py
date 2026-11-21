@@ -1284,8 +1284,9 @@ def main() -> int:
 
     # 7c-3. Car page: /cars?car=<id> preselects the car, the old /cars/<id>
     # URL redirects there. Leaderboards come from stage_runs: fastest stages
-    # per location (distinct tracks where this car holds the best posted time)
-    # + distance driven per driver.
+    # per location — overall (any car) and in-class (same class only; car 565
+    # is Rally GT while the faster car 385 on track 702 is H1 FWD) — plus
+    # distance driven per driver.
     with app.app_context():
         from datetime import timedelta  # noqa: F401
         from app.models import StageRun
@@ -1318,8 +1319,10 @@ def main() -> int:
           and 'id="car-select"' in html
           and 'Leaderboards' in html and 'Tunes' in html and 'Liveries' in html,
           f'status={r.status_code}')
-    check('car page fastest-stages leaderboard: Wales 2 (lost Sweden track)',
-          '<td>Wales</td><td class="num">2</td>' in html and 'Sweden' not in html, '')
+    check('car page shows both fastest-stage tables (in class + overall)',
+          'id="car-fastest-class-body"' in html
+          and 'id="car-fastest-overall-body"' in html
+          and 'Fastest in class' in html and 'Fastest overall' in html, '')
     # (exact totals are not asserted: earlier fixtures also drive car 565 —
     # cardriver's 5.2 km is exact because only our row uses that username)
     check('car page distance table: Smoke Driver first, Car Driver exactly 5.2 km',
@@ -1328,18 +1331,27 @@ def main() -> int:
           and html.find('Smoke Driver') < html.find('Car Driver'), '')
     r = client.get('/api/cars/data?car=565')
     j = r.get_json() or {}
-    fs = j.get('fastest_stages') or []
+    fs_overall = j.get('fastest_overall') or []
+    fs_class = j.get('fastest_class') or []
     dist = j.get('distance') or []
-    wales = next((x for x in fs if x.get('location') == 'Wales'), None)
+    wales_o = next((x for x in fs_overall if x.get('location') == 'Wales'), None)
+    sweden_o = next((x for x in fs_overall if x.get('location') == 'Sweden'), None)
+    wales_c = next((x for x in fs_class if x.get('location') == 'Wales'), None)
+    sweden_c = next((x for x in fs_class if x.get('location') == 'Sweden'), None)
     card = next((x for x in dist if x.get('username') == 'cardriver'), None)
-    check('cars data API returns car + leaderboards',
+    check('cars data API: overall fastest stages — Wales 2, Sweden lost to a faster car',
           r.status_code == 200 and j.get('ok') is True
           and j.get('title') == 'Porsche 911 RGT Rally Spec'
           and j.get('class_label') == 'Rally GT'
-          and wales is not None and wales.get('count') == 2
-          and dist and dist[0].get('username') == 'smokedriver'
+          and wales_o is not None and wales_o.get('count') == 2
+          and sweden_o is None, str(j)[:300])
+    check('cars data API: in-class fastest stages — Wales 2 + Sweden 1 (H1 FWD car excluded)',
+          wales_c is not None and wales_c.get('count') == 2
+          and sweden_c is not None and sweden_c.get('count') == 1, str(fs_class)[:300])
+    check('cars data API: distance table — Smoke Driver first, Car Driver exactly 5.2 km',
+          dist and dist[0].get('username') == 'smokedriver'
           and card is not None and card.get('km') == 5.2
-          and card.get('driver_url') == '/profile/cardriver', str(j)[:300])
+          and card.get('driver_url') == '/profile/cardriver', str(dist)[:300])
     r = client.get('/api/cars/data?car=999999')
     check('cars data API 404 for unknown car id', r.status_code == 404,
           f'status={r.status_code}')

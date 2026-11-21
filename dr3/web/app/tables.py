@@ -120,7 +120,24 @@ RX_CAR_CLASSES: dict[str, list[str]] = {
 
 # Every class is selectable for every event, rally or rallycross — players may
 # run RX cars on rally stages and rally cars on RX circuits.
-ALL_CAR_CLASSES: dict[str, list[str]] = {**CAR_CLASSES, **RX_CAR_CLASSES}
+_RALLY_RX_CLASSES: dict[str, list[str]] = {**CAR_CLASSES, **RX_CAR_CLASSES}
+
+# Display order for car-class select boxes (site-wide): the fixed sequence used
+# everywhere classes are listed in a <select> (car page, account, event builder).
+# Any class missing from the list is appended at the end so nothing is dropped.
+CAR_CLASS_ORDER: list[str] = [
+    'H1 (FWD)', 'H2 (FWD)', 'H2 (RWD)', 'H3 (RWD)',
+    'Group B (RWD)', 'Group B (4WD)', 'Group A', 'F2 Kit Car',
+    '2000cc', 'NR4/R4', 'R2', 'R5', 'Rally GT',
+    'RX Super 1600', 'Cross Kart', 'Group B Rallycross', 'RX2',
+    'RX Supercars', 'RX Supercars 2019',
+]
+
+ALL_CAR_CLASSES: dict[str, list[str]] = {
+    c: _RALLY_RX_CLASSES[c] for c in CAR_CLASS_ORDER if c in _RALLY_RX_CLASSES
+}
+for _cls, _cars in _RALLY_RX_CLASSES.items():
+    ALL_CAR_CLASSES.setdefault(_cls, _cars)
 
 # Drivetrain per car class (user-supplied 2026-11-03), for filtering clubs by
 # the drivetrain their current championship uses. No class mixes drivetrains;
