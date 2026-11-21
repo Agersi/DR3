@@ -541,7 +541,7 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .car-fastest tr.fastest-detail.open .fd-wrap { grid-template-rows: 1fr; }
 .fd-inner {
   overflow: hidden; min-height: 0;
-  padding-left: 1rem; padding-right: .5rem; color: var(--accent); font-size: 0.82rem;
+  padding-left: 1rem; padding-right: .5rem; color: var(--accent); font-size: 0.82rem; text-align: left;
   transition: padding 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
 .car-fastest tr.fastest-detail.open .fd-inner {
