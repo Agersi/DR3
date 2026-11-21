@@ -160,9 +160,9 @@ def main() -> int:
     check('car page fastest tables: rows expand to stage names (one row per stage)',
           'class="fastest-row"' in r.get_data(as_text=True)
           and '<tr class="fastest-detail" hidden><td colspan="2">Tolt Valley Sprint Forward</td></tr>' in r.get_data(as_text=True)
-          and '.car-fastest tbody tr.fastest-row { cursor: pointer; }' in css
+          and '.car-fastest tbody tr.fastest-row { cursor: pointer; font-weight: 600; }' in css
           and '.car-fastest tr:nth-child(even) td { background: transparent; }' in css
-          and '.car-fastest tr.fastest-detail td { padding: 0.2rem 0.5rem 0.2rem 1rem; color: var(--muted); font-size: 0.82rem; background: rgba(24, 28, 20, 0.35); }' in css
+          and '.car-fastest tr.fastest-detail td { padding: 0.2rem 0.5rem 0.2rem 1rem; color: var(--accent); font-size: 0.82rem; background: rgba(24, 28, 20, 0.35); text-align: left; }' in css
           and '.stage-name' not in css, '')
     check('car page CSS (selector row + header flex + stats grid)',
           '.car-pick { display: flex; gap: 0.8rem; align-items: center; }' in css
