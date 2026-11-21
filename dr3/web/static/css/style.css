@@ -466,6 +466,8 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .car-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.35rem 1rem; margin: 0.7rem 0 0; }
 .car-stat dt { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.74rem; font-weight: 600; color: var(--muted); }
 .car-stat dd { margin: 0; font-weight: 600; }
+.car-fastest-duo { display: flex; gap: 1rem; flex-wrap: wrap; }
+.car-fastest-col { flex: 1 1 240px; min-width: 0; }
 
 /* ── Flash messages ─────────────────────────────────── */
 

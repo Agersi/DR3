@@ -141,11 +141,14 @@ def main() -> int:
           and 'id="car-select"' in r.get_data(as_text=True)
           and '<option value="565" selected' in r.get_data(as_text=True),
           f'status={r.status_code}')
-    check('car page fastest-stage leaderboards split into in-class + overall tables',
-          'id="car-fastest-class-body"' in r.get_data(as_text=True)
+    check('car page fastest-stage leaderboards side by side (in-class + overall)',
+          'class="car-fastest-duo"' in r.get_data(as_text=True)
+          and 'id="car-fastest-class-body"' in r.get_data(as_text=True)
           and 'id="car-fastest-overall-body"' in r.get_data(as_text=True)
           and 'Fastest in class' in r.get_data(as_text=True)
-          and 'Fastest overall' in r.get_data(as_text=True), '')
+          and 'Fastest overall' in r.get_data(as_text=True)
+          and '.car-fastest-duo { display: flex; gap: 1rem; flex-wrap: wrap; }' in css
+          and '.car-fastest-col { flex: 1 1 240px; min-width: 0; }' in css, '')
     check('car page CSS (selector row + header flex + stats grid)',
           '.car-pick { display: flex; gap: 0.8rem; align-items: center; }' in css
           and '.car-header { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }' in css

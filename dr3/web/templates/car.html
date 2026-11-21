@@ -36,33 +36,36 @@
 <div id="car-tab-content">
   <section class="club-tab" data-tab="leaderboards" id="tab-leaderboards">
     <h2>Fastest stages by location</h2>
-    <p class="meta">Distinct stages (routes) where this car posts the fastest clean time.</p>
 
-    <h3>Fastest in class</h3>
-    <p class="meta">Fastest among cars sharing this car's class.</p>
-    <div class="table-wrap"><table class="table car-fastest">
-      <thead><tr><th>Location</th><th class="num">Stages</th></tr></thead>
-      <tbody id="car-fastest-class-body">
-        {% for row in fastest_class %}
-        <tr><td>{{ row.location }}</td><td class="num">{{ row.count }}</td></tr>
-        {% else %}
-        <tr><td colspan="2" class="dim">No stages yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table></div>
+    <div class="car-fastest-duo">
+      <div class="car-fastest-col">
+        <h3>Fastest in class</h3>
+        <div class="table-wrap"><table class="table car-fastest">
+          <thead><tr><th>Location</th><th class="num">Stages</th></tr></thead>
+          <tbody id="car-fastest-class-body">
+            {% for row in fastest_class %}
+            <tr><td>{{ row.location }}</td><td class="num">{{ row.count }}</td></tr>
+            {% else %}
+            <tr><td colspan="2" class="dim">No stages yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table></div>
+      </div>
 
-    <h3>Fastest overall</h3>
-    <p class="meta">Fastest of any car on the site.</p>
-    <div class="table-wrap"><table class="table car-fastest">
-      <thead><tr><th>Location</th><th class="num">Stages</th></tr></thead>
-      <tbody id="car-fastest-overall-body">
-        {% for row in fastest_overall %}
-        <tr><td>{{ row.location }}</td><td class="num">{{ row.count }}</td></tr>
-        {% else %}
-        <tr><td colspan="2" class="dim">No stages yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table></div>
+      <div class="car-fastest-col">
+        <h3>Fastest overall</h3>
+        <div class="table-wrap"><table class="table car-fastest">
+          <thead><tr><th>Location</th><th class="num">Stages</th></tr></thead>
+          <tbody id="car-fastest-overall-body">
+            {% for row in fastest_overall %}
+            <tr><td>{{ row.location }}</td><td class="num">{{ row.count }}</td></tr>
+            {% else %}
+            <tr><td colspan="2" class="dim">No stages yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table></div>
+      </div>
+    </div>
 
     <h2>Distance driven</h2>
     <p class="meta">Total distance driven in this car, per driver.</p>
