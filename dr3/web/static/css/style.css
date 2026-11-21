@@ -455,6 +455,18 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .club-members form.inline { float: right; margin: .1rem; }
 .club-members button.small { padding: .25rem; font-size: .75rem; }
 
+/* ── Car page: selector + header + stats ─────────────── */
+
+.car-pick { display: flex; gap: 0.8rem; align-items: center; }
+.car-pick label { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.82rem; font-weight: 600; color: var(--muted); }
+.car-pick select { max-width: 24rem; }
+.car-header { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }
+.car-img { max-width: 300px; width: 60%; height: auto; }
+.car-head-body { flex: 1; min-width: 16rem; }
+.car-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.35rem 1rem; margin: 0.7rem 0 0; }
+.car-stat dt { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.74rem; font-weight: 600; color: var(--muted); }
+.car-stat dd { margin: 0; font-weight: 600; }
+
 /* ── Flash messages ─────────────────────────────────── */
 
 .flash {

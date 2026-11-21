@@ -77,6 +77,32 @@ def _reset_link(user: User) -> str:
     return f"{base}/reset_password/{user.reset_token}"
 
 
+def _vehicle_class_groups() -> list[tuple[str, list[tuple[int, str]]]]:
+    """Every catalog car grouped by class label, builder order (rally then RX),
+    cars sorted by name within each group."""
+    from ..scoring import VEHICLES
+    from ..tables import ALL_CAR_CLASSES
+    from dr2server.game_data import VEHICLE_CLASSES, vehicle_class_id_for_label
+
+    vehicles = sorted(VEHICLES.items(), key=lambda kv: kv[1]['name'].lower())
+    by_class: dict[str, list] = {}
+    for vid, meta in vehicles:
+        label = VEHICLE_CLASSES.get(int(meta['class']), f"Class {meta['class']}")
+        by_class.setdefault(label, []).append((vid, meta['name']))
+    # Builder class order (rally then RX), mapped to canonical enum labels.
+    ordered_labels: list[str] = []
+    for key in ALL_CAR_CLASSES:
+        cid = vehicle_class_id_for_label(key)
+        if cid is not None:
+            label = VEHICLE_CLASSES[cid]
+            if label not in ordered_labels:
+                ordered_labels.append(label)
+    groups = [(label, by_class[label]) for label in ordered_labels if label in by_class]
+    groups += [(label, by_class[label]) for label in sorted(by_class)
+               if label not in ordered_labels]
+    return groups
+
+
 def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]:
     """Every posted stage time as one row, newest first (backlog #42).
 
@@ -234,7 +260,7 @@ def home_recent_times():
             'club': row['club'],
             'club_url': url_for('clubs.club_detail', club_id=row['club_id']) if row['club_id'] else '',
             'car': row['car'],
-            'car_url': url_for('pages.car_stats', vehicle_id=row['vehicle_id']) if row['vehicle_id'] else '',
+            'car_url': url_for('pages.cars_index', car=row['vehicle_id']) if row['vehicle_id'] else '',
             'time_text': row['time_text'],
             'at_text': _timeago(dt) if dt else '',
             'tyres': row['tyres'],
@@ -453,25 +479,10 @@ def account():
     # Favorite pickers: every confirmed car + every known location, grouped for
     # easier selection — cars by class (builder order), locations by discipline.
     from ..scoring import VEHICLES  # game_data catalog (sys.path set there)
-    from ..tables import ALL_CAR_CLASSES
-    from dr2server.game_data import Location, VEHICLE_CLASSES, vehicle_class_id_for_label
-    vehicles = sorted(VEHICLES.items(), key=lambda kv: kv[1]['name'].lower())
-    vehicle_ids = {vid for vid, _ in vehicles}
-    by_class: dict[str, list] = {}
-    for vid, meta in vehicles:
-        label = VEHICLE_CLASSES.get(int(meta['class']), f"Class {meta['class']}")
-        by_class.setdefault(label, []).append((vid, meta['name']))
-    # Builder class order (rally then RX), mapped to canonical enum labels.
-    ordered_labels: list[str] = []
-    for key in ALL_CAR_CLASSES:
-        cid = vehicle_class_id_for_label(key)
-        if cid is not None:
-            label = VEHICLE_CLASSES[cid]
-            if label not in ordered_labels:
-                ordered_labels.append(label)
-    car_groups = [(label, by_class[label]) for label in ordered_labels if label in by_class]
-    car_groups += [(label, by_class[label]) for label in sorted(by_class)
-                   if label not in ordered_labels]
+    from dr2server.game_data import Location
+
+    vehicle_ids = set(VEHICLES)
+    car_groups = _vehicle_class_groups()
     locations = sorted(Location, key=lambda loc: loc.display_name.lower())
     location_ids = {int(loc) for loc in locations}
     location_groups = [
@@ -836,14 +847,66 @@ def profile(username: str):
         'profile.html', target=user, stats=_profile_stats(user))
 
 
+@pages_bp.route('/cars')
+def cars_index():
+    """Car page: pick a car (?car=<vehicle id>) for its stats + leaderboards.
+    Unknown/missing ids fall back to the first catalog car."""
+    from ..scoring import VEHICLES
+
+    groups = _vehicle_class_groups()
+    selected = None
+    raw = (request.args.get('car') or '').strip()
+    if raw.isdigit():
+        cand = int(raw)
+        if cand in VEHICLES:
+            selected = cand
+    if selected is None and groups:
+        selected = groups[0][1][0][0]
+    data = _car_page_data(selected) if selected is not None else {}
+    return render_template('car.html', car_groups=groups, **data)
+
+
 @pages_bp.route('/cars/<int:vehicle_id>')
 def car_stats(vehicle_id: int):
-    """Super-simple per-car page (more stats land later)."""
+    """Back-compat: old /cars/<id> links redirect to the ?car= page."""
+    return redirect(url_for('pages.cars_index', car=vehicle_id), code=302)
+
+
+@pages_bp.route('/api/cars/data')
+def cars_data():
+    """JSON for the car page's live switcher (?car=<vehicle id>)."""
+    from ..scoring import VEHICLES
+
+    raw = (request.args.get('car') or '').strip()
+    if not raw.isdigit() or int(raw) not in VEHICLES:
+        return jsonify({'ok': False, 'error': 'Unknown car.'}), 404
+    return jsonify({'ok': True, **_car_page_data(int(raw))})
+
+
+def _car_page_data(vid: int) -> dict:
+    """Everything the car page renders for one catalog vehicle id."""
+    from ..cars_data import (
+        car_image_url,
+        car_info,
+        distance_driven_by_user,
+        fastest_stages_by_location,
+    )
     from ..scoring import vehicle_meta
 
-    title, class_label = vehicle_meta(vehicle_id)
-    return render_template('car.html', vehicle_id=vehicle_id,
-                           title=title, class_label=class_label)
+    title, class_label = vehicle_meta(vid)
+    info = car_info(vid)
+    distance = distance_driven_by_user(vid)
+    for row in distance:
+        row['km_text'] = f"{row['km']:,.1f}"
+    return {
+        'vehicle_id': int(vid),
+        'title': title,
+        'class_label': class_label,
+        'image_url': car_image_url(vid),
+        'stats': [list(s) for s in info.get('stats', [])],
+        'fastest_stages': fastest_stages_by_location(vid),
+        'distance': distance,
+    }
 
 
 @pages_bp.route('/install')

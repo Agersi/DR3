@@ -1,8 +1,224 @@
 {% extends "base.html" %}
 {% block title %}{{ title }} — DR3{% endblock %}
 {% block content %}
-<div class="panel">
-  <h1>{{ title }}</h1>
-  {% if class_label %}<p class="meta">{{ class_label }}</p>{% endif %}
+<div class="panel car-pick">
+  <label for="car-select">Car</label>
+  <select id="car-select">
+    {% for label, cars in car_groups %}
+    <optgroup label="{{ label }}">
+      {% for vid, name in cars %}
+      <option value="{{ vid }}" {% if vid == vehicle_id %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </optgroup>
+    {% endfor %}
+  </select>
 </div>
+
+<div class="panel car-header">
+  {% if image_url %}<img class="car-img" src="{{ image_url }}" alt="{{ title }}">{% endif %}
+  <div class="car-head-body">
+    <h1 id="car-title">{{ title }}</h1>
+    <p class="meta" id="car-class">{{ class_label }}</p>
+    <dl class="car-stats" id="car-stats">
+      {% for label, value in stats %}
+      <div class="car-stat"><dt>{{ label }}</dt><dd>{{ value }}</dd></div>
+      {% endfor %}
+    </dl>
+  </div>
+</div>
+
+<nav class="club-menu" id="car-tab-menu">
+  <a class="active" href="#tab-leaderboards" data-tab="leaderboards">Leaderboards</a>
+  <a href="#tab-tunes" data-tab="tunes">Tunes</a>
+  <a href="#tab-liveries" data-tab="liveries">Liveries</a>
+</nav>
+
+<div id="car-tab-content">
+  <section class="club-tab" data-tab="leaderboards" id="tab-leaderboards">
+    <h2>Fastest stages by location</h2>
+    <p class="meta">Distinct stages where this car holds the fastest posted time on the site.</p>
+    <div class="table-wrap"><table class="table car-fastest">
+      <thead><tr><th>Location</th><th class="num">Stages</th></tr></thead>
+      <tbody id="car-fastest-body">
+        {% for row in fastest_stages %}
+        <tr><td>{{ row.location }}</td><td class="num">{{ row.count }}</td></tr>
+        {% else %}
+        <tr><td colspan="2" class="dim">No stages yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+
+    <h2>Distance driven</h2>
+    <p class="meta">Total distance driven in this car, per driver.</p>
+    <div class="table-wrap"><table class="table car-distance">
+      <thead><tr><th>Driver</th><th class="num">Distance</th></tr></thead>
+      <tbody id="car-distance-body">
+        {% for row in distance %}
+        <tr>
+          <td>{% if row.flag_url %}<img class="flag" src="{{ row.flag_url }}" alt="">{% endif %}<a class="driver-link" href="{{ row.driver_url }}">{{ row.display_name }}</a></td>
+          <td class="num">{{ row.km_text }} km</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="2" class="dim">No distance yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="club-tab" data-tab="tunes" id="tab-tunes" hidden>
+    <div class="panel"><h2>Tunes</h2><p class="meta">Coming soon.</p></div>
+  </section>
+
+  <section class="club-tab" data-tab="liveries" id="tab-liveries" hidden>
+    <div class="panel"><h2>Liveries</h2><p class="meta">Coming soon.</p></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var links = document.querySelectorAll('#car-tab-menu [data-tab]');
+  var panels = document.querySelectorAll('#car-tab-content .club-tab');
+  var storeKey = 'dr3_car_tab';
+  function hasTab(name) {
+    return Array.prototype.some.call(links, function (l) { return l.getAttribute('data-tab') === name; });
+  }
+  function show(name, remember) {
+    links.forEach(function (l) { l.classList.toggle('active', l.getAttribute('data-tab') === name); });
+    panels.forEach(function (p) { p.hidden = p.getAttribute('data-tab') !== name; });
+    if (remember) {
+      try { sessionStorage.setItem(storeKey, name); } catch (e) {}
+      history.replaceState(null, '', '#tab-' + name);
+    }
+  }
+  links.forEach(function (l) {
+    l.addEventListener('click', function (e) { e.preventDefault(); show(l.getAttribute('data-tab'), true); });
+  });
+  var initial = null;
+  if (location.hash) {
+    var h = location.hash.slice(1).replace(/^tab-/, '');
+    if (hasTab(h)) initial = h;
+  }
+  if (!initial) {
+    try {
+      var saved = sessionStorage.getItem(storeKey);
+      if (saved && hasTab(saved)) initial = saved;
+    } catch (e) {}
+  }
+  if (initial) show(initial, false);
+})();
+</script>
+
+<script>
+(function () {
+  var select = document.getElementById('car-select');
+  if (!select) return;
+  var header = document.querySelector('.car-header');
+  var titleEl = document.getElementById('car-title');
+  var classEl = document.getElementById('car-class');
+  var statsEl = document.getElementById('car-stats');
+  var fastestBody = document.getElementById('car-fastest-body');
+  var distanceBody = document.getElementById('car-distance-body');
+  var DATA_URL = '{{ url_for("pages.cars_data") }}';
+  var PAGE_BASE = '{{ url_for("pages.cars_index") }}';
+
+  function emptyRow(tbody, text) {
+    tbody.innerHTML = '';
+    var tr = document.createElement('tr');
+    var td = document.createElement('td');
+    td.colSpan = 2;
+    td.className = 'dim';
+    td.textContent = text;
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  }
+
+  function renderFastest(rows) {
+    fastestBody.innerHTML = '';
+    if (!rows.length) { emptyRow(fastestBody, 'No stages yet.'); return; }
+    rows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      var td1 = document.createElement('td');
+      td1.textContent = r.location;
+      var td2 = document.createElement('td');
+      td2.className = 'num';
+      td2.textContent = r.count;
+      tr.appendChild(td1);
+      tr.appendChild(td2);
+      fastestBody.appendChild(tr);
+    });
+  }
+
+  function renderDistance(rows) {
+    distanceBody.innerHTML = '';
+    if (!rows.length) { emptyRow(distanceBody, 'No distance yet.'); return; }
+    rows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      var td1 = document.createElement('td');
+      if (r.flag_url) {
+        var img = document.createElement('img');
+        img.className = 'flag';
+        img.src = r.flag_url;
+        img.alt = '';
+        img.loading = 'lazy';
+        td1.appendChild(img);
+        td1.appendChild(document.createTextNode(' '));
+      }
+      var a = document.createElement('a');
+      a.className = 'driver-link';
+      a.href = r.driver_url;
+      a.textContent = r.display_name;
+      td1.appendChild(a);
+      var td2 = document.createElement('td');
+      td2.className = 'num';
+      td2.textContent = r.km_text + ' km';
+      tr.appendChild(td1);
+      tr.appendChild(td2);
+      distanceBody.appendChild(tr);
+    });
+  }
+
+  function renderStats(rows) {
+    statsEl.innerHTML = '';
+    (rows || []).forEach(function (s) {
+      var div = document.createElement('div');
+      div.className = 'car-stat';
+      var dt = document.createElement('dt');
+      dt.textContent = s[0];
+      var dd = document.createElement('dd');
+      dd.textContent = s[1];
+      div.appendChild(dt);
+      div.appendChild(dd);
+      statsEl.appendChild(div);
+    });
+  }
+
+  select.addEventListener('change', function () {
+    fetch(DATA_URL + '?car=' + encodeURIComponent(select.value),
+          { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (d) {
+        titleEl.textContent = d.title;
+        classEl.textContent = d.class_label || '';
+        var img = header.querySelector('.car-img');
+        if (d.image_url) {
+          if (!img) {
+            img = document.createElement('img');
+            img.className = 'car-img';
+            header.insertBefore(img, header.querySelector('.car-head-body'));
+          }
+          img.src = d.image_url;
+          img.alt = d.title;
+        } else if (img) {
+          img.remove();
+        }
+        renderStats(d.stats);
+        renderFastest(d.fastest_stages || []);
+        renderDistance(d.distance || []);
+        document.title = d.title + ' — DR3';
+        history.replaceState(null, '', PAGE_BASE + '?car=' + select.value);
+      })
+      .catch(function () {});
+  });
+})();
+</script>
 {% endblock %}

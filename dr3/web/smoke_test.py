@@ -1221,7 +1221,7 @@ def main() -> int:
           str(rows)[:300])
     check('recent-times row carries driver/car links (no club on this event)',
           rows[0].get('driver_url') == '/profile/smokedriver'
-          and rows[0].get('car_url') == '/cars/1'
+          and rows[0].get('car_url') == '/cars?car=1'
           and rows[0].get('club_url') == '', str(rows)[:300])
     r = client.get('/api/home/recent-times?offset=1&limit=25')
     j = r.get_json() or {}
@@ -1273,7 +1273,7 @@ def main() -> int:
           link is not None
           and link['driver_url'] == '/profile/smokedriver'
           and link['club_url'] == '/clubs/smoke-link-club'
-          and link['car_url'] == '/cars/565'
+          and link['car_url'] == '/cars?car=565'
           and link['car'] == 'Porsche 911 RGT Rally Spec', str(link or rows)[:300])
     check('recent-times row carries tuning fields (run detail + stage entry)',
           link is not None
@@ -1282,19 +1282,91 @@ def main() -> int:
           and link['vr'] is False and link['assists'] is False,
           str(link or rows)[:300])
 
-    r = client.get('/cars/565')
-    check('car stats page shows name + class',
-          r.status_code == 200 and 'Porsche 911 RGT Rally Spec' in r.get_data(as_text=True)
-          and 'Rally GT' in r.get_data(as_text=True), f'status={r.status_code}')
-    r = client.get('/cars/1')
-    check('car stats page falls back for unknown vehicle ids',
-          r.status_code == 200 and 'Vehicle 1' in r.get_data(as_text=True),
+    # 7c-3. Car page: /cars?car=<id> preselects the car, the old /cars/<id>
+    # URL redirects there. Leaderboards come from stage_runs: fastest stages
+    # per location (distinct tracks where this car holds the best posted time)
+    # + distance driven per driver.
+    with app.app_context():
+        from datetime import timedelta  # noqa: F401
+        from app.models import StageRun
+        create_user('cardriver', 'car-driver@example.com', 'car-pass-12345',
+                    display_name='Car Driver', country='Denmark')
+        db.session.add_all([
+            # Wales: car 565 fastest on two distinct tracks (700, 701).
+            StageRun(username='smokedriver', source_type='timetrial',
+                     location_id=3, track_model_id=700, vehicle_id=565,
+                     time_ms=120000, player_finished=True, distance_m=4800),
+            StageRun(username='cardriver', source_type='timetrial',
+                     location_id=3, track_model_id=701, vehicle_id=565,
+                     time_ms=90000, player_finished=True, distance_m=5200),
+            # Sweden: car 385 beats car 565 on the one shared track (702) —
+            # must not count toward 565's fastest stages.
+            StageRun(username='smokedriver', source_type='timetrial',
+                     location_id=14, track_model_id=702, vehicle_id=385,
+                     time_ms=60000, player_finished=True, distance_m=3000),
+            StageRun(username='smokedriver', source_type='timetrial',
+                     location_id=14, track_model_id=702, vehicle_id=565,
+                     time_ms=61000, player_finished=True, distance_m=3100),
+        ])
+        db.session.commit()
+
+    r = client.get('/cars?car=565')
+    html = r.get_data(as_text=True)
+    check('car page preselects the ?car= vehicle and shows name + class + tabs',
+          r.status_code == 200 and 'Porsche 911 RGT Rally Spec' in html
+          and 'Rally GT' in html and '<option value="565" selected' in html
+          and 'id="car-select"' in html
+          and 'Leaderboards' in html and 'Tunes' in html and 'Liveries' in html,
           f'status={r.status_code}')
+    check('car page fastest-stages leaderboard: Wales 2 (lost Sweden track)',
+          '<td>Wales</td><td class="num">2</td>' in html and 'Sweden' not in html, '')
+    # (exact totals are not asserted: earlier fixtures also drive car 565 —
+    # cardriver's 5.2 km is exact because only our row uses that username)
+    check('car page distance table: Smoke Driver first, Car Driver exactly 5.2 km',
+          'Smoke Driver' in html and 'Car Driver' in html
+          and '5.2 km' in html
+          and html.find('Smoke Driver') < html.find('Car Driver'), '')
+    r = client.get('/api/cars/data?car=565')
+    j = r.get_json() or {}
+    fs = j.get('fastest_stages') or []
+    dist = j.get('distance') or []
+    wales = next((x for x in fs if x.get('location') == 'Wales'), None)
+    card = next((x for x in dist if x.get('username') == 'cardriver'), None)
+    check('cars data API returns car + leaderboards',
+          r.status_code == 200 and j.get('ok') is True
+          and j.get('title') == 'Porsche 911 RGT Rally Spec'
+          and j.get('class_label') == 'Rally GT'
+          and wales is not None and wales.get('count') == 2
+          and dist and dist[0].get('username') == 'smokedriver'
+          and card is not None and card.get('km') == 5.2
+          and card.get('driver_url') == '/profile/cardriver', str(j)[:300])
+    r = client.get('/api/cars/data?car=999999')
+    check('cars data API 404 for unknown car id', r.status_code == 404,
+          f'status={r.status_code}')
+    r = client.get('/cars/565')
+    check('old /cars/<id> URL redirects to the ?car= page',
+          r.status_code == 302 and r.headers.get('Location', '').endswith('/cars?car=565'),
+          f'status={r.status_code} loc={r.headers.get("Location")}')
+    r = client.get('/cars/1')
+    check('unknown car id redirects to the ?car= page (falls back server-side)',
+          r.status_code == 302 and r.headers.get('Location', '').endswith('/cars?car=1'),
+          f'status={r.status_code}')
+    r = client.get('/cars')
+    html = r.get_data(as_text=True)
+    check('/cars default: first catalog car selected (DS Automobiles DS 21)',
+          r.status_code == 200 and 'DS Automobiles DS 21' in html
+          and '<option value="572" selected' in html, f'status={r.status_code}')
 
     with app.app_context():
         from app.models import Club, ClubMember, Event, Result, StageRun
         db.session.query(Result).filter_by(event_id='smoke-link-event').delete()
         db.session.query(StageRun).filter_by(event_id='smoke-link-event').delete()
+        db.session.query(StageRun).filter(
+            StageRun.track_model_id.in_([700, 701, 702])
+        ).delete(synchronize_session=False)
+        cd = db.session.query(User).filter_by(username='cardriver').first()
+        if cd is not None:
+            db.session.delete(cd)
         db.session.query(Event).filter_by(id='smoke-link-event').delete()
         db.session.query(ClubMember).filter_by(club_id='smoke-link-club').delete()
         db.session.query(Club).filter_by(id='smoke-link-club').delete()

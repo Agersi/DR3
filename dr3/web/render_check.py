@@ -41,7 +41,8 @@ def main() -> int:
 
     anon_pages = [('/', 200), ('/events', 404), ('/clubs', 200), ('/install', 200),
                   ('/about', 200), ('/login', 200), ('/register', 200),
-                  ('/forgot_password', 200), ('/static/css/style.css', 200),
+                  ('/forgot_password', 200), ('/cars', 200),
+                  ('/static/css/style.css', 200),
                   ('/static/logo.png', 200), ('/nope', 404)]
     for path, want in anon_pages:
         r = client.get(path)
@@ -115,7 +116,7 @@ def main() -> int:
     check('home: recent-times rows link driver + club + vehicle pages (all use driver-link)',
           '<a class="driver-link" href="/profile/smokedriver">Smoke Driver</a>' in html
           and "a.className = 'driver-link';" in html
-          and '<a class="driver-link" href="/cars/1">Vehicle 1</a>' in html, '')
+          and '<a class="driver-link" href="/cars?car=1">Vehicle 1</a>' in html, '')
     check('home: recent-times Time + Posted columns use num class (headers, server + JS rows)',
           '<th class="num">Time</th>' in html and '<th class="num">Posted</th>' in html
           and html.count('<td class="num">') == 2
@@ -133,10 +134,18 @@ def main() -> int:
           and "tuningCells(row).forEach(function (td) { tr.appendChild(td); });" in html
           and "tbody.querySelectorAll('tr').forEach(applyTuning);" in html
           and '.recent-box th:nth-child(4), .recent-box td:nth-child(4)' in css, '')
-    r = client.get('/cars/565')
-    check('car stats page renders name + class',
+    r = client.get('/cars/565', follow_redirects=True)
+    check('car page renders name + class + tabs (old /cars/<id> redirects to ?car=)',
           r.status_code == 200 and 'Porsche 911 RGT Rally Spec' in r.get_data(as_text=True)
-          and 'Rally GT' in r.get_data(as_text=True), f'status={r.status_code}')
+          and 'Rally GT' in r.get_data(as_text=True)
+          and 'id="car-select"' in r.get_data(as_text=True)
+          and '<option value="565" selected' in r.get_data(as_text=True),
+          f'status={r.status_code}')
+    check('car page CSS (selector row + header flex + stats grid)',
+          '.car-pick { display: flex; gap: 0.8rem; align-items: center; }' in css
+          and '.car-header { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }' in css
+          and '.car-img { max-width: 300px; width: 60%; height: auto; }' in css
+          and '.car-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.35rem 1rem; margin: 0.7rem 0 0; }' in css, '')
     check('recent-times header stays pinned while rows scroll (sticky thead + box scrollbar)',
           '.recent-box { max-height: 360px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }' in css
           and '.recent-box::-webkit-scrollbar { width: 10px; }' in css
