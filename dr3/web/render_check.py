@@ -61,16 +61,15 @@ def main() -> int:
           and client.get('/static/css/style.css').get_data(as_text=True)
           .find('.filters { position: sticky; top: 0') != -1, '')
     css = client.get('/static/css/style.css').get_data(as_text=True)
-    check('global select styling (cross-browser chevron + open flip; Chromium ::picker bonus)',
-          'appearance: none; -webkit-appearance: none;' in css
-          and "stroke='%23ECDFCC'" in css
-          and 'select.is-open {' in css
-          and 'option { background-color: var(--card); color: var(--text); }' in css
-          and 'color-scheme: dark;' in css
+    check('custom dropdown widget (all-browser listbox: 500px cap, accent hover/focus, recent-box scrollbar)',
+          '.cselect { position: relative; display: block; }' in css
           and 'max-height: 500px;' in css
-          and 'scrollbar-color: var(--line) transparent;' in css
-          and '::picker(select) option:hover, ::picker(select) option:focus {' in css
-          and "sel.classList.add('is-open')" in html, '')
+          and 'scrollbar-color: var(--line) rgba(24, 28, 20, 0.5);' in css
+          and '.cselect-item:hover, .cselect-item:focus, .cselect-item.cselect-focus { background: var(--accent); color: var(--bg); }' in css
+          and "stroke='%23ECDFCC'" in css
+          and 'color-scheme: dark;' in css
+          and 'function enhance(sel)' in html
+          and "sel.dataset.cselect === '1'" in html, '')
     check('clubs: filter tile styling scoped to .filters (builder page untouched)',
           '.filters { position: sticky; top: 0; z-index: 20; padding: 0.9rem; }' in css
           and '.filters .opt-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin: 0.6rem 0 0 0; }' in css
@@ -502,8 +501,8 @@ def main() -> int:
               and "}).join('');" in det, '')
         check('club detail: board tooltips flow out of the scroll wrapper (body-level fixed element)',
               '.board-wrap { overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }' in board_css
-              and 'position: fixed;' in board_css.split('.hover-tip {', 1)[1].split('}', 1)[0]
-              and '::after' not in board_css, '')
+               and 'position: fixed;' in board_css.split('.hover-tip {', 1)[1].split('}', 1)[0]
+               and '.hover-tip::after' not in board_css, '')
         check('club detail: board table fills wrapper collapsed, grows to fit split columns when open',
               '.board-wrap::-webkit-scrollbar { height: 10px; }' in board_css
               and '.board-wrap::-webkit-scrollbar-track { background: rgba(24, 28, 20, 0.5); }' in board_css

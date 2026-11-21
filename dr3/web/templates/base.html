@@ -214,14 +214,148 @@ if (document.querySelector('.flash.error')) window.scrollTo(0, 0);
   });
 })();
 (function () {
-  document.querySelectorAll('select').forEach(function (sel) {
-    var open = function () { sel.classList.add('is-open'); };
-    var close = function () { sel.classList.remove('is-open'); };
-    sel.addEventListener('mousedown', open);
-    sel.addEventListener('focus', open);
-    sel.addEventListener('blur', close);
-    sel.addEventListener('change', close);
-    sel.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+  var openWrap = null;
+
+  function syncLabel(sel, wrap) {
+    var label = wrap.querySelector('.cselect-label');
+    var o = sel.options[sel.selectedIndex];
+    if (label) label.textContent = o ? o.textContent : '';
+  }
+
+  function buildMenu(sel, wrap) {
+    var menu = wrap.querySelector('.cselect-menu');
+    menu.innerHTML = '';
+    var ul = document.createElement('ul');
+    ul.className = 'cselect-list';
+    var lastGroup = null;
+    for (var i = 0; i < sel.options.length; i++) {
+      var opt = sel.options[i];
+      var group = (opt.parentElement && opt.parentElement.tagName === 'OPTGROUP') ? opt.parentElement : null;
+      if (group !== lastGroup) {
+        if (group) {
+          var g = document.createElement('li');
+          g.className = 'cselect-group';
+          g.textContent = group.label;
+          ul.appendChild(g);
+        }
+        lastGroup = group;
+      }
+      if (opt.disabled) continue;
+      var li = document.createElement('li');
+      li.className = 'cselect-item';
+      li.textContent = opt.textContent;
+      li.title = opt.textContent;
+      li.setAttribute('data-value', opt.value);
+      (function (v) {
+        li.addEventListener('mousedown', function (e) { e.preventDefault(); choose(sel, wrap, v); });
+      })(opt.value);
+      ul.appendChild(li);
+    }
+    menu.appendChild(ul);
+  }
+
+  function closeMenu(wrap) {
+    if (!wrap) return;
+    wrap.classList.remove('open');
+    var menu = wrap.querySelector('.cselect-menu');
+    if (menu) menu.hidden = true;
+    if (openWrap === wrap) openWrap = null;
+  }
+
+  function openMenu(wrap) {
+    if (openWrap && openWrap !== wrap) closeMenu(openWrap);
+    var sel = wrap.querySelector('select');
+    buildMenu(sel, wrap);
+    syncLabel(sel, wrap);
+    wrap.classList.add('open');
+    wrap.querySelector('.cselect-menu').hidden = false;
+    openWrap = wrap;
+  }
+
+  function choose(sel, wrap, value) {
+    sel.value = value;
+    syncLabel(sel, wrap);
+    closeMenu(wrap);
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function enhance(sel) {
+    if (sel.dataset.cselect === '1' || sel.multiple) return;
+    sel.dataset.cselect = '1';
+    var wrap = document.createElement('div');
+    wrap.className = 'cselect';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cselect-btn';
+    var label = document.createElement('span');
+    label.className = 'cselect-label';
+    btn.appendChild(label);
+    var menu = document.createElement('div');
+    menu.className = 'cselect-menu';
+    menu.hidden = true;
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(btn);
+    wrap.appendChild(menu);
+    wrap.appendChild(sel);
+    sel.setAttribute('tabindex', '-1');
+    buildMenu(sel, wrap);
+    syncLabel(sel, wrap);
+
+    btn.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      if (wrap.classList.contains('open')) closeMenu(wrap); else openMenu(wrap);
+      btn.focus();
+    });
+    btn.addEventListener('keydown', function (e) {
+      var list = wrap.querySelectorAll('.cselect-item');
+      if (!list.length) return;
+      if (!wrap.classList.contains('open')) {
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          openMenu(wrap);
+          list[0].classList.add('cselect-focus');
+        }
+        return;
+      }
+      var idx = -1;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].classList.contains('cselect-focus')) { idx = i; break; }
+      }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        var next = e.key === 'ArrowDown' ? (idx + 1) % list.length : (idx - 1 + list.length) % list.length;
+        if (idx >= 0) list[idx].classList.remove('cselect-focus');
+        list[next].classList.add('cselect-focus');
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        var f = wrap.querySelector('.cselect-item.cselect-focus');
+        if (f) choose(sel, wrap, f.getAttribute('data-value'));
+      } else if (e.key === 'Escape') {
+        closeMenu(wrap);
+      } else if (e.key === 'Tab') {
+        closeMenu(wrap);
+      }
+    });
+
+    new MutationObserver(function () {
+      buildMenu(sel, wrap);
+      syncLabel(sel, wrap);
+    }).observe(sel, { childList: true });
+  }
+
+  document.querySelectorAll('select').forEach(enhance);
+  new MutationObserver(function (muts) {
+    muts.forEach(function (m) {
+      m.addedNodes.forEach(function (n) {
+        if (!n.nodeType || n.nodeType !== 1) return;
+        if (n.tagName === 'SELECT') enhance(n);
+        else if (n.querySelectorAll) n.querySelectorAll('select').forEach(enhance);
+      });
+    });
+  }).observe(document.body, { childList: true, subtree: true });
+
+  document.addEventListener('mousedown', function (e) {
+    if (openWrap && !openWrap.contains(e.target)) closeMenu(openWrap);
   });
 })();
 </script>
