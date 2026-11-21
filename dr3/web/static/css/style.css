@@ -322,6 +322,7 @@ input[type='checkbox'] { width: auto; max-width: none; }
   margin-top: 0;
   outline: none;
 }
+.cselect-btn:hover, .cselect-btn:active { transform: none; box-shadow: none; background: var(--bg); color: var(--text); }
 .cselect-btn::after {
   content: ''; position: absolute; right: 0.7rem; top: 30%;
   width: 24px; height: 24px;
