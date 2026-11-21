@@ -23,11 +23,10 @@
       </optgroup>
     </select>
 
-    {% if draft.mode != 'season' and ei > 0 %}
     <label>Vehicle class</label>
+    {% if draft.mode != 'season' and ei > 0 %}
     <p class="meta">Same as Event 1 — car damage and tyre state carry over between rallies, so the whole championship runs one vehicle class.</p>
     {% else %}
-    <label>Vehicle class — rally and rallycross cars are both allowed on any track type{% if draft.mode == 'season' %}; each rally may use its own class{% endif %}</label>
     <select name="events[{{ ei }}][car_class]" required>
       <option value="">Select class...</option>
       {% for cls in car_classes %}<option value="{{ cls }}" {% if event.car_class == cls %}selected{% endif %}>{{ cls }}</option>{% endfor %}
@@ -47,7 +46,6 @@
         {% for m in [0, 15, 30, 45] %}<option value="{{ m }}" {% if event.duration.mins == m %}selected{% endif %}>{{ m }} min</option>{% endfor %}
       </select>
     </div>
-    <p class="meta">{% if draft.mode != 'season' and draft.events|length > 1 %}Rallies {{ ei + 2 }}–{{ draft.events|length }} run on this same timer.{% elif draft.mode == 'season' %}This rally opens when the previous one's window ends and closes when its own duration runs out.{% endif %}</p>
     {% endif %}
 
     <div class="rx-laps-row" data-event="{{ ei }}" {% if event.location not in rx_locs %}hidden{% endif %}>
