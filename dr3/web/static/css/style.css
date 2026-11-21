@@ -25,6 +25,7 @@
   --shadow: rgba(0, 0, 0, 0.45);
   /* Content column: full width on small screens, capped + centered on big ones */
   --page-max: 1440px;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -300,9 +301,20 @@ input:focus, select:focus, textarea:focus {
 }
 input[type='checkbox'] { width: auto; max-width: none; }
 
-/* Global native <select> popup (Chromium ::picker menu) — integrated look */
-select::picker-icon { color: var(--accent); transition: 0.4s rotate; }
-select:open::picker-icon { rotate: 180deg; }
+/* Global <select> styling — cross-browser: custom accent chevron drawn as a
+   background (tracks any select width), open-state flip via .is-open, dark
+   native popup; the ::picker rules are a Chromium-only bonus for the menu. */
+select {
+  appearance: none; -webkit-appearance: none;
+  padding-right: 2.1rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23ECDFCC' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+}
+select.is-open {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23ECDFCC' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 15l6-6 6 6'/%3E%3C/svg%3E");
+}
+option { background-color: var(--card); color: var(--text); }
 ::picker(select) {
   border: none;
   background: var(--card);
@@ -311,7 +323,6 @@ select:open::picker-icon { rotate: 180deg; }
   scrollbar-width: thin;
   scrollbar-color: var(--line) transparent;
 }
-::picker(select) option { color: var(--text); }
 ::picker(select) option:hover, ::picker(select) option:focus {
   background: var(--accent);
   color: var(--bg);

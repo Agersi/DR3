@@ -213,6 +213,17 @@ if (document.querySelector('.flash.error')) window.scrollTo(0, 0);
     });
   });
 })();
+(function () {
+  document.querySelectorAll('select').forEach(function (sel) {
+    var open = function () { sel.classList.add('is-open'); };
+    var close = function () { sel.classList.remove('is-open'); };
+    sel.addEventListener('mousedown', open);
+    sel.addEventListener('focus', open);
+    sel.addEventListener('blur', close);
+    sel.addEventListener('change', close);
+    sel.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+  });
+})();
 </script>
 </body>
 </html>
