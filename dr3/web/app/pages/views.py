@@ -128,12 +128,17 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
         cur = runs_of.get(key)
         if cur is None or (run.received_at, run.id) > (cur.received_at, cur.id):
             runs_of[key] = run
-    # Tuning blobs per slot — the spares fallback for pre-v0.1.74 clients.
+    # Tuning blobs + damage snapshots per slot — the spares fallback for
+    # pre-v0.1.74 clients and the tyre-click popup payload.
     tuning_of = {}
+    damage_of = {}
     for st in ClubStageState.query.all():
         if st.tuning_setup_b64:
             tuning_of[(st.event_id, st.username, st.flat_stage_index)] = \
                 st.tuning_setup_b64
+        if st.comp_damage_json:
+            damage_of[(st.event_id, st.username, st.flat_stage_index)] = \
+                json.loads(st.comp_damage_json)
 
     rows = []
     for r in Result.query.all():
@@ -157,6 +162,12 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
                 'time_text': format_ms(t),
                 'at': sa,
                 'tyres': [a['tyre']] if a['tyre'] is not None else [],
+                # Parallel to tyres: the stage-state damage snapshot for this
+                # slot (null when never captured — the popup shows its
+                # no-data fallback, same as the club board).
+                'tyre_damage': ([{'s': i, 'd': damage_of.get(
+                    (r.event_id, r.username, i))}]
+                                if a['tyre'] is not None else []),
                 'spares': _spare_tyres({
                     'spare_tyres': s.get('spare_tyres'),
                     'tuning_setup_b64':
@@ -264,6 +275,7 @@ def home_recent_times():
             'time_text': row['time_text'],
             'at_text': _timeago(dt) if dt else '',
             'tyres': row['tyres'],
+            'tyre_damage': row['tyre_damage'],
             'spares': row['spares'],
             'input': row['input'],
             'vr': row['vr'],

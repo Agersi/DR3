@@ -104,7 +104,7 @@
         <td>{{ flag_img(row.driver_flag) }}<a class="driver-link" href="{{ url_for('pages.profile', username=row.driver_username) }}">{{ row.driver }}</a></td>
         <td>{% if row.club_id %}<a class="driver-link" href="{{ url_for('clubs.club_detail', club_id=row.club_id) }}">{{ row.club }}</a>{% else %}—{% endif %}</td>
         <td>{% if row.vehicle_id %}<a class="driver-link" href="{{ url_for('pages.cars_index', car=row.vehicle_id) }}">{{ row.car }}</a>{% else %}{{ row.car or '—' }}{% endif %}</td>
-        <td class="tyre-cell" data-tyres="{{ row.tyres|tojson }}"></td>
+        <td class="tyre-cell" data-tyres="{{ row.tyres|tojson }}" data-td="{{ row.tyre_damage|tojson }}"></td>
         <td class="spare-cell" data-spares="{{ '' if row.spares is none else row.spares }}"></td>
         <td class="input-cell" data-input="{{ row.input or '' }}" data-vr="{{ '1' if row.vr else '' }}" data-assists="{{ '1' if row.assists else '' }}"></td>
         <td class="cam-cell" data-camera="{{ row.camera or '' }}"></td>
@@ -147,10 +147,10 @@
 
   function tyreCell(tyres) {
     if (!tyres || !tyres.length) return '<span class="ink">—</span>';
-    return tyres.map(function (t) {
+    return tyres.map(function (t, i) {
       var slug = TYRE_FILE[t] || '#_unknown';
       var name = esc(tyreName(slug));
-      return '<span class="tyre-img" data-tip="' + name + '"><img src="' + STATIC + 'tyres/' + slug + '.png" alt="" aria-label="' + name + '"></span>';
+      return '<span class="tyre-img" data-tip="' + name + '" data-tdx="' + i + '"><img src="' + STATIC + 'tyres/' + slug + '.png" alt="" aria-label="' + name + '"></span>';
     }).join(' ');
   }
 
@@ -208,7 +208,7 @@
       for (var k in attrs) td.dataset[k] = attrs[k];
       out.push(td);
     }
-    mk('tyre-cell', { tyres: JSON.stringify(row.tyres || []) });
+    mk('tyre-cell', { tyres: JSON.stringify(row.tyres || []), td: JSON.stringify(row.tyre_damage || []) });
     mk('spare-cell', { spares: row.spares == null ? '' : String(row.spares) });
     mk('input-cell', { input: row.input || '', vr: row.vr === true ? '1' : '', assists: row.assists === true ? '1' : '' });
     mk('cam-cell', { camera: row.camera || '' });
@@ -318,6 +318,166 @@
   tbody.addEventListener('mouseleave', hideTip);
   box.addEventListener('scroll', hideTip, { passive: true });
   window.addEventListener('scroll', hideTip, { passive: true });
+
+  // Pinned damage popup (same as the club board): clicking a tyre image pins
+  // the compound tip as a full vehicle-state model for the stage that set was
+  // used on. Hover keeps showing the plain compound name; click again /
+  // outside / Esc closes it.
+  var dmg = document.createElement('div');
+  dmg.className = 'dmg-popup';
+  document.body.appendChild(dmg);
+  var dmgTarget = null;
+
+  function unpack4(v) {
+    v = Number(v) || 0;
+    return [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >>> 24) & 0xFF];
+  }
+
+  // Packed-field byte -> corner map (accepted working decode; wheels_wear
+  // confirmed, the rest accepted preliminary).
+  var CORNER = {
+    FL: { wear: 2, impact: 2, springs: 0, brakes: 0, dampers: 0, body: 0 },
+    FR: { wear: 3, impact: 0, springs: 1, brakes: 1, dampers: 1, body: 3 },
+    RL: { wear: 0, impact: 3, springs: 2, brakes: 2, dampers: 2, body: 1 },
+    RR: { wear: 1, impact: 1, springs: 3, brakes: 3, dampers: 3, body: 2 }
+  };
+
+  function dmgColor(t) {
+    t = Math.max(0, Math.min(1, t));
+    return 'hsl(' + (130 * (1 - t)) + ', 75%, ' + (40 + 10 * t) + '%)';
+  }
+
+  function carSvg(d) {
+    var wear = unpack4(d.wheels_wear);
+    var impact = unpack4(d.wheels_impact);
+    var springs = unpack4(d.springs);
+    var dampers = unpack4(d.dampers);
+    var brakes = unpack4(d.brakes);
+    var bodywork = unpack4(d.bodywork);
+    var overlays = [
+      ['FL', 74, 29, 45, 120], ['FR', 119, 29, 45, 120],
+      ['RL', 74, 150, 45, 121], ['RR', 119, 150, 45, 121]
+    ].map(function (q) {
+      var v = bodywork[CORNER[q[0]].body] / 255;
+      if (v <= 0.02) return '';
+      return '<rect x="' + q[1] + '" y="' + q[2] + '" width="' + q[3] + '" height="' + q[4] + '" fill="' + dmgColor(v) + '" opacity="0.8"/>';
+    }).join('');
+    var wheels = [
+      ['FL', 78, 64], ['FR', 160, 64], ['RL', 78, 236], ['RR', 160, 236]
+    ].map(function (w) {
+      var c = CORNER[w[0]];
+      var x = w[1], y = w[2];
+      var bx = x < 119 ? 2 : 176;
+      var s = '<g>';
+      s += '<rect x="' + bx + '" y="' + (y - 22) + '" width="60" height="44" rx="6" fill="rgba(236,223,204,0.06)" stroke="#697565"/>';
+      [['Spr', springs[c.springs]], ['Dmp', dampers[c.dampers]], ['Brk', brakes[c.brakes]]].forEach(function (r, i) {
+        var ry = y - 13 + i * 13;
+        s += '<text x="' + (bx + 5) + '" y="' + ry + '" font-size="12" fill="#afff95" dominant-baseline="central">' + r[0] + '</text>';
+        s += '<text x="' + (bx + 55) + '" y="' + ry + '" font-size="12" font-weight="700" text-anchor="end" fill="' + dmgColor(r[1] / 255) + '" dominant-baseline="central">' + Math.round(r[1] / 255 * 100) + '%</text>';
+      });
+      var wr = wear[c.wear] / 255;
+      s += '<rect x="' + (x - 15) + '" y="' + (y - 25) + '" width="30" height="50" rx="11" fill="' + dmgColor(wr) + '" stroke="#697565"/>';
+      var ibx = x < 119 ? x + 17 : x - 23;
+      s += '<rect x="' + ibx + '" y="' + (y - 16) + '" width="6" height="32" rx="2" style="fill:var(--card)" stroke="#697565"/>';
+      var imp = impact[c.impact] / 255;
+      if (imp > 0.02) {
+        var fh = Math.max(2, imp * 32);
+        s += '<rect x="' + ibx + '" y="' + (y + 16 - fh) + '" width="6" height="' + fh.toFixed(1) + '" rx="2" fill="' + dmgColor(imp) + '"/>';
+      }
+      s += '<text x="' + x + '" y="' + y + '" font-size="14" font-weight="700" text-anchor="middle" dominant-baseline="central" style="fill:var(--bg)">' + Math.round(wr * 100) + '%</text>';
+      s += '</g>';
+      return s;
+    }).join('');
+    return '<svg class="dmg-car" viewBox="0 0 238 300" aria-hidden="true">' +
+      '<defs><clipPath id="dmg-body-clip"><rect x="73" y="28" width="92" height="244" rx="15"/></clipPath></defs>' +
+      '<rect x="73" y="28" width="92" height="244" rx="15" fill="#262b21" stroke="#697565" stroke-width="1.5"/>' +
+      '<g clip-path="url(#dmg-body-clip)">' + overlays + '</g>' +
+      wheels +
+      '</svg>';
+  }
+
+  function dmgBars(d) {
+    var items = [
+      ['Engine', d.engine], ['Clutch', d.clutch], ['Radiator', d.radiator],
+      ['Exhaust', d.exhaust], ['Lights', d.lights]
+    ];
+    return '<div class="dmg-bars">' + items.map(function (it) {
+      var v = Math.max(0, Math.min(1, Number(it[1]) || 0));
+      var pct = Math.round(v * 100);
+      return '<div class="dmg-bar"><span class="dmg-bar-label">' + it[0] + '</span>' +
+        '<span class="dmg-bar-track"><span class="dmg-bar-fill" style="width:' + pct + '%;background:' + dmgColor(v) + '"></span></span>' +
+        '<span class="dmg-bar-val">' + pct + '%</span></div>';
+    }).join('') + '</div>';
+  }
+
+  function renderDmg(tyres, idx, entry) {
+    var t = (tyres || [])[idx];
+    var title = tyreName(TYRE_FILE[t] || '#_unknown');
+    var d = entry && entry.d;
+    var body;
+    if (!d) {
+      body = '<div class="dmg-nodata">No damage data for this stage.</div>';
+    } else {
+      body = '<div class="dmg-body">' + carSvg(d) + dmgBars(d) + '</div>';
+    }
+    dmg.innerHTML =
+      '<div class="dmg-head"><span class="dmg-title">Tyres: ' + esc(title) + '</span></div>' +
+      body;
+  }
+
+  function placeDmg() {
+    if (!dmgTarget) return;
+    var r = dmgTarget.getBoundingClientRect();
+    var w = dmg.offsetWidth, h = dmg.offsetHeight;
+    var left = r.right + 12;
+    if (left + w > window.innerWidth - 8) left = r.left - w - 12;
+    if (left < 8) left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
+    var top = Math.min(Math.max(8, r.top + r.height / 2 - h / 2), Math.max(8, window.innerHeight - h - 8));
+    dmg.style.left = left + 'px';
+    dmg.style.top = top + 'px';
+  }
+
+  function openDmg(el) {
+    var td = el.closest('td.tyre-cell');
+    if (!td) return;
+    var idx = parseInt(el.getAttribute('data-tdx'), 10);
+    renderDmg(
+      JSON.parse(td.dataset.tyres || '[]'),
+      idx,
+      (JSON.parse(td.dataset.td || '[]'))[idx]
+    );
+    dmgTarget = el;
+    dmg.classList.add('show');
+    placeDmg();
+  }
+
+  function closeDmg() {
+    dmgTarget = null;
+    dmg.classList.remove('show');
+  }
+
+  tbody.addEventListener('click', function (e) {
+    var tyre = e.target.closest('.tyre-img');
+    if (tyre) {
+      if (dmgTarget === tyre) closeDmg(); else openDmg(tyre);
+      return;
+    }
+  });
+  document.addEventListener('click', function (e) {
+    if (!dmgTarget) return;
+    if (e.target.closest('.dmg-popup') || e.target.closest('.tyre-img')) return;
+    closeDmg();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeDmg();
+  });
+  // The box scrolls internally (max-height), so reposition on box scroll too.
+  box.addEventListener('scroll', function () {
+    if (dmgTarget) placeDmg();
+  }, { passive: true });
+  window.addEventListener('scroll', function () {
+    if (dmgTarget) placeDmg();
+  }, { passive: true });
 })();
 </script>
 {% endif %}

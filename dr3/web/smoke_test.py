@@ -1217,7 +1217,8 @@ def main() -> int:
     check('recent-times row carries tuning fields (null without a run detail)',
           rows[0].get('tyres') == [] and rows[0].get('spares') is None
           and rows[0].get('input') is None and rows[0].get('vr') is None
-          and rows[0].get('camera') is None and rows[0].get('assists') is None,
+          and rows[0].get('camera') is None and rows[0].get('assists') is None
+          and rows[0].get('tyre_damage') == [],
           str(rows)[:300])
     check('recent-times row carries driver/car links (no club on this event)',
           rows[0].get('driver_url') == '/profile/smokedriver'
@@ -1232,7 +1233,7 @@ def main() -> int:
     # stats page is a super-simple name+class panel for now.
     with app.app_context():
         from datetime import timedelta
-        from app.models import Club, ClubMember, Event, Result, StageRun
+        from app.models import Club, ClubMember, ClubStageState, Event, Result, StageRun
         u = db.session.query(User).filter_by(username='smokedriver').first()
         db.session.add(Club(id='smoke-link-club', name='Smoke Link Club',
                             created_by=u.id))
@@ -1264,6 +1265,11 @@ def main() -> int:
             username='smokedriver', event_id='smoke-link-event',
             flat_stage_index=0, time_ms=200000, player_finished=True,
             tyre_compound=2, input_method='wheel', camera_position='chase_close'))
+        # Damage snapshot for the same slot — feeds the tyre-click popup.
+        _link_dmg = {'engine': 0.1, 'clutch': 0.2, 'wheels_wear': 42}
+        db.session.add(ClubStageState(
+            event_id='smoke-link-event', username='smokedriver',
+            flat_stage_index=0, comp_damage_json=json.dumps(_link_dmg)))
         db.session.commit()
 
     r = client.get('/api/home/recent-times?offset=0&limit=25')
@@ -1280,6 +1286,10 @@ def main() -> int:
           and link['tyres'] == [2] and link['spares'] == 2
           and link['input'] == 'wheel' and link['camera'] == 'chase_close'
           and link['vr'] is False and link['assists'] is False,
+          str(link or rows)[:300])
+    check('recent-times row carries tyre damage snapshot from stage states',
+          link is not None
+          and link['tyre_damage'] == [{'s': 0, 'd': _link_dmg}],
           str(link or rows)[:300])
 
     # 7c-3. Car page: /cars?car=<id> preselects the car, the old /cars/<id>

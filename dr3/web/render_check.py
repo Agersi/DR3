@@ -137,7 +137,7 @@ def main() -> int:
     check('home: recent-times Tyres/Spares/Input/Camera columns (data attrs + board-style cell JS)',
           '<th>Tyres</th>' in html and '<th>Spares</th>' in html
           and '<th>Input</th>' in html and '<th>Camera</th>' in html
-          and 'class="tyre-cell" data-tyres="[]"' in html
+          and 'class="tyre-cell" data-tyres="[]" data-td="[]"' in html
           and 'class="spare-cell" data-spares=""' in html
           and 'class="input-cell" data-input=""' in html
           and 'class="cam-cell" data-camera=""' in html
@@ -202,6 +202,18 @@ def main() -> int:
           and "tbody.addEventListener('mouseover'" in html
           and "tbody.addEventListener('mouseleave', hideTip);" in html
           and ".hover-tip {\n  position: fixed;" in css, '')
+    check('home: recent-times tyre click opens the pinned damage popup (club-board parity)',
+          "dmg.className = 'dmg-popup';" in html
+          and 'function carSvg(' in html and 'function dmgBars(' in html
+          and 'function renderDmg(' in html and 'function placeDmg(' in html
+          and 'function openDmg(' in html and 'function closeDmg(' in html
+          and "data-tdx=\"' + i + '\"><img src=\"" in html
+          and "mk('tyre-cell', { tyres: JSON.stringify(row.tyres || []), td: JSON.stringify(row.tyre_damage || []) });" in html
+          and "tbody.addEventListener('click'" in html
+          and "if (e.key === 'Escape') closeDmg();" in html
+          and "e.target.closest('.dmg-popup')" in html
+          and 'No damage data for this stage.' in html
+          and html.count("box.addEventListener('scroll', function () {") == 2, '')
     check('home: stat cards link out (drivers + combined clubs card) + terminal-damage card',
           '<a class="stat-card stat-drivers" href="/drivers">' in html
           and '<a class="stat-link" href="/clubs">' in html
