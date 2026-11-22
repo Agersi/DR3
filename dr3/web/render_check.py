@@ -366,12 +366,12 @@ def main() -> int:
     html = client.get('/install').get_data(as_text=True)
     check('install: auto-launch panel + launcher bat + Steam launch options',
           'id="auto-launch"' in html
-          and '<p>Make sure — <strong>Start automatically when DR3 opens</strong> option in the Main tab is ticked</p>' in html
+          and '<p>Make sure <strong>Start automatically when DR3 opens</strong> option in the Main tab is ticked.</p>' in html
           and 'start "" "C:\\DR3\\DR3.exe"' in html
           and '%*' in html
           and 'taskkill /im DR3.exe /f' in html
           and '"C:\\Users\\YOURNAME\\Desktop\\DR3.bat" %command%' in html
-          and 'does not expand Windows environment variables' in html, '')
+          and 'does not expand Windows environment variables' not in html, '')
     check('install: uninstall note (cert-troubleshooting panel removed)',
           'id="cert-troubleshooting"' not in html
           and '<p class="meta uninstall-note">If you want to uninstall DR3, go to the <strong>Logs</strong> tab and click <strong>Uninstall DR3</strong> at the bottom — it removes the program and your settings.</p>' in html
