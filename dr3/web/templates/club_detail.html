@@ -820,13 +820,15 @@
         s += '<text x="' + (bx + 55) + '" y="' + ry + '" font-size="12" font-weight="700" text-anchor="end" fill="' + dmgColor(r[1] / 255) + '" dominant-baseline="central">' + Math.round(r[1] / 255 * 100) + '%</text>';
       });
       var wr = wear[c.wear] / 255;
-      s += '<rect x="' + (x - 12) + '" y="' + (y - 22) + '" width="24" height="44" rx="9" fill="' + dmgColor(wr) + '" stroke="#697565"/>';
+      s += '<rect x="' + (x - 15) + '" y="' + (y - 25) + '" width="30" height="50" rx="11" fill="' + dmgColor(wr) + '" stroke="#697565"/>';
+      var ibx = x < 119 ? x + 17 : x - 23;
+      s += '<rect x="' + ibx + '" y="' + (y - 16) + '" width="6" height="32" rx="2" style="fill:var(--card)" stroke="#697565"/>';
       var imp = impact[c.impact] / 255;
       if (imp > 0.02) {
         var fh = Math.max(2, imp * 32);
-        s += '<rect x="' + (x < 119 ? x + 14 : x - 20) + '" y="' + (y + 16 - fh) + '" width="6" height="' + fh.toFixed(1) + '" rx="2" fill="' + dmgColor(imp) + '"/>';
+        s += '<rect x="' + ibx + '" y="' + (y + 16 - fh) + '" width="6" height="' + fh.toFixed(1) + '" rx="2" fill="' + dmgColor(imp) + '"/>';
       }
-      s += '<text x="' + x + '" y="' + y + '" font-size="9" font-weight="700" text-anchor="middle" dominant-baseline="central" style="fill:var(--bg)">' + Math.round(wr * 100) + '%</text>';
+      s += '<text x="' + x + '" y="' + y + '" font-size="14" font-weight="700" text-anchor="middle" dominant-baseline="central" style="fill:var(--bg)">' + Math.round(wr * 100) + '%</text>';
       s += '</g>';
       return s;
     }).join('');
@@ -866,15 +868,10 @@
     if (!d) {
       body = '<div class="dmg-nodata">No damage data for this stage.</div>';
     } else {
-      body = '<div class="dmg-body">' + carSvg(d) + dmgBars(d) + '</div>' +
-        '<div class="dmg-legend">' +
-        '<span>tyre centre: <b>wear</b></span>' +
-        '<span>bar in tyre: <b>impact</b></span>' +
-        '<span>side boxes top→bottom: <b>springs</b> · <b>dampers</b> · <b>brakes</b></span>' +
-        '</div>';
+      body = '<div class="dmg-body">' + carSvg(d) + dmgBars(d) + '</div>';
     }
     dmg.innerHTML =
-      '<div class="dmg-head"><span class="dmg-title">' + esc(title) + '</span><span class="dmg-stage">' + cap + '</span></div>' +
+      '<div class="dmg-head"><span class="dmg-title">Tyres: ' + esc(title) + '</span><span class="dmg-stage">' + cap + '</span></div>' +
       body;
   }
 

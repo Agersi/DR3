@@ -859,13 +859,11 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .dmg-car { width: 9.6rem; flex: none; }
 .dmg-bars { flex: 1; min-width: 0; }
 .dmg-bar { display: flex; align-items: center; gap: 0.4rem; margin: 0.28rem 0; }
-.dmg-bar-label { width: 4.6rem; flex: none; color: var(--muted); }
+.dmg-bar-label { width: 3rem; flex: none; color: var(--muted); }
 .dmg-bar-track { flex: 1; height: 0.45rem; background: rgba(105, 117, 101, 0.35); overflow: hidden; }
 .dmg-bar-fill { display: block; height: 100%; }
 .dmg-bar-val { width: 2rem; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
 .dmg-nodata { color: var(--muted); padding: 1.5rem 0; text-align: center; }
-.dmg-legend { margin-top: 0.5rem; padding-top: 0.45rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.7rem; display: flex; flex-wrap: wrap; gap: 0.25rem 0.9rem; }
-.dmg-legend b { color: var(--text); font-weight: 600; }
 .splits-row td { background: var(--bg); color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .board-empty td { text-align: center; color: var(--muted); padding: 1rem; }
 

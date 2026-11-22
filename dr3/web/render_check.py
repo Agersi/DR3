@@ -565,13 +565,16 @@ def main() -> int:
               and 'viewBox="0 0 238 300"' in det
               and '<rect x="73" y="28" width="92" height="244" rx="15"/>' in det
               and 'rx="15" fill="#262b21"' in det
-              and 'width="24" height="44" rx="9"' in det
+              and 'width="30" height="50" rx="11"' in det
               and 'var fh = Math.max(2, imp * 32);' in det
-              and '(x < 119 ? x + 14 : x - 20)' in det
+              and 'var ibx = x < 119 ? x + 17 : x - 23;' in det
+              and 'height="32" rx="2" style="fill:var(--card)"' in det
               and 'width="60" height="44" rx="6"' in det
               and 'font-size="12"' in det
+              and 'font-size="14"' in det
               and 'style="fill:var(--bg)"' in det
-              and 'side boxes top→bottom' in det
+              and '<span class="dmg-title">Tyres: ' in det
+              and '.dmg-bar-label { width: 3rem; flex: none; color: var(--muted); }' in board_css
               and 'No damage data for this stage.' in det
               and "var tyre = e.target.closest('.tyre-img');" in det
               and 'if (dmgTarget === tyre) closeDmg(); else openDmg(tyre);' in det
