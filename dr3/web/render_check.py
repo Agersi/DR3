@@ -371,12 +371,11 @@ def main() -> int:
           and '%*' in html
           and '"C:\\Users\\YOURNAME\\Desktop\\DR3.bat" %command%' in html
           and 'does not expand Windows environment variables' in html, '')
-    check('install: certificate/SSL troubleshooting panel',
-          'id="cert-troubleshooting"' in html
-          and 'CERTIFICATE_VERIFY_FAILED' in html
-          and 'built-in Let\'s Encrypt' in html
-          and 'Get-ChildItem Cert:\\CurrentUser\\CA,Cert:\\LocalMachine\\CA' in html
-          and 'check your Windows date and time' in html, '')
+    check('install: uninstall note (cert-troubleshooting panel removed)',
+          'id="cert-troubleshooting"' not in html
+          and 'If you want to uninstall DR3, go to the <strong>Logs</strong> tab and click <strong>Uninstall DR3</strong> at the bottom' in html
+          and 'it removes the program and your settings.</p>' in html
+          and '<p class="meta small">(Press STOP first if the server is running.)</p>' in html, '')
 
     r = client.post('/login', data={'username': 'smokedriver', 'password': 'password123'})
     check('login', r.status_code in (302, 200), f'status={r.status_code}')
