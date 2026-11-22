@@ -373,9 +373,9 @@ def main() -> int:
           and 'does not expand Windows environment variables' in html, '')
     check('install: uninstall note (cert-troubleshooting panel removed)',
           'id="cert-troubleshooting"' not in html
-          and 'If you want to uninstall DR3, go to the <strong>Logs</strong> tab and click <strong>Uninstall DR3</strong> at the bottom' in html
-          and 'it removes the program and your settings.</p>' in html
-          and '<p class="meta small">(Press STOP first if the server is running.)</p>' in html, '')
+          and '<p class="meta uninstall-note">If you want to uninstall DR3, go to the <strong>Logs</strong> tab and click <strong>Uninstall DR3</strong> at the bottom — it removes the program and your settings.</p>' in html
+          and '<p class="meta small uninstall-note">(Press STOP first if the server is running.)</p>' in html
+          and '.uninstall-note { margin: 0; }' in css, '')
 
     r = client.post('/login', data={'username': 'smokedriver', 'password': 'password123'})
     check('login', r.status_code in (302, 200), f'status={r.status_code}')

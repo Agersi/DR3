@@ -666,6 +666,7 @@ details.create-club form {
 
 .meta { color: var(--muted); }
 .meta.flush-top { margin-top: 0; }
+.uninstall-note { margin: 0; }
 
 code { font-family: var(--mono); font-size: 0.9em; background: var(--surface); border: 1px solid var(--line); padding: 0.1rem 0.35rem; word-break: break-all; }
 pre, .codeblock {
