@@ -344,6 +344,23 @@ if (document.querySelector('.flash.error')) window.scrollTo(0, 0);
       }
     });
 
+    /* Labels associated with the native select (for= or wrapping) would
+       otherwise activate it and open the native dropdown — forward them to
+       the custom menu instead. */
+    if (sel.labels) {
+      Array.prototype.forEach.call(sel.labels, function (lab) {
+        lab.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+        lab.addEventListener('click', function (e) {
+          e.preventDefault();
+          if (wrap.classList.contains('open')) closeMenu(wrap); else openMenu(wrap);
+          btn.focus();
+        });
+      });
+    }
+
     new MutationObserver(function () {
       buildMenu(sel, wrap);
       syncLabel(sel, wrap);
