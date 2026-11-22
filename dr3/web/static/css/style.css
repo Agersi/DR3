@@ -102,15 +102,11 @@ main { max-width: var(--page-max); width: 100%; margin: 0 auto; padding: 0 1.25r
 /* ── Headings ───────────────────────────────────────── */
 
 h1 {
-  font-family: var(--display);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: clamp(1.8rem, 4vw, 2.3rem);
-  line-height: 1.05;
-  font-weight: 700;
-  margin: 0 1rem 1rem;
-  text-align: center;
+  font-family: var(--display); text-transform: uppercase; letter-spacing: 0.04em;
+  font-size: clamp(1.8rem, 4vw, 2.3rem); line-height: 1.05; font-weight: 700;
+  margin: 1.4rem 0 0.8rem; display: flex; align-items: center; gap: 0.6rem;
 }
+h1::before { content: ''; width: 2em; height: 0.5em; flex: none; transform: skewX(-14deg); background: repeating-linear-gradient(-45deg, var(--accent) 0 0.35em, transparent 0.35em 0.7em); }
 
 h2 {
   font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em;
@@ -640,6 +636,19 @@ details.create-club form {
 
 .auth-card { max-width: 550px; margin: 2rem auto; }
 .register-btn { display: block; margin: .8rem auto; }
+/* Register-page h1 only (the global h1 keeps its flex layout + ::before stripe). */
+.register-title {
+  display: block;
+  font-family: var(--display);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: clamp(1.8rem, 4vw, 2.3rem);
+  line-height: 1.05;
+  font-weight: 700;
+  margin: 0 1rem 1rem;
+  text-align: center;
+}
+.register-title::before { content: none; }
 .auth-logo {
   display: block; width: 72px; height: 72px; margin: 0 auto 0.6rem;
   object-fit: contain;

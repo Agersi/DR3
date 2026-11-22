@@ -3,7 +3,7 @@
 {% block content %}
 <div class="auth-card">
   <div class="panel">
-    <h1>Create account</h1>
+    <h1 class="register-title">Create account</h1>
     <form method="post">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label for="username">Username (3-32 chars, letters/numbers/_)</label>
