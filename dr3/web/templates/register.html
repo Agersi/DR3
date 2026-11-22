@@ -3,7 +3,6 @@
 {% block content %}
 <div class="auth-card">
   <div class="panel">
-    <img class="auth-logo" src="{{ url_for('static', filename='logo.png') }}" alt="DR3 logo" width="72" height="72">
     <h1>Create account</h1>
     <form method="post">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -23,7 +22,7 @@
       <input id="password" name="password" type="password" required>
       <label for="confirm">Confirm password</label>
       <input id="confirm" name="confirm" type="password" required>
-      <button type="submit">Register</button>
+      <button type="submit" class="register-btn">Register</button>
     </form>
   </div>
 </div>

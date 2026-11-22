@@ -61,6 +61,15 @@ def main() -> int:
           and client.get('/static/css/style.css').get_data(as_text=True)
           .find('.filters { position: sticky; top: 0') != -1, '')
     css = client.get('/static/css/style.css').get_data(as_text=True)
+    reg_html = client.get('/register').get_data(as_text=True)
+    check('register page styling (centered h1 without ::before, 550px auth-card, soft panel shadow, centered register button)',
+          'h1 {\n  font-family: var(--display);\n  text-transform: uppercase;\n  letter-spacing: 0.04em;\n  font-size: clamp(1.8rem, 4vw, 2.3rem);\n  line-height: 1.05;\n  font-weight: 700;\n  margin: 0 1rem 1rem;\n  text-align: center;\n}' in css
+          and 'h1::before' not in css
+          and '.auth-card { max-width: 550px; margin: 2rem auto; }' in css
+          and '.register-btn { display: block; margin: .8rem auto; }' in css
+          and '.panel {\n  background: var(--card); border: 2px solid var(--line);\n  box-shadow: 4px 4px 4px var(--shadow);\n  padding: 1.1rem 1.25rem; margin: 1rem 0;\n}' in css
+          and 'auth-logo' not in reg_html
+          and '<button type="submit" class="register-btn">Register</button>' in reg_html, '')
     check('custom dropdown widget (all-browser listbox: 500px cap, accent hover/focus, recent-box scrollbar)',
           '.cselect { position: relative; display: block; }' in css
           and 'max-height: 500px;' in css
