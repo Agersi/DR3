@@ -4,8 +4,8 @@
   (stopped/hidden, disabled in config, port busy, waiting for data,
   connected, stale-after-data, and the game-aware hints off the parsed
   <udp> elements: no stream enabled -> warn restart the game, DR3's port
-  among the game's streams -> muted start a stage, only foreign streams ->
-  warn listing them + restart DR3 / set telemetry_port);
+   among the game's streams -> muted start a stage, only foreign streams ->
+   warn listing them + restart DR3 so it adds its own stream);
 - the real GUI boots with the new status-card row, and while the server is
   stopped the Main tab still fits the fixed window (no scrollbar) and the
   telemetry row exists but is hidden.
@@ -184,8 +184,7 @@ def check_gui(mod) -> int:
         # Use the longest real message (the foreign-streams hint that used to
         # clip): it must wrap to a second line (wraplength set) and still fit.
         long_msg = ("Game sends UDP to :20777, DR3 listens on :20999 "
-                    "\u2014 restart DR3 so it adds its own stream, or set "
-                    "telemetry_port in config.json")
+                    "\u2014 restart DR3 so it adds its own stream")
         tel.configure(text=long_msg)
         tel.pack(fill="x", padx=15, pady=(0, 8))
         root.update_idletasks()

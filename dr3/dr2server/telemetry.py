@@ -1,7 +1,7 @@
 """UDP telemetry listener for DiRT Rally 2.0.
 
-Binds the UDP telemetry port configured for DR3 (``telemetry_port`` in
-config.json, default 20999) and records per-stage run trajectories. The game
+Binds DR3's fixed UDP telemetry port (20999) and records per-stage run
+trajectories. The game
 supports several ``<udp>`` streams at once in
 ``hardware_settings_config.xml`` (it round-trips them all on rewrite), so DR3
 makes sure the game sends to a port DR3 receives by ADDING a dedicated
@@ -74,54 +74,6 @@ PENALTY_JUMP_S = 4.0
 # after its stage closes, so a small ring is enough; it bounds memory if a run
 # goes unclaimed (e.g. a DNF that never produces a clean StageComplete).
 _MAX_COMPLETED = 6
-
-
-def _xml_port(text: str, tag: str, require_enabled: bool) -> Optional[int]:
-    """Port from the ``<tag ... port="NNNN" />`` element of the game's
-    hardware_settings_config.xml; None when absent or unparseable."""
-    m = re.search(r"<%s\b[^>]*/?>" % tag, text)
-    if not m:
-        return None
-    el = m.group(0)
-    if require_enabled and 'enabled="true"' not in el:
-        return None
-    p = re.search(r'port="(\d+)"', el)
-    if p:
-        port = int(p.group(1))
-        if 0 < port < 65536:
-            return port
-    return None
-
-
-def detect_udp_port(default: int = 20777) -> int:
-    """Return the UDP port the game's telemetry is configured to use (best
-    effort): an enabled ``<custom_udp>`` stream wins when present, else the
-    first enabled standard ``<udp>`` port. DR3 itself listens on its own
-    config.json ``telemetry_port`` and adds a dedicated stream there — this
-    helper reports where the game points. Falls back to ``default`` when the
-    file is missing or unparseable.
-    """
-    try:
-        home = os.path.expanduser("~")
-        path = os.path.join(
-            home, "Documents", "My Games", "DiRT Rally 2.0",
-            "hardwaresettings", "hardware_settings_config.xml")
-        if os.path.isfile(path):
-            with open(path, "r", encoding="utf-8", errors="replace") as fh:
-                text = fh.read()
-            port = _xml_port(text, "custom_udp", require_enabled=True)
-            if not port:
-                for _m, attrs in _xml_udp_elems(text):
-                    if attrs.get("enabled") == "true":
-                        p = attrs.get("port", "")
-                        if p.isdigit() and 0 < int(p) < 65536:
-                            port = int(p)
-                            break
-            if port:
-                return port
-    except Exception:
-        pass
-    return default
 
 
 # ---------------------------------------------------------------------------
@@ -504,9 +456,8 @@ class TelemetryListener:
             self._log(
                 f"[TELEMETRY] cannot bind UDP :{self.port} ({exc}); telemetry "
                 f"disabled — splits will use the even profile. Another tool "
-                f'already owns this port: set "telemetry_port" in config.json '
-                f"to a free port and restart DR3 (the game's dedicated stream "
-                f"follows that setting).")
+                f"already owns this port: close it (or stop its UDP broadcast) "
+                f"and restart DR3.")
             return False
         self._sock = sock
         self._stop.clear()

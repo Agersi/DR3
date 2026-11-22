@@ -9,6 +9,7 @@ Usage:  python tools/vps.py "command" ["cmd2" ...]   (each runs, exit codes show
 """
 import os
 import sys
+import uuid
 
 import paramiko
 
@@ -64,30 +65,39 @@ class Vps:
         """Upload a bash script to /tmp and execute it remotely.
 
         ``script_args`` are forwarded as positional arguments ($1, $2, ...) —
-        each must be a single shell-safe word (no spaces)."""
+        each must be a single shell-safe word (no spaces). Each call uploads
+        to its OWN unique path so concurrent vps.py invocations can never
+        clobber each other's script."""
         arg_str = " ".join(script_args)
+        remote = f"/tmp/dr3_remote_{uuid.uuid4().hex[:12]}.sh"
         with open(local_path, "rb") as f:
             data = f.read().replace(b"\r\n", b"\n")
         sftp = self.client.open_sftp()
-        with sftp.open("/tmp/dr3_remote.sh", "wb") as rf:
+        with sftp.open(remote, "wb") as rf:
             rf.write(data)
-        if not use_sudo:
-            return self.run(f"bash /tmp/dr3_remote.sh {arg_str}".rstrip(), timeout)
-        rc, out, err = self.run("sudo -n true", 30)
-        if rc == 0:
-            return self.run(f"sudo bash /tmp/dr3_remote.sh {arg_str}".rstrip(), timeout)
-        chan = self.client.get_transport().open_session()
-        chan.exec_command(f"sudo -S bash /tmp/dr3_remote.sh {arg_str}".rstrip())
-        chan.sendall((self.password + "\n").encode())
-        chan.shutdown_write()
-        out_b, err_b = b"", b""
-        while not chan.exit_status_ready():
-            if chan.recv_ready():
-                out_b += chan.recv(65536)
-            if chan.recv_stderr_ready():
-                err_b += chan.recv_stderr(65536)
-        rc = chan.recv_exit_status()
-        return rc, out_b.decode("utf-8", "replace"), err_b.decode("utf-8", "replace")
+        try:
+            if not use_sudo:
+                return self.run(f"bash {remote} {arg_str}".rstrip(), timeout)
+            rc, out, err = self.run("sudo -n true", 30)
+            if rc == 0:
+                return self.run(f"sudo bash {remote} {arg_str}".rstrip(), timeout)
+            chan = self.client.get_transport().open_session()
+            chan.exec_command(f"sudo -S bash {remote} {arg_str}".rstrip())
+            chan.sendall((self.password + "\n").encode())
+            chan.shutdown_write()
+            out_b, err_b = b"", b""
+            while not chan.exit_status_ready():
+                if chan.recv_ready():
+                    out_b += chan.recv(65536)
+                if chan.recv_stderr_ready():
+                    err_b += chan.recv_stderr(65536)
+            rc = chan.recv_exit_status()
+            return rc, out_b.decode("utf-8", "replace"), err_b.decode("utf-8", "replace")
+        finally:
+            try:
+                sftp.remove(remote)
+            except Exception:
+                pass
 
     def close(self):
         self.client.close()

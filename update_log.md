@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.81**
+- Simplified telemetry setup — DR3 always uses its own dedicated data connection, so there is nothing to configure.
+
 **v0.1.80**
 - DR3 now sets up its own telemetry connection automatically, so it works alongside SimHub and other telemetry apps with no extra setup.
 

@@ -20,27 +20,6 @@
 <p class="meta uninstall-note">If you want to uninstall DR3, go to the <strong>Logs</strong> tab and click <strong>Uninstall DR3</strong> at the bottom — it removes the program and your settings.</p>
 <p class="meta small uninstall-note">(Press STOP first if the server is running.)</p>
 
-<div class="panel" id="telemetry-apps">
-  <h2>Using SimHub or another Telemetry app</h2>
-  <p>DR3 reads the game's live telemetry over UDP to compute real per-segment stage
-     splits (used on the website and for time trial ghosts). When DR3 starts it quietly
-     makes sure the game sends telemetry to DR3's own port — <code>telemetry_port</code>
-     in its <code>config.json</code>, default <code>20999</code> — by adding a dedicated
-     UDP stream to the game's settings when none points there. The game supports several
-     telemetry streams at once, so any existing stream (for example SimHub's standard
-     port <code>20777</code>) is never modified or removed: DR3 and the other tools each
-     receive their own copy of the data, with no forwarding to set up.</p>
-  <p>A backup of the file is kept and a line appears in the Logs tab whenever DR3 changes
-     anything, so nothing is ever edited without a trace. If you start or change another
-     telemetry tool while DR3 runs, just restart DR3 (or the game) and both keep working.</p>
-  <p class="meta">To change DR3's own port, edit <code>"telemetry_port"</code> in the
-     DR3 <code>config.json</code>, then press STOP and START (or relaunch DR3) — on the
-     next start DR3 adds its stream to the new port. The Main-tab telemetry line always
-     shows the current state — connected, waiting for data, or why it isn't receiving.
-     If no data arrives, splits simply fall back to an even profile and stage times /
-     time trials still record normally.</p>
-</div>
-
 <div class="panel" id="auto-launch">
   <h2>Auto-launching DR3 and the game</h2>
   <p>DR3 starts its server automatically when you open it — the

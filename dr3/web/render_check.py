@@ -376,13 +376,10 @@ def main() -> int:
           and '<p class="meta uninstall-note">If you want to uninstall DR3, go to the <strong>Logs</strong> tab and click <strong>Uninstall DR3</strong> at the bottom — it removes the program and your settings.</p>' in html
           and '<p class="meta small uninstall-note">(Press STOP first if the server is running.)</p>' in html
           and '.uninstall-note { margin: 0; }' in css, '')
-    check('install: telemetry panel — dedicated stream added, no SimHub forwarding',
-          'id="telemetry-apps"' in html
-          and 'by adding a dedicated\n     UDP stream to the game\'s settings when none points there' in html
-          and 'is never modified or removed' in html
-          and 'no forwarding to set up' in html
-          and 'forward SimHub' not in html
-          and 'UDP broadcast/\n      forward option' not in html, '')
+    check('install: telemetry-apps panel removed (fixed port, nothing to configure)',
+          'id="telemetry-apps"' not in html
+          and 'telemetry_port' not in html
+          and 'SimHub' not in html, '')
 
     r = client.post('/login', data={'username': 'smokedriver', 'password': 'password123'})
     check('login', r.status_code in (302, 200), f'status={r.status_code}')
