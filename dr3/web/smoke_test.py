@@ -3372,6 +3372,48 @@ def main() -> int:
     check('close-out: second pass is a no-op',
           (tick2.get('closed_out') or []) == [] and snap == after, str(tick2))
 
+    # Final fixture (no check here — render_check pins it): a recent-times row
+    # that survives the whole run, carrying both a tyre compound and a damage
+    # snapshot. The home page renders its data-td attribute from tojson output,
+    # which must survive HTML escaping in a double-quoted attribute (the
+    # tyre-click popup reads it back with JSON.parse). A dedicated user keeps
+    # this out of every pinned per-user stat.
+    with app.app_context():
+        from datetime import timedelta
+        from app.models import ClubStageState, Event as _HdEvent, Result as _HdResult, StageRun as _HdRun
+        create_user('homedmglr', 'home-dmg@example.com', 'homedmg-pass123',
+                    display_name='Home Dmg Lr', country='Norway')
+        _hd_stage = {'name': 'HD Stage', 'track_id': 21, 'distance_km': 4.0,
+                     'conditions_id': 5, 'conditions': 'Dry',
+                     'surface_deg': 'Medium', 'service_area': 'Medium'}
+        db.session.add(_HdEvent(
+            id='smoke-home-dmg-event', schema_version=2, name='Home Dmg Event',
+            type='daily', location='Lydden Hill', car_class='Rally GT',
+            surface='Gravel', conditions='Dry',
+            stages_json=json.dumps([_hd_stage]), settings_json=json.dumps({}),
+            legs_json=json.dumps([{
+                'location': 'Lydden Hill', 'car_class': 'Rally GT',
+                'surface': 'Gravel',
+                'duration': {'days': 0, 'hours': 1, 'mins': 0},
+                'stages': [_hd_stage],
+            }]),
+            start_time=utcnow() - timedelta(minutes=2),
+            end_time=utcnow() + timedelta(hours=1),
+            active=True, featured=False, club_id=None, system=False))
+        db.session.add(_HdResult(
+            event_id='smoke-home-dmg-event', username='homedmglr', vehicle_id=565,
+            total_time_ms=300000, stages_json=json.dumps([
+                {'time_ms': 300000, 'submitted_at': utcnow().isoformat()}])))
+        db.session.add(_HdRun(
+            username='homedmglr', event_id='smoke-home-dmg-event',
+            flat_stage_index=0, time_ms=300000, player_finished=True,
+            tyre_compound=2))
+        _hd_dmg = {'engine': 0.25, 'wheels_wear': 7}
+        db.session.add(ClubStageState(
+            event_id='smoke-home-dmg-event', username='homedmglr',
+            flat_stage_index=0, comp_damage_json=json.dumps(_hd_dmg)))
+        db.session.commit()
+
     print()
     if failures:
         print(f'{len(failures)} FAILURES: {failures}')

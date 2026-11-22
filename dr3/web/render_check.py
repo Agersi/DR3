@@ -131,7 +131,7 @@ def main() -> int:
           and '<a class="driver-link" href="/cars?car=1">Vehicle 1</a>' in html, '')
     check('home: recent-times Time + Posted columns use num class (headers, server + JS rows)',
           '<th class="num">Time</th>' in html and '<th class="num">Posted</th>' in html
-          and html.count('<td class="num">') == 2
+          and html.count('<td class="num">') == 4
           and "tr.appendChild(cell(row.time_text, 'num'));" in html
           and "tr.appendChild(cell(row.at_text, 'num'));" in html, '')
     check('home: recent-times Tyres/Spares/Input/Camera columns (data attrs + board-style cell JS)',
@@ -214,6 +214,18 @@ def main() -> int:
           and "e.target.closest('.dmg-popup')" in html
           and 'No damage data for this stage.' in html
           and html.count("box.addEventListener('scroll', function () {") == 2, '')
+    # data-td is tojson output inside a double-quoted attribute: raw quotes
+    # would truncate the attribute and break the popup's JSON.parse. Decode it
+    # exactly like the browser does (entity unescape -> parse) and compare.
+    from html import unescape as _attr_unescape
+    _td_m = re.search(r'data-tyres="\[2\]" data-td="([^"]*)"', html)
+    try:
+        _td_ok = _td_m is not None and json.loads(_attr_unescape(_td_m.group(1))) \
+            == [{'s': 0, 'd': {'engine': 0.25, 'wheels_wear': 7}}]
+    except (TypeError, ValueError):
+        _td_ok = False
+    check('home: recent-times data-td attr survives HTML escaping (popup JSON.parse round-trip)',
+          _td_ok, '')
     check('home: stat cards link out (drivers + combined clubs card) + terminal-damage card',
           '<a class="stat-card stat-drivers" href="/drivers">' in html
           and '<a class="stat-link" href="/clubs">' in html

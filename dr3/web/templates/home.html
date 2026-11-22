@@ -104,7 +104,7 @@
         <td>{{ flag_img(row.driver_flag) }}<a class="driver-link" href="{{ url_for('pages.profile', username=row.driver_username) }}">{{ row.driver }}</a></td>
         <td>{% if row.club_id %}<a class="driver-link" href="{{ url_for('clubs.club_detail', club_id=row.club_id) }}">{{ row.club }}</a>{% else %}—{% endif %}</td>
         <td>{% if row.vehicle_id %}<a class="driver-link" href="{{ url_for('pages.cars_index', car=row.vehicle_id) }}">{{ row.car }}</a>{% else %}{{ row.car or '—' }}{% endif %}</td>
-        <td class="tyre-cell" data-tyres="{{ row.tyres|tojson }}" data-td="{{ row.tyre_damage|tojson }}"></td>
+        <td class="tyre-cell" data-tyres="{{ row.tyres|tojson }}" data-td="{{ row.tyre_damage|tojson|forceescape }}"></td>
         <td class="spare-cell" data-spares="{{ '' if row.spares is none else row.spares }}"></td>
         <td class="input-cell" data-input="{{ row.input or '' }}" data-vr="{{ '1' if row.vr else '' }}" data-assists="{{ '1' if row.assists else '' }}"></td>
         <td class="cam-cell" data-camera="{{ row.camera or '' }}"></td>
