@@ -636,6 +636,9 @@ def event_board(event: dict, round_index: int, mode: str,
             a = _run_attrs(run_obj)
             vid = (getattr(run_obj, 'vehicle_id', None) if run_obj else None) \
                 or entries_by_user.get(e.get('username'), {}).get('vehicle_id')
+            dmg = se.get('comp_damage') if isinstance(se, dict) else None
+            if not isinstance(dmg, dict):
+                dmg = None
             raw.append({
                 'username': e.get('username'),
                 'time_ms': t,
@@ -644,6 +647,9 @@ def event_board(event: dict, round_index: int, mode: str,
                 'dnf': rs != 0,
                 'vid': vid,
                 'spares': _spare_tyres(se),
+                # One entry per tyre image: the state at the end of this
+                # stage (stage mode shows exactly one stage).
+                'tyre_damage': [{'s': j, 'd': dmg}] if a['tyre'] is not None else [],
                 **a,
             })
     elif count > 0:
@@ -658,6 +664,9 @@ def event_board(event: dict, round_index: int, mode: str,
             done = 0
             penalty = 0
             tyres_seq: list[int] = []
+            # Flat index of the LAST stage each physical set was used — its
+            # comp_damage snapshot is the state shown for that set's image.
+            tyres_last_flat: list[int] = []
             last_rem: int | None = None
             last_comp: int | None = None
             inputs: list = []
@@ -696,21 +705,29 @@ def event_board(event: dict, round_index: int, mode: str,
                     except (TypeError, ValueError):
                         rem = None
                 if comp is not None:
+                    appended = False
                     if not tyres_seq:
                         # The set fitted for the first stage.
                         tyres_seq.append(comp)
+                        appended = True
                     elif comp != last_comp:
                         # A different compound is always a different physical
                         # set — including at leg boundaries, where
                         # tyres_remaining restarts per leg and never signals
                         # the inter-leg service refit.
                         tyres_seq.append(comp)
+                        appended = True
                     elif rem is not None and last_rem is not None \
                             and rem < last_rem:
                         # Same compound, but a spare set of it was fitted at
                         # the service before this stage — one image per set,
                         # in running order.
                         tyres_seq.append(comp)
+                        appended = True
+                    if appended:
+                        tyres_last_flat.append(flat_k)
+                    else:
+                        tyres_last_flat[-1] = flat_k
                     last_comp = comp
                 if rem is not None:
                     last_rem = rem
@@ -721,6 +738,16 @@ def event_board(event: dict, round_index: int, mode: str,
                 spares_list.append(_spare_tyres(se))
             if not ran:
                 continue
+            # One entry per set image: the comp_damage state at the end of
+            # the last stage that physical set was used (null when no snapshot
+            # was stored for it).
+            tyre_damage = []
+            for fk in tyres_last_flat:
+                se_k = seg[fk] if fk < len(seg) else None
+                d = se_k.get('comp_damage') if isinstance(se_k, dict) else None
+                if not isinstance(d, dict):
+                    d = None
+                tyre_damage.append({'s': max(0, fk - offset), 'd': d})
             total = adjusted_total_ms(e, bogeys, offset=offset)
             raw.append({
                 'username': e.get('username'),
@@ -730,6 +757,7 @@ def event_board(event: dict, round_index: int, mode: str,
                 'dnf': done < j + 1,
                 'vid': vid or entries_by_user.get(e.get('username'), {}).get('vehicle_id'),
                 'tyres': tyres_seq,
+                'tyre_damage': tyre_damage,
                 'spares': _most_common(spares_list),
                 'input': _most_common(inputs),
                 'vr': _most_common(vrs),
@@ -757,6 +785,7 @@ def event_board(event: dict, round_index: int, mode: str,
         tyres = r.get('tyres')
         if tyres is None:
             tyres = [r['tyre']] if r.get('tyre') is not None else []
+        tyre_damage = r.get('tyre_damage') or []
         rows.append({
             'pos': i + 1,
             'username': r['username'],
@@ -765,6 +794,9 @@ def event_board(event: dict, round_index: int, mode: str,
             'vehicle': name,
             'car_url': f'/cars?car={vid}' if vid is not None else '',
             'tyres': tyres,
+            # Parallel to `tyres`: per-image {s: stage-bar local index,
+            # d: comp_damage dict or null}.
+            'tyre_damage': tyre_damage,
             'spares': r.get('spares'),
             'input': r.get('input'),
             'vr': r.get('vr'),

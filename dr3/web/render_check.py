@@ -112,7 +112,7 @@ def main() -> int:
           'border-radius: 0.3rem;' in css
           and '.panel, .club-card, .stat-card, .btn, button, input, select, textarea,' in css
           and '.opt, .num-tile, .table-wrap, .chip, .flash' in css
-             and 'details.create-club .plus, .hover-tip, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in css, '')
+              and 'details.create-club .plus, .hover-tip, .champ-center, .round-thumb, .round-class-thumb, .dmg-popup { border-radius: 0.3rem; }' in css, '')
 
     # home recent-times box (backlog #42): server-rendered first page +
     # infinite-scroll JS wired to the public endpoint
@@ -478,7 +478,7 @@ def main() -> int:
               and '.round-box:hover .round-class-thumb, .round-box.hovered .round-class-thumb, .round-box.active .round-class-thumb { filter: none; }' in board_css
               and '.round-loc {\n  font-weight: 900;\n  font-size: 0.95rem;\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  height: 4.5rem;\n  border-bottom-left-radius: .3rem;\n  border-bottom-right-radius: .3rem;\n  padding-left: .5rem;\n  padding-top: .25rem;\n  color: var(--accent);\n  background: color-mix(in srgb, var(--accent-deep) 45%, transparent);\n}' in board_css
               and '.round-window {\n  color: var(--accent);\n  font-weight: 500;\n  font-size: 0.8rem;\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  padding: .25rem .75rem;\n}' in board_css
-                and 'details.create-club .plus, .hover-tip, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }' in board_css, '')
+                 and 'details.create-club .plus, .hover-tip, .champ-center, .round-thumb, .round-class-thumb, .dmg-popup { border-radius: 0.3rem; }' in board_css, '')
         check('club detail: splits toggle in thead reveals per-split/lap columns',
               '<thead id="board-head"></thead>' in det
               and "return { n: board.split_count || 0, word: board.is_rx ? 'Lap' : 'Split' };" in det
@@ -551,8 +551,27 @@ def main() -> int:
               and "1: '1_soft_gravel'" in det
               and "13: '13_dry_rx'" in det
               and "TYRE_FILE[t] || '#_unknown'" in det
-                and '<span class="tyre-img" data-tip="' in det
-                and ".hover-tip {\n  position: fixed;" in board_css, '')
+                 and '<span class="tyre-img" data-tip="' in det
+                 and ".hover-tip {\n  position: fixed;" in board_css, '')
+        check('club detail: clicking a tyre image pins a vehicle-state damage popup (car model + % bars)',
+              'data-tdx="' in det
+              and "var dmg = document.createElement('div');" in det
+              and "dmg.className = 'dmg-popup';" in det
+              and "document.body.appendChild(dmg);" in det
+              and 'function unpack4(v) {' in det
+              and 'FL: { wear: 2, impact: 2, springs: 0, brakes: 0, dampers: 0, body: 0 }' in det
+              and 'FR: { wear: 3, impact: 0, springs: 1, brakes: 1, dampers: 1, body: 3 }' in det
+              and "['Engine', d.engine], ['Clutch', d.clutch], ['Radiator', d.radiator]," in det
+              and 'viewBox="0 0 172 300"' in det
+              and 'clipPath id="dmg-body-clip"' in det
+              and 'No damage data for this stage.' in det
+              and "var tyre = e.target.closest('.tyre-img');" in det
+              and 'if (dmgTarget === tyre) closeDmg(); else openDmg(tyre);' in det
+              and "if (e.key === 'Escape') closeDmg();" in det
+              and "function renderRows(board) {\n    closeDmg();" in det
+              and ".dmg-popup {\n  position: fixed;" in board_css
+              and '.dmg-popup.show { opacity: 1; pointer-events: auto; }' in board_css
+              and '.dmg-car { width: 6.8rem; flex: none; }' in board_css, '')
         check('club detail: spares column after Tyres shows the count with a tooltip (ink dash when unknown)',
               "function spareCell(v) {" in det
               and "<th>Tyres</th><th>Spares</th>" in det

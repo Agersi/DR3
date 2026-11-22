@@ -397,10 +397,10 @@
 
   function tyreCell(tyres) {
     if (!tyres || !tyres.length) return '<span class="ink">—</span>';
-    return tyres.map(function (t) {
+    return tyres.map(function (t, i) {
       var slug = TYRE_FILE[t] || '#_unknown';
       var name = esc(tyreName(slug));
-      return '<span class="tyre-img" data-tip="' + name + '"><img src="' + STATIC + 'tyres/' + slug + '.png" alt="" aria-label="' + name + '"></span>';
+      return '<span class="tyre-img" data-tip="' + name + '" data-tdx="' + i + '"><img src="' + STATIC + 'tyres/' + slug + '.png" alt="" aria-label="' + name + '"></span>';
     }).join('');
   }
 
@@ -556,6 +556,7 @@
   }
 
   function renderRows(board) {
+    closeDmg();
     var body = document.getElementById('board-body');
     var rows = board.rows || [];
     var spec = splitSpec(board);
@@ -762,6 +763,165 @@
     document.getElementById(id).addEventListener('mouseleave', hideTip);
   });
   window.addEventListener('scroll', hideTip, { passive: true });
+
+  // Pinned damage popup: clicking a board tyre image pins the compound tip as
+  // a full vehicle-state model for the stage that set was used on. Hover keeps
+  // showing the plain compound name; click again / outside / Esc closes it.
+  var dmg = document.createElement('div');
+  dmg.className = 'dmg-popup';
+  document.body.appendChild(dmg);
+  var dmgTarget = null;
+
+  function unpack4(v) {
+    v = Number(v) || 0;
+    return [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >>> 24) & 0xFF];
+  }
+
+  // Packed-field byte -> corner map (accepted working decode; wheels_wear
+  // confirmed, the rest accepted preliminary).
+  var CORNER = {
+    FL: { wear: 2, impact: 2, springs: 0, brakes: 0, dampers: 0, body: 0 },
+    FR: { wear: 3, impact: 0, springs: 1, brakes: 1, dampers: 1, body: 3 },
+    RL: { wear: 0, impact: 3, springs: 2, brakes: 2, dampers: 2, body: 1 },
+    RR: { wear: 1, impact: 1, springs: 3, brakes: 3, dampers: 3, body: 2 }
+  };
+
+  function dmgColor(t) {
+    t = Math.max(0, Math.min(1, t));
+    return 'hsl(' + (130 * (1 - t)) + ', 75%, ' + (40 + 10 * t) + '%)';
+  }
+
+  function carSvg(d) {
+    var wear = unpack4(d.wheels_wear);
+    var impact = unpack4(d.wheels_impact);
+    var springs = unpack4(d.springs);
+    var dampers = unpack4(d.dampers);
+    var brakes = unpack4(d.brakes);
+    var bodywork = unpack4(d.bodywork);
+    var overlays = [
+      ['FL', 41, 29, 45, 120], ['FR', 86, 29, 45, 120],
+      ['RL', 41, 150, 45, 121], ['RR', 86, 150, 45, 121]
+    ].map(function (q) {
+      var v = bodywork[CORNER[q[0]].body] / 255;
+      if (v <= 0.02) return '';
+      return '<rect x="' + q[1] + '" y="' + q[2] + '" width="' + q[3] + '" height="' + q[4] + '" fill="' + dmgColor(v) + '" opacity="0.8"/>';
+    }).join('');
+    var wheels = [
+      ['FL', 48, 64], ['FR', 124, 64], ['RL', 48, 236], ['RR', 124, 236]
+    ].map(function (w) {
+      var c = CORNER[w[0]];
+      var x = w[1], y = w[2];
+      var s = '<g>';
+      s += '<circle cx="' + x + '" cy="' + y + '" r="20.5" fill="#14170f"/>';
+      s += '<circle cx="' + x + '" cy="' + y + '" r="19" fill="none" stroke="' + dmgColor(springs[c.springs] / 255) + '" stroke-width="3"/>';
+      s += '<circle cx="' + x + '" cy="' + y + '" r="14.5" fill="none" stroke="' + dmgColor(dampers[c.dampers] / 255) + '" stroke-width="3"/>';
+      s += '<circle cx="' + x + '" cy="' + y + '" r="10" fill="none" stroke="' + dmgColor(brakes[c.brakes] / 255) + '" stroke-width="3"/>';
+      s += '<circle cx="' + x + '" cy="' + y + '" r="6.5" fill="' + dmgColor(wear[c.wear] / 255) + '"/>';
+      var imp = impact[c.impact] / 255;
+      if (imp > 0.02) {
+        s += '<path d="M' + (x - 7) + ' ' + (y - 7) + 'L' + (x + 7) + ' ' + (y + 7) + 'M' + (x + 7) + ' ' + (y - 7) + 'L' + (x - 7) + ' ' + (y + 7) + '" stroke="#ff5252" stroke-width="2.5" opacity="' + Math.min(1, imp * 1.4).toFixed(2) + '"/>';
+      }
+      s += '</g>';
+      return s;
+    }).join('');
+    return '<svg class="dmg-car" viewBox="0 0 172 300" aria-hidden="true">' +
+      '<defs><clipPath id="dmg-body-clip"><rect x="40" y="28" width="92" height="244" rx="26"/></clipPath></defs>' +
+      '<rect x="40" y="28" width="92" height="244" rx="26" fill="#262b21" stroke="#697565" stroke-width="1.5"/>' +
+      '<g clip-path="url(#dmg-body-clip)">' + overlays + '</g>' +
+      '<rect x="58" y="96" width="56" height="72" rx="14" fill="rgba(236,223,204,0.08)"/>' +
+      wheels +
+      '</svg>';
+  }
+
+  function dmgBars(d) {
+    var items = [
+      ['Engine', d.engine], ['Clutch', d.clutch], ['Radiator', d.radiator],
+      ['Exhaust', d.exhaust], ['Lights', d.lights]
+    ];
+    return '<div class="dmg-bars">' + items.map(function (it) {
+      var v = Math.max(0, Math.min(1, Number(it[1]) || 0));
+      var pct = Math.round(v * 100);
+      return '<div class="dmg-bar"><span class="dmg-bar-label">' + it[0] + '</span>' +
+        '<span class="dmg-bar-track"><span class="dmg-bar-fill" style="width:' + pct + '%;background:' + dmgColor(v) + '"></span></span>' +
+        '<span class="dmg-bar-val">' + pct + '%</span></div>';
+    }).join('') + '</div>';
+  }
+
+  function renderDmg(row, idx, entry) {
+    var t = (row.tyres || [])[idx];
+    var title = tyreName(TYRE_FILE[t] || '#_unknown');
+    var s = entry ? ((state.board && state.board.stages_bar) || [])[entry.s] : null;
+    var cap = '';
+    if (s) {
+      cap = 'after ' + s.label;
+      if (s.location) cap += ' — ' + esc(s.location);
+    }
+    var d = entry && entry.d;
+    var body;
+    if (!d) {
+      body = '<div class="dmg-nodata">No damage data for this stage.</div>';
+    } else {
+      body = '<div class="dmg-body">' + carSvg(d) + dmgBars(d) + '</div>' +
+        '<div class="dmg-legend">' +
+        '<span>rings outer→in: <b>springs</b> · <b>dampers</b> · <b>brakes</b></span>' +
+        '<span>centre: <b>tyre wear</b></span>' +
+        '<span><b style="color:#ff5252">✕</b> impact</span>' +
+        '</div>';
+    }
+    dmg.innerHTML =
+      '<div class="dmg-head"><span class="dmg-title">' + esc(title) + '</span><span class="dmg-stage">' + cap + '</span></div>' +
+      body;
+  }
+
+  function placeDmg() {
+    if (!dmgTarget) return;
+    var r = dmgTarget.getBoundingClientRect();
+    var w = dmg.offsetWidth, h = dmg.offsetHeight;
+    var left = r.right + 12;
+    if (left + w > window.innerWidth - 8) left = r.left - w - 12;
+    if (left < 8) left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
+    var top = Math.min(Math.max(8, r.top + r.height / 2 - h / 2), Math.max(8, window.innerHeight - h - 8));
+    dmg.style.left = left + 'px';
+    dmg.style.top = top + 'px';
+  }
+
+  function openDmg(el) {
+    var tr = el.closest('tr');
+    var row = null;
+    ((state.board && state.board.rows) || []).forEach(function (r) {
+      if (String(r.pos) === tr.getAttribute('data-pos')) row = r;
+    });
+    if (!row) return;
+    var idx = parseInt(el.getAttribute('data-tdx'), 10);
+    renderDmg(row, idx, (row.tyre_damage || [])[idx]);
+    dmgTarget = el;
+    dmg.classList.add('show');
+    placeDmg();
+  }
+
+  function closeDmg() {
+    dmgTarget = null;
+    dmg.classList.remove('show');
+  }
+
+  document.getElementById('board-table').addEventListener('click', function (e) {
+    var tyre = e.target.closest('.tyre-img');
+    if (tyre) {
+      if (dmgTarget === tyre) closeDmg(); else openDmg(tyre);
+      return;
+    }
+  });
+  document.addEventListener('click', function (e) {
+    if (!dmgTarget) return;
+    if (e.target.closest('.dmg-popup') || e.target.closest('.tyre-img')) return;
+    closeDmg();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeDmg();
+  });
+  window.addEventListener('scroll', function () {
+    if (dmgTarget) placeDmg();
+  }, { passive: true });
 
   renderAll();
   centerActiveRound();

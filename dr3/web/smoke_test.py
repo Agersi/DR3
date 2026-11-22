@@ -2120,6 +2120,20 @@ def main() -> int:
                 _TB(version=b.version, uncompressed_size=222,
                     payload=bytes(p)).encode()).decode()
 
+        # Distinctive per-stage comp_damage snapshots (packed uint32 wheel
+        # fields, little-endian bytes) so the board's per-set damage mapping
+        # is checkable end to end.
+        D_CUM0 = {'wheels_wear': 0x40201005, 'wheels_impact': 200, 'springs': 100,
+                  'dampers': 200 * 65536, 'brakes': 50 * 256,
+                  'bodywork': 90 + 180 * 256,
+                  'engine': 0.25, 'clutch': 0.5, 'radiator': 0.0,
+                  'exhaust': 0.75, 'lights': 0.0}
+        D_CUM1 = {'wheels_wear': 0x80403020, 'springs': 64 * 256,
+                  'dampers': 128 * 16777216, 'brakes': 96 + 32 * 256,
+                  'bodywork': 220 + 110 * 65536,
+                  'engine': 0.9, 'clutch': 0.1, 'radiator': 0.5,
+                  'exhaust': 0.25, 'lights': 0.75}
+        D_CUM2 = {'wheels_wear': 0x07070707, 'bodywork': 0, 'engine': 1.0}
         cum_routes = routes[:2] if len(routes) >= 2 else (routes * 2)[:2] if routes else []
         cum_conds = stage_conditions_for_location(qloc) if qloc else []
         cum_stages = []
@@ -2178,6 +2192,15 @@ def main() -> int:
                         username=name, event_id='evt-smoke-board-cum',
                         vehicle_id=565, flat_stage_index=k, time_ms=t,
                         player_finished=True, tyre_compound=run_comps[k]))
+            from app.models import ClubStageState as _BoardCSS
+            # secondpilot has no snapshot for stage 2 — his second set must
+            # come back with a null damage dict.
+            db.session.add(_BoardCSS(event_id='evt-smoke-board-cum', username='smokedriver',
+                                     flat_stage_index=0, comp_damage_json=json.dumps(D_CUM0)))
+            db.session.add(_BoardCSS(event_id='evt-smoke-board-cum', username='smokedriver',
+                                     flat_stage_index=1, comp_damage_json=json.dumps(D_CUM1)))
+            db.session.add(_BoardCSS(event_id='evt-smoke-board-cum', username='secondpilot',
+                                     flat_stage_index=0, comp_damage_json=json.dumps(D_CUM2)))
             db.session.commit()
 
         api = client.get(
@@ -2257,6 +2280,19 @@ def main() -> int:
               and by_name0.get('secondpilot', {}).get('tyres') == [6]
               and by_name1.get('secondpilot', {}).get('tyres') == [6, 8],
               f"tyres={[(n, r.get('tyres')) for n, r in {**by_name0, **by_name1}.items()]}")
+        check("event-board API: overall rows carry per-set tyre_damage (state at each set's last-used stage)",
+              by_name0.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM0}]
+              and by_name1.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM0}, {'s': 1, 'd': D_CUM1}]
+              and by_name1.get('secondpilot', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM2}, {'s': 1, 'd': None}],
+              f"td={[(n, r.get('tyre_damage')) for n, r in {**by_name0, **by_name1}.items()]}")
+        api_cum_s0 = client.get(
+            f'/clubs/{club_id}/event-board?event=evt-smoke-board-cum&round=0&mode=stage&stage=0')
+        bs0 = {row['username']: row for row in (api_cum_s0.get_json() or {}).get('rows') or []}
+        check("event-board API: stage-mode rows carry the selected stage's damage snapshot",
+              api_cum_s0.status_code == 200
+              and bs0.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM0}]
+              and bs0.get('secondpilot', {}).get('tyre_damage') == [],
+              f"rows={[(n, r.get('tyre_damage')) for n, r in bs0.items()]}")
 
         # Combined-multi fixture: two legs x two stages so the board must span
         # the whole event — a flat S1..S4 bar, Overall accumulating across
@@ -2315,6 +2351,15 @@ def main() -> int:
                     {'time_ms': 900000, 'penalties_ms': 0, 'race_status': 5},
                     {},
                 ])))
+            # Snapshots only at the LAST stage of each set (flat 1 = softs,
+            # flat 3 = mediums) — the combined board must map them to the
+            # right set images across the leg boundary.
+            D_M1 = {'wheels_wear': 0x10203040, 'engine': 0.5}
+            D_M3 = {'wheels_wear': 0x50607080, 'engine': 1.0, 'lights': 0.25}
+            db.session.add(_BoardCSS(event_id='evt-smoke-board-multi', username='smokedriver',
+                                     flat_stage_index=1, comp_damage_json=json.dumps(D_M1)))
+            db.session.add(_BoardCSS(event_id='evt-smoke-board-multi', username='smokedriver',
+                                     flat_stage_index=3, comp_damage_json=json.dumps(D_M3)))
             db.session.commit()
 
         api2 = client.get(
@@ -2355,6 +2400,10 @@ def main() -> int:
               and by_name_m3.get('smokedriver', {}).get('tyres') == [6, 7]
               and by_name_m3.get('secondpilot', {}).get('tyres') == [],
               f"tyres={[(n, r.get('tyres')) for n, r in {**by_name_m0, **by_name_m3}.items()]}")
+        check("event-board API: combined per-set tyre_damage maps to each set's last-used stage (null when unsnapshotted)",
+              by_name_m0.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': None}]
+              and by_name_m3.get('smokedriver', {}).get('tyre_damage') == [{'s': 1, 'd': D_M1}, {'s': 3, 'd': D_M3}],
+              f"td={[(n, r.get('tyre_damage')) for n, r in {**by_name_m0, **by_name_m3}.items()]}")
         check('event-board API: combined info shows the selected stage + its leg location',
               (bm3.get('info') or {}).get('number') == 4
               and (bm3.get('info') or {}).get('location') == (qloc or ''),

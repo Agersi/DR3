@@ -836,6 +836,36 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
   z-index: 50;
 }
 .hover-tip.show { opacity: 1; }
+/* Pinned tyre-damage popup: click a board tyre image to pin the compound tip
+   as a full vehicle-state model for the stage that set was used on. */
+.dmg-popup {
+  position: fixed;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--text);
+  width: 21rem;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.78rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  z-index: 51;
+}
+.dmg-popup.show { opacity: 1; pointer-events: auto; }
+.dmg-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; margin-bottom: 0.45rem; }
+.dmg-title { font-family: var(--display); font-size: 0.95rem; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink); }
+.dmg-stage { color: var(--muted); white-space: nowrap; }
+.dmg-body { display: flex; gap: 0.7rem; align-items: center; }
+.dmg-car { width: 6.8rem; flex: none; }
+.dmg-bars { flex: 1; min-width: 0; }
+.dmg-bar { display: flex; align-items: center; gap: 0.4rem; margin: 0.28rem 0; }
+.dmg-bar-label { width: 4.6rem; flex: none; color: var(--muted); }
+.dmg-bar-track { flex: 1; height: 0.45rem; background: rgba(105, 117, 101, 0.35); overflow: hidden; }
+.dmg-bar-fill { display: block; height: 100%; }
+.dmg-bar-val { width: 2rem; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
+.dmg-nodata { color: var(--muted); padding: 1.5rem 0; text-align: center; }
+.dmg-legend { margin-top: 0.5rem; padding-top: 0.45rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.7rem; display: flex; flex-wrap: wrap; gap: 0.25rem 0.9rem; }
+.dmg-legend b { color: var(--text); font-weight: 600; }
 .splits-row td { background: var(--bg); color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .board-empty td { text-align: center; color: var(--muted); padding: 1rem; }
 
@@ -853,7 +883,7 @@ table.standings td.strong { font-weight: 700; color: var(--accent); }
 .panel, .club-card, .stat-card, .btn, button, input, select, textarea,
 .opt, .num-tile, .table-wrap, .chip, .flash, code, pre, .codeblock,
 .steps li, .steps li::before, .big404 .num-plate, .token-box code,
-details.create-club .plus, .hover-tip, .champ-center, .round-thumb, .round-class-thumb { border-radius: 0.3rem; }
+details.create-club .plus, .hover-tip, .champ-center, .round-thumb, .round-class-thumb, .dmg-popup { border-radius: 0.3rem; }
 
 @media (max-width: 900px) {
   .grid-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
