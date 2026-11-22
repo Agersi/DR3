@@ -634,6 +634,13 @@ def event_board(event: dict, round_index: int, mode: str,
                 continue
             run_obj = runs_by_user.get(e.get('username'), {}).get(flat)
             a = _run_attrs(run_obj)
+            # Pre-stage_runs history has no row for the slot — fall back to
+            # the compound captured at stage begin (same as Overall mode).
+            if a['tyre'] is None and isinstance(se, dict):
+                try:
+                    a['tyre'] = int(se.get('tyre_compound') or 0) or None
+                except (TypeError, ValueError):
+                    a['tyre'] = None
             vid = (getattr(run_obj, 'vehicle_id', None) if run_obj else None) \
                 or entries_by_user.get(e.get('username'), {}).get('vehicle_id')
             dmg = se.get('comp_damage') if isinstance(se, dict) else None

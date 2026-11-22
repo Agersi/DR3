@@ -2291,8 +2291,12 @@ def main() -> int:
         check("event-board API: stage-mode rows carry the selected stage's damage snapshot",
               api_cum_s0.status_code == 200
               and bs0.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM0}]
-              and bs0.get('secondpilot', {}).get('tyre_damage') == [],
+              and bs0.get('secondpilot', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM2}],
               f"rows={[(n, r.get('tyre_damage')) for n, r in bs0.items()]}")
+        check("event-board API: stage-mode tyre falls back to the begin-capture compound (legacy rows)",
+              bs0.get('smokedriver', {}).get('tyres') == [6]
+              and bs0.get('secondpilot', {}).get('tyres') == [6],
+              f"rows={[(n, r.get('tyres')) for n, r in bs0.items()]}")
 
         # Combined-multi fixture: two legs x two stages so the board must span
         # the whole event — a flat S1..S4 bar, Overall accumulating across
