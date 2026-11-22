@@ -856,7 +856,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .dmg-title { font-family: var(--display); font-size: 0.95rem; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink); }
 .dmg-stage { color: var(--muted); white-space: nowrap; }
 .dmg-body { display: flex; gap: 0.7rem; align-items: center; }
-.dmg-car { width: 6.8rem; flex: none; }
+.dmg-car { width: 8.5rem; flex: none; }
 .dmg-bars { flex: 1; min-width: 0; }
 .dmg-bar { display: flex; align-items: center; gap: 0.4rem; margin: 0.28rem 0; }
 .dmg-bar-label { width: 4.6rem; flex: none; color: var(--muted); }

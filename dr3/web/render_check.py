@@ -562,8 +562,12 @@ def main() -> int:
               and 'FL: { wear: 2, impact: 2, springs: 0, brakes: 0, dampers: 0, body: 0 }' in det
               and 'FR: { wear: 3, impact: 0, springs: 1, brakes: 1, dampers: 1, body: 3 }' in det
               and "['Engine', d.engine], ['Clutch', d.clutch], ['Radiator', d.radiator]," in det
-              and 'viewBox="0 0 172 300"' in det
-              and 'clipPath id="dmg-body-clip"' in det
+              and 'viewBox="0 0 210 300"' in det
+              and '<rect x="59" y="28" width="92" height="244" rx="15"/>' in det
+              and 'rx="15" fill="#262b21"' in det
+              and 'width="20" height="38" rx="8"' in det
+              and 'width="46" height="40" rx="6"' in det
+              and 'side boxes top→bottom' in det
               and 'No damage data for this stage.' in det
               and "var tyre = e.target.closest('.tyre-img');" in det
               and 'if (dmgTarget === tyre) closeDmg(); else openDmg(tyre);' in det
@@ -571,7 +575,7 @@ def main() -> int:
               and "function renderRows(board) {\n    closeDmg();" in det
               and ".dmg-popup {\n  position: fixed;" in board_css
               and '.dmg-popup.show { opacity: 1; pointer-events: auto; }' in board_css
-              and '.dmg-car { width: 6.8rem; flex: none; }' in board_css, '')
+              and '.dmg-car { width: 8.5rem; flex: none; }' in board_css, '')
         check('club detail: spares column after Tyres shows the count with a tooltip (ink dash when unknown)',
               "function spareCell(v) {" in det
               and "<th>Tyres</th><th>Spares</th>" in det
