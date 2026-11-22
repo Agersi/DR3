@@ -799,40 +799,40 @@
     var brakes = unpack4(d.brakes);
     var bodywork = unpack4(d.bodywork);
     var overlays = [
-      ['FL', 60, 29, 45, 120], ['FR', 105, 29, 45, 120],
-      ['RL', 60, 150, 45, 121], ['RR', 105, 150, 45, 121]
+      ['FL', 74, 29, 45, 120], ['FR', 119, 29, 45, 120],
+      ['RL', 74, 150, 45, 121], ['RR', 119, 150, 45, 121]
     ].map(function (q) {
       var v = bodywork[CORNER[q[0]].body] / 255;
       if (v <= 0.02) return '';
       return '<rect x="' + q[1] + '" y="' + q[2] + '" width="' + q[3] + '" height="' + q[4] + '" fill="' + dmgColor(v) + '" opacity="0.8"/>';
     }).join('');
     var wheels = [
-      ['FL', 64, 64], ['FR', 146, 64], ['RL', 64, 236], ['RR', 146, 236]
+      ['FL', 78, 64], ['FR', 160, 64], ['RL', 78, 236], ['RR', 160, 236]
     ].map(function (w) {
       var c = CORNER[w[0]];
       var x = w[1], y = w[2];
-      var bx = x < 105 ? 2 : 162;
+      var bx = x < 119 ? 2 : 176;
       var s = '<g>';
-      s += '<rect x="' + bx + '" y="' + (y - 20) + '" width="46" height="40" rx="6" fill="rgba(236,223,204,0.06)" stroke="#697565"/>';
+      s += '<rect x="' + bx + '" y="' + (y - 22) + '" width="60" height="44" rx="6" fill="rgba(236,223,204,0.06)" stroke="#697565"/>';
       [['Spr', springs[c.springs]], ['Dmp', dampers[c.dampers]], ['Brk', brakes[c.brakes]]].forEach(function (r, i) {
-        var ry = y - 12 + i * 12;
-        s += '<text x="' + (bx + 5) + '" y="' + ry + '" font-size="9" fill="#afff95" dominant-baseline="central">' + r[0] + '</text>';
-        s += '<text x="' + (bx + 41) + '" y="' + ry + '" font-size="9" font-weight="700" text-anchor="end" fill="' + dmgColor(r[1] / 255) + '" dominant-baseline="central">' + Math.round(r[1] / 255 * 100) + '%</text>';
+        var ry = y - 13 + i * 13;
+        s += '<text x="' + (bx + 5) + '" y="' + ry + '" font-size="12" fill="#afff95" dominant-baseline="central">' + r[0] + '</text>';
+        s += '<text x="' + (bx + 55) + '" y="' + ry + '" font-size="12" font-weight="700" text-anchor="end" fill="' + dmgColor(r[1] / 255) + '" dominant-baseline="central">' + Math.round(r[1] / 255 * 100) + '%</text>';
       });
       var wr = wear[c.wear] / 255;
       s += '<rect x="' + (x - 12) + '" y="' + (y - 22) + '" width="24" height="44" rx="9" fill="' + dmgColor(wr) + '" stroke="#697565"/>';
       var imp = impact[c.impact] / 255;
       if (imp > 0.02) {
         var fh = Math.max(2, imp * 32);
-        s += '<rect x="' + (x - 3) + '" y="' + (y + 16 - fh) + '" width="6" height="' + fh.toFixed(1) + '" rx="2" fill="' + dmgColor(imp) + '"/>';
+        s += '<rect x="' + (x < 119 ? x + 14 : x - 20) + '" y="' + (y + 16 - fh) + '" width="6" height="' + fh.toFixed(1) + '" rx="2" fill="' + dmgColor(imp) + '"/>';
       }
-      s += '<text x="' + x + '" y="' + y + '" font-size="9" font-weight="700" text-anchor="middle" dominant-baseline="central" fill="#ffffff">' + Math.round(wr * 100) + '%</text>';
+      s += '<text x="' + x + '" y="' + y + '" font-size="9" font-weight="700" text-anchor="middle" dominant-baseline="central" style="fill:var(--bg)">' + Math.round(wr * 100) + '%</text>';
       s += '</g>';
       return s;
     }).join('');
-    return '<svg class="dmg-car" viewBox="0 0 210 300" aria-hidden="true">' +
-      '<defs><clipPath id="dmg-body-clip"><rect x="59" y="28" width="92" height="244" rx="15"/></clipPath></defs>' +
-      '<rect x="59" y="28" width="92" height="244" rx="15" fill="#262b21" stroke="#697565" stroke-width="1.5"/>' +
+    return '<svg class="dmg-car" viewBox="0 0 238 300" aria-hidden="true">' +
+      '<defs><clipPath id="dmg-body-clip"><rect x="73" y="28" width="92" height="244" rx="15"/></clipPath></defs>' +
+      '<rect x="73" y="28" width="92" height="244" rx="15" fill="#262b21" stroke="#697565" stroke-width="1.5"/>' +
       '<g clip-path="url(#dmg-body-clip)">' + overlays + '</g>' +
       wheels +
       '</svg>';

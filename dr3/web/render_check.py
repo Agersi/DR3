@@ -562,12 +562,15 @@ def main() -> int:
               and 'FL: { wear: 2, impact: 2, springs: 0, brakes: 0, dampers: 0, body: 0 }' in det
               and 'FR: { wear: 3, impact: 0, springs: 1, brakes: 1, dampers: 1, body: 3 }' in det
               and "['Engine', d.engine], ['Clutch', d.clutch], ['Radiator', d.radiator]," in det
-              and 'viewBox="0 0 210 300"' in det
-              and '<rect x="59" y="28" width="92" height="244" rx="15"/>' in det
+              and 'viewBox="0 0 238 300"' in det
+              and '<rect x="73" y="28" width="92" height="244" rx="15"/>' in det
               and 'rx="15" fill="#262b21"' in det
               and 'width="24" height="44" rx="9"' in det
               and 'var fh = Math.max(2, imp * 32);' in det
-              and 'width="46" height="40" rx="6"' in det
+              and '(x < 119 ? x + 14 : x - 20)' in det
+              and 'width="60" height="44" rx="6"' in det
+              and 'font-size="12"' in det
+              and 'style="fill:var(--bg)"' in det
               and 'side boxes top→bottom' in det
               and 'No damage data for this stage.' in det
               and "var tyre = e.target.closest('.tyre-img');" in det
@@ -576,7 +579,7 @@ def main() -> int:
               and "function renderRows(board) {\n    closeDmg();" in det
               and ".dmg-popup {\n  position: fixed;" in board_css
               and '.dmg-popup.show { opacity: 1; pointer-events: auto; }' in board_css
-              and '.dmg-car { width: 8.5rem; flex: none; }' in board_css, '')
+              and '.dmg-car { width: 9.6rem; flex: none; }' in board_css, '')
         check('club detail: spares column after Tyres shows the count with a tooltip (ink dash when unknown)',
               "function spareCell(v) {" in det
               and "<th>Tyres</th><th>Spares</th>" in det
