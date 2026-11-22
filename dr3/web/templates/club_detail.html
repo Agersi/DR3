@@ -819,12 +819,14 @@
         s += '<text x="' + (bx + 5) + '" y="' + ry + '" font-size="9" fill="#afff95" dominant-baseline="central">' + r[0] + '</text>';
         s += '<text x="' + (bx + 41) + '" y="' + ry + '" font-size="9" font-weight="700" text-anchor="end" fill="' + dmgColor(r[1] / 255) + '" dominant-baseline="central">' + Math.round(r[1] / 255 * 100) + '%</text>';
       });
-      s += '<rect x="' + (x - 10) + '" y="' + (y - 19) + '" width="20" height="38" rx="8" fill="#14170f" stroke="#697565"/>';
-      s += '<text x="' + x + '" y="' + y + '" font-size="8" font-weight="700" text-anchor="middle" dominant-baseline="central" fill="' + dmgColor(wear[c.wear] / 255) + '">' + Math.round(wear[c.wear] / 255 * 100) + '%</text>';
+      var wr = wear[c.wear] / 255;
+      s += '<rect x="' + (x - 12) + '" y="' + (y - 22) + '" width="24" height="44" rx="9" fill="' + dmgColor(wr) + '" stroke="#697565"/>';
       var imp = impact[c.impact] / 255;
       if (imp > 0.02) {
-        s += '<path d="M' + (x - 8) + ' ' + (y - 8) + 'L' + (x + 8) + ' ' + (y + 8) + 'M' + (x + 8) + ' ' + (y - 8) + 'L' + (x - 8) + ' ' + (y + 8) + '" stroke="#ff5252" stroke-width="2.5" opacity="' + Math.min(1, imp * 1.4).toFixed(2) + '"/>';
+        var fh = Math.max(2, imp * 32);
+        s += '<rect x="' + (x - 3) + '" y="' + (y + 16 - fh) + '" width="6" height="' + fh.toFixed(1) + '" rx="2" fill="' + dmgColor(imp) + '"/>';
       }
+      s += '<text x="' + x + '" y="' + y + '" font-size="9" font-weight="700" text-anchor="middle" dominant-baseline="central" fill="#ffffff">' + Math.round(wr * 100) + '%</text>';
       s += '</g>';
       return s;
     }).join('');
@@ -832,7 +834,6 @@
       '<defs><clipPath id="dmg-body-clip"><rect x="59" y="28" width="92" height="244" rx="15"/></clipPath></defs>' +
       '<rect x="59" y="28" width="92" height="244" rx="15" fill="#262b21" stroke="#697565" stroke-width="1.5"/>' +
       '<g clip-path="url(#dmg-body-clip)">' + overlays + '</g>' +
-      '<rect x="77" y="96" width="56" height="72" rx="14" fill="rgba(236,223,204,0.08)"/>' +
       wheels +
       '</svg>';
   }
@@ -868,8 +869,8 @@
       body = '<div class="dmg-body">' + carSvg(d) + dmgBars(d) + '</div>' +
         '<div class="dmg-legend">' +
         '<span>tyre centre: <b>wear</b></span>' +
+        '<span>bar in tyre: <b>impact</b></span>' +
         '<span>side boxes top→bottom: <b>springs</b> · <b>dampers</b> · <b>brakes</b></span>' +
-        '<span><b style="color:#ff5252">✕</b> impact</span>' +
         '</div>';
     }
     dmg.innerHTML =

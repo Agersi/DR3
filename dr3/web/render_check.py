@@ -565,7 +565,8 @@ def main() -> int:
               and 'viewBox="0 0 210 300"' in det
               and '<rect x="59" y="28" width="92" height="244" rx="15"/>' in det
               and 'rx="15" fill="#262b21"' in det
-              and 'width="20" height="38" rx="8"' in det
+              and 'width="24" height="44" rx="9"' in det
+              and 'var fh = Math.max(2, imp * 32);' in det
               and 'width="46" height="40" rx="6"' in det
               and 'side boxes top→bottom' in det
               and 'No damage data for this stage.' in det
