@@ -626,11 +626,11 @@ details.create-club form {
 
 .champ-stages th:first-child, .champ-stages td.num { text-align: center; width: 1.5rem; }
 .champ-stages th:nth-child(2), .champ-stages th:nth-child(3), .champ-stages th:nth-child(4), .champ-stages th:nth-child(5) { padding-left: 0.7rem; }
-.champ-stages th:nth-child(2), .champ-stages td:nth-child(2) { width: 22rem; }
-.champ-stages th:nth-child(3), .champ-stages td:nth-child(3) { width: 15rem; }
+.champ-stages th:nth-child(2), .champ-stages td:nth-child(2) { width: 20rem; }
+.champ-stages th:nth-child(3), .champ-stages td:nth-child(3) { width: 16rem; }
 .champ-stages .cselect-btn { font-size: 0.75rem; }
 .champ-stages .cselect-item { font-size: 0.85rem; padding: 0.1rem 0.65rem; }
-.champ-stages .champ-route .cselect-label, .champ-stages .champ-conditions .cselect-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.champ-stages td:nth-child(2) .cselect-label, .champ-stages td:nth-child(3) .cselect-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Misc components ────────────────────────────────── */
 
