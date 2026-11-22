@@ -2,9 +2,10 @@
 """Verify the dispatcher's telemetry -> splits wiring end to end (no socket).
 
 Replays the German TT UDP capture through TelemetryListener to obtain a real
-completed StageRun, then feeds it to RpcDispatcher._compute_stage_splits via a
-fake telemetry object and checks the segments are scaled to sum exactly to the
-submitted official stage time. Also covers the no-telemetry / no-run fallbacks.
+completed StageRun, claims it via take_run_since (the dispatcher's own
+convention) and feeds it to RpcDispatcher._compute_stage_splits, checking the
+segments are scaled to sum exactly to the submitted official stage time. Also
+covers the no-telemetry / no-run fallbacks.
 
 Run: python tools/repro_telemetry_wiring.py   (from D:\\CODE\\DR2)
 """
@@ -98,22 +99,25 @@ def main():
 
     # (a) a real run scales to the submitted official total exactly.
     d = make_dispatcher(FakeTelemetry(run))
-    out = d._compute_stage_splits("evtS", 0, 0, time_ms=200000)   # 200 s
+    claimed = d.telemetry.take_run_since(d._telemetry_arm_wall)
+    out = d._compute_stage_splits("evtS", 0, 0, time_ms=200000, run=claimed)   # 200 s
     check("a: returns 4 segments", len(out or []), 4)
     check("a: sums to official total", round(sum(out), 3), 200.0)
 
     # (b) a different official time rescales the same run.
     d = make_dispatcher(FakeTelemetry(run))
-    out = d._compute_stage_splits("evtS", 0, 0, time_ms=180000)   # 180 s
+    claimed = d.telemetry.take_run_since(d._telemetry_arm_wall)
+    out = d._compute_stage_splits("evtS", 0, 0, time_ms=180000, run=claimed)   # 180 s
     check("b: sums to 180s", round(sum(out), 3), 180.0)
 
     # (c) telemetry disabled -> None (no crash).
     d = make_dispatcher(None)
-    check("c: no telemetry -> None", d._compute_stage_splits("evtS", 0, 0, 200000), None)
+    check("c: no telemetry -> None", d._compute_stage_splits("evtS", 0, 0, 200000, None), None)
 
     # (d) no completed run available -> None.
     d = make_dispatcher(FakeTelemetry(None))
-    check("d: no run -> None", d._compute_stage_splits("evtS", 0, 0, 200000), None)
+    claimed = d.telemetry.take_run_since(d._telemetry_arm_wall)
+    check("d: no run -> None", d._compute_stage_splits("evtS", 0, 0, 200000, claimed), None)
 
     # (e) unknown track (no split count) -> None even with a run present.
     store = AccountStore(Path(r"D:\CODE\DR2\build\telemetry_wiring_accounts") / "u")
@@ -122,7 +126,8 @@ def main():
     d._telemetry_arm_wall = 0.0
     # point the event at an unmapped track so _stage_split_profile returns None
     d.api_client.events = {"evtS": {"stages": [{"track_id": 1}]}}
-    check("e: unmapped track -> None", d._compute_stage_splits("evtS", 0, 0, 200000), None)
+    claimed = d.telemetry.take_run_since(d._telemetry_arm_wall)
+    check("e: unmapped track -> None", d._compute_stage_splits("evtS", 0, 0, 200000, claimed), None)
 
     # (f)+(g) take_run_since matches on the run's FINISH wall, not its start.
     # Club rally: the car idles in the start zone (service park) so the buffer

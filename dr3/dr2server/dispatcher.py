@@ -4059,10 +4059,10 @@ class RpcDispatcher:
         port = getattr(self.telemetry, "port", "?")
         print(
             f"[TELEMETRY] no telemetry data received on UDP :{port} — splits "
-            f"fall back to the even profile (times still record normally). If "
-            f"SimHub owns the game's standard telemetry port, forward its UDP "
-            f"output to this port (see the install page) or set "
-            f'"telemetry_port" in config.json to a free port.')
+            f"fall back to the even profile (times still record normally). DR3 "
+            f"adds its own <udp> stream to the game's config at startup, so "
+            f"restart the game if you changed it while running; or set "
+            f'"telemetry_port" in config.json to a free port and restart DR3.')
 
     def _stage_penalty_ms(self, run: Optional[StageRun], time_ms: int) -> int:
         """Total penalty (ms) the game baked into this stage's reported

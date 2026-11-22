@@ -2,8 +2,10 @@
 
 - tel_status_text() maps every state to the right text/color key
   (stopped/hidden, disabled in config, port busy, waiting for data,
-  connected, stale-after-data, and the game-aware hints: UDP disabled -> warn,
-  game already on DR3's port -> muted, game on a different port -> warn);
+  connected, stale-after-data, and the game-aware hints off the parsed
+  <udp> elements: no stream enabled -> warn restart the game, DR3's port
+  among the game's streams -> muted start a stage, only foreign streams ->
+  warn listing them + restart DR3 / set telemetry_port);
 - the real GUI boots with the new status-card row, and while the server is
   stopped the Main tab still fits the fixed window (no scrollbar) and the
   telemetry row exists but is hidden.
@@ -74,25 +76,32 @@ def check_states(mod) -> int:
 
     # Game-aware hints (server up, listening, never seen a packet).
     st = t(True, True, {"port": 20999}, FakeListener(packets_seen=0),
-           game={"present": True, "enabled": False, "port": None})
-    check("game UDP disabled -> warn (restart the game)",
+           game={"present": False, "enabled": False, "port": None, "ports": []})
+    check("no game config -> muted (waiting for data)",
+          st == ("Telemetry waiting for data on :20999", "muted"), repr(st))
+
+    st = t(True, True, {"port": 20999}, FakeListener(packets_seen=0),
+           game={"present": True, "enabled": False, "port": None, "ports": []})
+    check("no stream enabled -> warn (restart the game)",
           st is not None and st[1] == "warn" and "restart the game" in st[0], repr(st))
 
     st = t(True, True, {"port": 20999}, FakeListener(packets_seen=0),
-           game={"present": True, "enabled": True, "port": 20999})
-    check("game already on DR3 port -> muted (start a stage)",
+           game={"present": True, "enabled": True, "port": 20999, "ports": [20999]})
+    check("DR3 port among game streams -> muted (start a stage)",
           st is not None and st[1] == "muted" and "start a stage" in st[0], repr(st))
 
     st = t(True, True, {"port": 20999}, FakeListener(packets_seen=0),
-           game={"present": True, "enabled": True, "port": 20777})
-    check("game on a different port -> warn (forward in SimHub)",
+           game={"present": True, "enabled": True, "port": 20777, "ports": [20777]})
+    check("only foreign stream -> warn (lists port + restart DR3)",
           st is not None and st[1] == "warn" and ":20777" in st[0]
-          and "SimHub" in st[0], repr(st))
+          and "restart DR3" in st[0], repr(st))
 
     st = t(True, True, {"port": 20999}, FakeListener(packets_seen=0),
-           game={"present": True, "enabled": True, "port": None})
-    check("game enabled but no parseable port -> muted",
-          st is not None and st[1] == "muted" and "start a stage" in st[0], repr(st))
+           game={"present": True, "enabled": True, "port": 20777,
+                 "ports": [20777, 30000]})
+    check("two foreign streams -> warn lists both",
+          st is not None and st[1] == "warn" and ":20777" in st[0]
+          and ":30000" in st[0], repr(st))
 
     return failures
 
@@ -172,10 +181,11 @@ def check_gui(mod) -> int:
     # While the server runs the row is packed — confirm Main still fits then.
     if len(tel_labels) == 1:
         tel = tel_labels[0]
-        # Use the longest real message (the game-port hint that used to clip):
-        # it must wrap to a second line (wraplength set) and still fit.
+        # Use the longest real message (the foreign-streams hint that used to
+        # clip): it must wrap to a second line (wraplength set) and still fit.
         long_msg = ("Game sends UDP to :20777, DR3 listens on :20999 "
-                    "\u2014 forwarded in SimHub")
+                    "\u2014 restart DR3 so it adds its own stream, or set "
+                    "telemetry_port in config.json")
         tel.configure(text=long_msg)
         tel.pack(fill="x", padx=15, pady=(0, 8))
         root.update_idletasks()

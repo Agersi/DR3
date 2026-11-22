@@ -1072,11 +1072,12 @@ def tel_status_text(server_up: bool, enabled: bool, holder: dict, listener,
     States: server stopped (None), disabled in config.json, bind failed
     (holder carries the busy port), connected (fresh packets within 20 s), or —
     with no recent data — a game-aware hint from ``game`` (the parsed
-    hardware_settings_config.xml ``<udp>`` element as read_game_udp() returns):
-    file missing/unreadable, UDP disabled, game already sending to our port, or
-    game on a different port (forward in SimHub). ``listener`` may be any object
-    exposing .port / .packets_seen / .last_packet_wall (the TelemetryListener
-    does); ``game`` may be None.
+    hardware_settings_config.xml ``<udp>`` elements as read_game_udp() returns,
+    all enabled ports in ``game["ports"]``): file missing/unreadable, no
+    stream enabled, DR3's port among the game's streams, or only foreign
+    streams present. ``listener`` may be any object exposing .port /
+    .packets_seen / .last_packet_wall (the TelemetryListener does); ``game``
+    may be None.
     """
     if not server_up:
         return None
@@ -1094,14 +1095,16 @@ def tel_status_text(server_up: bool, enabled: bool, holder: dict, listener,
     # No data yet and never seen any — give a game-aware hint.
     if game is None or not game.get("present"):
         return (f"Telemetry waiting for data on :{port}", "muted")
-    if not game.get("enabled"):
-        return ("Game UDP disabled \u2014 DR3 enabled it; restart the game", "warn")
-    gport = game.get("port")
-    if gport is None or gport == port:
+    ports = game.get("ports") or []
+    if port in ports:
         return (f"Listening on the game's port :{port} \u2014 start a stage to see data",
                 "muted")
-    return (f"Game sends UDP to :{gport}, DR3 listens on :{port} \u2014 forward in "
-            f"SimHub or set telemetry_port to {gport}", "warn")
+    if not ports:
+        return ("Game UDP disabled \u2014 DR3 enabled it; restart the game", "warn")
+    other = ", ".join(f":{p}" for p in ports)
+    return (f"Game sends UDP to {other}, DR3 listens on :{port} \u2014 restart DR3 "
+            f"so it adds its own stream, or set telemetry_port in config.json",
+            "warn")
 
 
 # ---------------------------------------------------------------------------
@@ -1548,8 +1551,9 @@ def run_gui():
                 pass
 
     def _normalize_game_udp():
-        """Silently enable/point the game's <udp> telemetry at DR3's port so
-        telemetry works out of the box (writes a .bak backup + a log line only
+        """Make sure the game sends telemetry to DR3's port by adding a
+        dedicated <udp> stream when none points there (existing streams for
+        SimHub & co are never touched; writes a .bak backup + a log line only
         when something actually changes)."""
         if not IS_WIN or not bool(config.get("telemetry_enabled", True)):
             return
@@ -2070,12 +2074,13 @@ def run_gui():
 
             # UDP telemetry listener (real per-segment stage splits). Enabled by
             # default; binds DR3's own telemetry port from config.json
-            # ("telemetry_port", default 20999). The game's <udp> element is
-            # normalized at startup (ensure_game_udp_for_dr3) so the game sends
-            # to a port DR3 receives — when it stays on the SimHub default 20777,
-            # SimHub forwards its UDP output here. A bind failure just leaves
-            # telemetry off (with an actionable log line) — the server still runs
-            # and splits fall back to the even profile.
+            # ("telemetry_port", default 20999). At startup
+            # ensure_game_udp_for_dr3 makes sure the game sends to that port by
+            # adding a dedicated <udp> stream when none points there — existing
+            # streams (SimHub & co) are never touched, and the game delivers to
+            # every enabled stream at once. A bind failure just leaves telemetry
+            # off (with an actionable log line) — the server still runs and
+            # splits fall back to the even profile.
             from dr2server.telemetry import TelemetryListener
             telemetry_listener = None
             if bool(config.get("telemetry_enabled", True)):

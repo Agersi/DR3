@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.80**
+- DR3 now sets up its own telemetry connection automatically, so it works alongside SimHub and other telemetry apps with no extra setup.
+
 **v0.1.79**
 - Fixed a bug where time trial results could be recorded twice or lose their tyre compound.
 
