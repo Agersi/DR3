@@ -1558,9 +1558,9 @@ def main() -> int:
               (r.get_json() or {}).get('ok') is True, str(r.get_json()))
     prof3 = client2.get('/profile/secondpilot').get_data(as_text=True)
     check('profile: most driven cars list by distance, class parens only for shared names',
-          '<span class="top-name">Audi S1 EKS RX Quattro (RX Supercars)</span>' in prof3
-          and '<span class="top-name">Peugeot 208 WRX (RX Supercars 2019)</span>' in prof3
-          and '<span class="top-name">Porsche 911 RGT Rally Spec</span>' in prof3
+          '<span class="top-name"><a class="driver-link" href="/cars?car=566">Audi S1 EKS RX Quattro (RX Supercars)</a></span>' in prof3
+          and '<span class="top-name"><a class="driver-link" href="/cars?car=580">Peugeot 208 WRX (RX Supercars 2019)</a></span>' in prof3
+          and '<span class="top-name"><a class="driver-link" href="/cars?car=565">Porsche 911 RGT Rally Spec</a></span>' in prof3
           and prof3.index('Audi S1 EKS RX Quattro') < prof3.index('Peugeot 208 WRX')
           < prof3.index('Porsche 911 RGT Rally Spec'),
           f'status={r.status_code}')
@@ -1569,12 +1569,12 @@ def main() -> int:
           and '<span class="top-name">Spain</span>' in prof3
           and '<span class="top-name">Finland</span>' in prof3, '')
     check('profile: top-list rows — name left / distance right (flex li), no parens, cars left col / locations right col',
-          '<li><span class="top-name">Audi S1 EKS RX Quattro (RX Supercars)</span>'
+          '<li><span class="top-name"><a class="driver-link" href="/cars?car=566">Audi S1 EKS RX Quattro (RX Supercars)</a></span>'
           '<span class="top-km num">30.0 km</span></li>' in prof3
           and '<li><span class="top-name">Monte Carlo</span>'
           '<span class="top-km num">30.0 km</span></li>' in prof3
           and '(30.0 km)' not in prof3
-          and prof3.index('Most driven cars</div>') < prof3.index('<li><span class="top-name">Audi S1')
+          and prof3.index('Most driven cars</div>') < prof3.index('<li><span class="top-name"><a class="driver-link" href="/cars?car=566">Audi S1')
           and prof3.index('Most driven locations</div>') < prof3.index('<li><span class="top-name">Monte Carlo'),
           '')
 
@@ -2241,6 +2241,10 @@ def main() -> int:
               and by_name1.get('smokedriver', {}).get('vehicle') == 'Porsche 911 RGT Rally Spec'
               and all(r.get('vehicle') != 'Ford Fiesta R2' for r in list(by_name0.values()) + list(by_name1.values())),
                f"cars={[(n, r.get('vehicle')) for n, r in {**by_name0, **by_name1}.items()]}")
+        check('event-board API: rows carry a car-page url when the driven vehicle is known',
+              by_name0.get('smokedriver', {}).get('car_url') == '/cars?car=565'
+              and by_name0.get('secondpilot', {}).get('car_url') == '/cars?car=565',
+              f"urls={[(n, r.get('car_url')) for n, r in {**by_name0, **by_name1}.items()]}")
         check('event-board API: rows carry spare tyre counts, decoded from the stored tuning blob when the client did not report them',
               by_name0.get('smokedriver', {}).get('spares') == 2
               and by_name1.get('smokedriver', {}).get('spares') == 2

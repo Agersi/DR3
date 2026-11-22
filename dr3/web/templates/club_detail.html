@@ -569,7 +569,7 @@
       var cells =
         '<td class="num">' + r.pos + '</td>' +
         '<td>' + flagCell(r.flag_url, r.username) + '<a class="driver-link" href="' + root + esc(r.driver_url) + '">' + esc(r.username) + '</a></td>' +
-        '<td>' + esc(r.vehicle || '') + '</td>' +
+        '<td>' + (r.car_url ? '<a class="driver-link" href="' + root + r.car_url + '">' + esc(r.vehicle || '') + '</a>' : esc(r.vehicle || '')) + '</td>' +
         '<td class="tyre-cell">' + tyreCell(r.tyres) + '</td>' +
         '<td class="spare-cell num">' + spareCell(r.spares) + '</td>' +
         '<td class="input-cell">' + inputCell(r.input, r.vr, r.assists) + '</td>' +

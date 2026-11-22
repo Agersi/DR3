@@ -778,7 +778,7 @@ def _profile_stats(user: User) -> dict:
         scored.sort(key=lambda r: (-r[1], -r[2]))
         return [(v, d) for v, d, _c in scored[:n]]
 
-    top_cars = [{'label': _car_label(v), 'km': d / 1000.0}
+    top_cars = [{'label': _car_label(v), 'car': v, 'km': d / 1000.0}
                 for v, d in _top_driven(StageRun.vehicle_id)]
     top_locations = [{'label': _loc_label(v), 'km': d / 1000.0}
                      for v, d in _top_driven(StageRun.location_id)]
