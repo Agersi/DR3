@@ -299,6 +299,13 @@ def api_game_stage_begin():
     return jsonify({'ok': True})
 
 
+# The snapshot's stage_time_seconds and PostTime's StageTime are the same game
+# clock read as two different floats (one rounded to ms, one truncated), so the
+# two channels' integer milliseconds can differ by a hair. Tolerance for
+# "same run" matching across channels.
+_BEST_TOL_MS = 1000
+
+
 def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
                  category=None, vclass=None, livery_id=None,
                  using_wheel=None, using_assists=None,
@@ -336,7 +343,10 @@ def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
             # so the exact match above misses. At most one placeholder exists per
             # 4-tuple (the unique key includes compound), so any zero row in this
             # group is this run's — adopt it instead of filing a second row that
-            # would orphan it and later crash the boot backfill.
+            # would orphan it and later crash the boot backfill. (When a real
+            # row for this compound already exists the placeholder is left alone:
+            # its payload may belong to an older, never-resolved run, and the
+            # boot backfill settles those without risk of mixing payloads.)
             vessel = next((r for r in rows if r.tyre_compound == 0), None)
         if vessel is not None:
             if entry is None:
@@ -358,6 +368,17 @@ def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
         # one, since pre-compound rows were keyed without it — else create it.
         entry = next((r for r in rows if r.stage_time_ms == tm), None) \
             or next((r for r in rows if r.tyre_compound == 0), None)
+        if entry is None and rows:
+            # Channel inversion + rounding: the stage-detail half often files
+            # this run FIRST, and its ms can differ from the PostTime's by a
+            # millisecond (round vs truncate of the same game clock), so the
+            # exact match above misses and this would file a second row that
+            # orphans the first. Fall back to the nearest row in the group — a
+            # genuinely different run is never within _BEST_TOL_MS on the same
+            # car + track + conditions (re-entry alone takes over a minute).
+            entry = min(rows, key=lambda r: abs((r.stage_time_ms or 0) - tm))
+            if abs((entry.stage_time_ms or 0) - tm) > _BEST_TOL_MS:
+                entry = None
 
     if entry is None:
         db.session.add(TimeTrialEntry(
@@ -772,14 +793,27 @@ def api_game_stage_detail():
     existing = None
     if fields['challenge_id'] is not None:
         window_start = utcnow() - timedelta(seconds=120)
-        existing = db.session.query(StageRun).filter(
+        q = db.session.query(StageRun).filter(
             StageRun.username == user.username,
             StageRun.challenge_id == fields['challenge_id'],
             StageRun.event_index == fields['event_index'],
             StageRun.stage_index == fields['stage_index'],
             StageRun.received_at >= window_start,
-        ).first()
-    if existing is not None:
+        )
+        if fields['challenge_id'] == 0:
+            # TT runs all carry challenge_id=0 — disambiguate by car + track
+            # and time so back-to-back repeats don't collapse into one row.
+            q = q.filter(StageRun.track_model_id == fields['track_model_id'],
+                         StageRun.vehicle_id == fields['vehicle_id'])
+        for cand in q.order_by(StageRun.received_at.desc()).all():
+            # Non-TT slots always collapse; TT rows must also be within
+            # tolerance on time (a back-to-back repeat is NOT a retransmit).
+            if fields['challenge_id'] != 0 or \
+                    abs((cand.time_ms or 0) - time_ms) <= _BEST_TOL_MS:
+                existing = cand
+                break
+    same_run = existing is not None
+    if same_run:
         if _detail_rich_score(fields) > _detail_rich_score(existing):
             for key, value in fields.items():
                 setattr(existing, key, value)

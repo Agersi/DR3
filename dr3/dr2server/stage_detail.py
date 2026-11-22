@@ -91,6 +91,10 @@ class StageDetailBuffer:
     """
 
     FLUSH_TIMEOUT_S = 15.0
+    # Time trials send no StageComplete RPC, so their only half is the snapshot;
+    # wait longer before flushing so the PostTime's splits (stashed per car)
+    # have time to arrive — the emit grabs them (httpd._fix_stage_detail_splits).
+    TT_FLUSH_TIMEOUT_S = 45.0
 
     def __init__(self, send: Callable[[Dict[str, Any]], None]) -> None:
         self._send = send
@@ -104,11 +108,17 @@ class StageDetailBuffer:
 
     def feed_datamining(self, fields: Dict[str, Any]) -> None:
         """StageEnded snapshot arrived (event name already checked by caller)."""
-        key = (
-            _opt_int(fields.get("challenge_id")),
-            _opt_int(fields.get("event_index")),
-            _opt_int(fields.get("stage_index")),
-        )
+        if _opt_int(fields.get("challenge_type")) == -1:
+            # TT runs all carry challenge_id=0 — key them on the game's UTC
+            # event timestamp instead so back-to-back repeats can't clobber
+            # each other's pending half (they send no RPC half to merge with).
+            key = (0, 0, _opt_int(fields.get("g_utc_timestamp")))
+        else:
+            key = (
+                _opt_int(fields.get("challenge_id")),
+                _opt_int(fields.get("event_index")),
+                _opt_int(fields.get("stage_index")),
+            )
         half = {k: fields[k] for k in STAGE_ENDED_FIELDS if k in fields}
         self._merge(key, "datamining", half)
 
@@ -139,7 +149,12 @@ class StageDetailBuffer:
         timer = self._timers.get(key)
         if timer is not None:
             timer.cancel()
-        timer = threading.Timer(self.FLUSH_TIMEOUT_S, self._timeout_flush, [key])
+        delay = self.FLUSH_TIMEOUT_S
+        rec = self._pending.get(key)
+        dm = rec.get("datamining") if rec else None
+        if dm is not None and dm.get("challenge_type") == -1:
+            delay = self.TT_FLUSH_TIMEOUT_S
+        timer = threading.Timer(delay, self._timeout_flush, [key])
         timer.daemon = True
         self._timers[key] = timer
         timer.start()

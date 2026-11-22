@@ -270,6 +270,7 @@ class App:
             return
         try:
             self._fix_stage_detail_distance(record)
+            self._fix_stage_detail_splits(record)
             self._fix_stage_detail_cameras(record)
         except Exception as exc:  # correction must never drop the record
             print(f"[DATA] stage-detail correction failed: {exc}")
@@ -292,6 +293,24 @@ class App:
         distance_m = self.dispatcher.take_posttime_distance(vid)
         if distance_m:
             record["distance_driven"] = distance_m
+
+    def _fix_stage_detail_splits(self, record: Dict[str, Any]) -> None:
+        """Fill splits from the PostTime run's measured segments when the merged
+        record carries none. Time-trial rows are always like that — they send no
+        StageComplete RPC, so the proxy path never claims the stash; club/
+        official rows already carry their splits and pass through untouched."""
+        if record.get("splits"):
+            return
+        vehicle_id = record.get("vehicle_id")
+        if not vehicle_id:
+            return
+        try:
+            vid = int(vehicle_id)
+        except (TypeError, ValueError):
+            return
+        splits = self.dispatcher.take_posttime_splits(vid)
+        if splits:
+            record["splits"] = splits
 
     def _fix_stage_detail_cameras(self, record: Dict[str, Any]) -> None:
         """Turn the snapshot's cumulative per-camera counters into per-stage
