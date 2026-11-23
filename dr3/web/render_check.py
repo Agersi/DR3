@@ -68,6 +68,11 @@ def main() -> int:
           and '(all cars)' in lb_html
           and client.get('/leaderboard?car=class-999999').status_code == 200
           and '<th>Car</th>' in client.get(f'/leaderboard?car=class-{_cls_cid}').get_data(as_text=True), '')
+    # strict tag equality: a stray char after `selected` (e.g. `selected}`)
+    # silently kills the default selection in browsers
+    check('leaderboard: car/class selection renders a clean selected attribute',
+          '<option value="572" selected>' in client.get('/leaderboard?car=572').get_data(as_text=True)
+          and f'<option value="class-{_cls_cid}" selected>' in client.get(f'/leaderboard?car=class-{_cls_cid}').get_data(as_text=True), '')
     check('leaderboard: distance mode swaps the board columns',
           client.get('/leaderboard?mode=distance').get_data(as_text=True)
           .count('<th class="num">Stages</th><th class="num">Distance</th>') == 1
