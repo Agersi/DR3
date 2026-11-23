@@ -329,7 +329,7 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
             'conditions_label': r['conditions_label'],
         })
     return {'rows': rows, 'count': len(rows), 'split_count': split_count,
-            'split_word': 'Lap' if is_rx else 'Split'}
+            'split_word': 'Lap' if is_rx else 'Split', 'is_rx': is_rx}
 
 
 def distance_board(vehicle_id, *, vehicle_ids=None, degrad_level=None,

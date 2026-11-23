@@ -881,6 +881,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .dmg-cond { margin-top: 0.6rem; padding-top: 0.45rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.85rem; text-align: center; }
 .splits-row td { background: var(--bg); color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 #lb-board-table .diff-col { width: 5.5rem; }
+#lb-board-table .pen-col { width: 4.5rem; }
 #lb-board-table .src-cell { text-align: center; }
 table th:last-child, table td:last-child { padding-right: .5rem; }
 .car-fastest tr.fastest-detail td:last-child { padding-right: 0; }

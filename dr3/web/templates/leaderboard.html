@@ -127,7 +127,7 @@
   <table class="board" id="lb-board-table">
     {% if mode == 'times' %}
     <thead>
-      <tr><th>#</th><th>Driver</th>{% if not vehicle_id %}<th class="car-col">Car</th>{% endif %}<th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th class="src-cell">Source</th><th class="num">Time</th><th class="num diff-col">Diff 1st</th>{% for i in range(split_count) %}<th class="num split-col">{{ split_word }} #{{ i + 1 }}</th>{% endfor %}<th class="num">Penalty</th></tr>
+      <tr><th>#</th><th>Driver</th>{% if not vehicle_id %}<th class="car-col">Car</th>{% endif %}<th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th class="src-cell">Source</th><th class="num">Time</th><th class="num diff-col">Diff 1st</th>{% for i in range(split_count) %}<th class="num split-col">{{ split_word }} #{{ i + 1 }}</th>{% endfor %}{% if not is_rx %}<th class="num pen-col">Penalty</th>{% endif %}</tr>
     </thead>
     <tbody id="lb-board-body">
       {% for r in rows %}
@@ -143,10 +143,10 @@
         <td class="num">{{ r.time_text }}</td>
         <td class="num diff-col">{{ r.diff_str or '—' }}</td>
         {% for v in r.splits %}<td class="num split-col">{% if v is not none %}{{ '%.2f'|format(v) }}{% else %}<span class="dash-tip" data-tip="Configure Telemetry">-</span>{% endif %}</td>{% endfor %}
-        <td class="num">{% if r.penalty_text %}{{ r.penalty_text }}{% else %}<span class="ink">—</span>{% endif %}</td>
+        {% if not is_rx %}<td class="num pen-col">{% if r.penalty_text %}{{ r.penalty_text }}{% else %}<span class="ink">—</span>{% endif %}</td>{% endif %}
       </tr>
       {% else %}
-      <tr class="board-empty"><td colspan="{{ (11 if not vehicle_id else 10) + split_count }}">No times yet.</td></tr>
+      <tr class="board-empty"><td colspan="{{ (10 if not vehicle_id else 9) + split_count + (0 if is_rx else 1) }}">No times yet.</td></tr>
       {% endfor %}
     </tbody>
     {% else %}

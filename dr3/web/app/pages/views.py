@@ -1030,6 +1030,7 @@ def leaderboard():
     # Distance mode (and an empty times board) carries no split metadata.
     board.setdefault('split_count', 0)
     board.setdefault('split_word', 'Split')
+    board.setdefault('is_rx', False)
 
     car_name, car_class = ('', '')
     if vehicle_id is not None and vehicle_id in VEHICLES:

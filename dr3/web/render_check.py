@@ -105,7 +105,15 @@ def main() -> int:
           '#lb-board-table .diff-col { width: 5.5rem; }' in lb_css
           and '#lb-board-table .src-cell { text-align: center; }' in lb_css
           and '.dmg-cond { margin-top: 0.6rem;' in lb_css
-          and '#lb-board-table .car-col { width: 14rem; }' in lb_css, '')
+          and '#lb-board-table .car-col { width: 14rem; }' in lb_css
+          and '#lb-board-table .pen-col { width: 4.5rem; }' in lb_css, '')
+    # Rallycross stages (track 641 = Bikernieki) carry no penalty column —
+    # the board is about best laps there; smoke fixtures keep 641 empty.
+    _rx_lb = client.get('/leaderboard?stage=641').get_data(as_text=True)
+    check('leaderboard: penalty column on rally stages, absent on RX',
+          '<th class="num pen-col">Penalty</th>' in lb_html
+          and 'pen-col' not in _rx_lb
+          and '<td colspan="10">No times yet.</td>' in _rx_lb, '')
 
     # clubs list: filter form + partial reload (only the results section swaps)
     html = client.get('/clubs').get_data(as_text=True)
