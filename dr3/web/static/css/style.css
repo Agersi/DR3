@@ -910,11 +910,11 @@ details.create-club .plus, .hover-tip, .champ-center, .round-thumb, .round-class
   main { padding: 0 0.9rem 2rem; }
 }
 /* ── Leaderboard filter panel ─────────────────────────── */
-.lb-filters { margin-bottom: 0.6rem; }
+.lb-filters { margin-bottom: 0.6rem; padding: 1rem; }
 .lb-filter-row { display: flex; gap: 0.9rem; flex-wrap: wrap; }
 .lb-filter-row + .lb-filter-row { margin-top: 0.8rem; }
 .lb-filter-row label { margin: 0 0 0.2rem; font-size: 0.82rem; color: var(--muted); }
-.lb-filter-row .cselect { width: 9.5rem; }
+.lb-filter-row .cselect { width: 10.66rem; }
 .lb-mode-toggle { display: inline-flex; margin-top: 0.8rem; border: 2px solid var(--line); box-shadow: 3px 3px 3px var(--shadow); background: var(--card); }
 .lb-mode-toggle label { margin: 0; padding: 0.45rem 1rem; font-family: var(--display); text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.82rem; font-weight: 600; color: var(--muted); cursor: pointer; }
 .lb-mode-toggle label + label { border-left: 2px solid var(--line); }
@@ -923,5 +923,5 @@ details.create-club .plus, .hover-tip, .champ-center, .round-thumb, .round-class
 .lb-filter-row .cselect:has(select[name=stage]), .lb-filter-row .cselect:has(select[name=car]) { width: 24rem; }
 .lb-extra-row { display: grid; grid-template-rows: 0fr; margin-top: 0; transition: grid-template-rows 0.15s ease; }
 .lb-extra-row.open { grid-template-rows: 1fr; }
-.lb-extra-inner { display: flex; gap: 0.9rem; flex-wrap: wrap; align-items: flex-end; min-height: 0; overflow: hidden; padding-top: 0.8rem; transition: padding 0.15s ease; }
+.lb-extra-inner { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end; min-height: 0; overflow: hidden; padding-top: 0.8rem; transition: padding 0.15s ease; }
 .lb-filters-btn { margin: 0; padding: .5rem .4rem; align-self: flex-end; }

@@ -74,7 +74,7 @@ def main() -> int:
           and '<th>Tyres</th>' not in client.get('/leaderboard?mode=distance').get_data(as_text=True), '')
     lb_css = client.get('/static/css/style.css').get_data(as_text=True)
     check('leaderboard: filter panel CSS',
-          '.lb-filters { margin-bottom: 0.6rem; }' in lb_css
+          '.lb-filters { margin-bottom: 0.6rem; padding: 1rem; }' in lb_css
           and           '.lb-filter-row { display: flex; gap: 0.9rem; flex-wrap: wrap; }' in lb_css
           and '.lb-mode-toggle label:has(input:checked) { background: var(--accent); color: var(--bg); }' in lb_css
           and '.lb-filters-btn { margin: 0; padding: .5rem .4rem; align-self: flex-end; }' in lb_css, '')
