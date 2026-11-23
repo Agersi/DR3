@@ -275,8 +275,9 @@ def distance_board(vehicle_id, *, vehicle_ids=None, degrad_level=None,
                    hardcore=None, country=None) -> dict:
     """Total distance driven per driver across all run types and stages —
     in one car when selected, over the cars of a class when vehicle_ids is
-    given, over every car when neither is set.  DNF runs carry no distance_m
-    and are excluded by the query."""
+    given, over every car when neither is set.  Every recorded run counts as
+    a stage (same denominator as /drivers); DNF runs carry no trusted
+    distance_m and contribute 0 to the distance sum."""
     from .db import db
     from .models import StageRun, User
 
@@ -291,8 +292,7 @@ def distance_board(vehicle_id, *, vehicle_ids=None, degrad_level=None,
         q = q.filter(StageRun.vehicle_id.in_(list(vehicle_ids)))
     elif vehicle_id is not None:
         q = q.filter(StageRun.vehicle_id == int(vehicle_id))
-    rows = q.filter(StageRun.distance_m.isnot(None),
-                    StageRun.distance_m > 0).all()
+    rows = q.all()
 
     sums: dict[str, list] = {}  # username -> [meters, stage count]
     for user, dist, level, inp, cam, vr_e, ass_e, ass_u, hc in rows:
@@ -306,7 +306,7 @@ def distance_board(vehicle_id, *, vehicle_ids=None, degrad_level=None,
                 camera=camera, vr=vr, assists=assists, hardcore=hardcore):
             continue
         cur = sums.setdefault(user, [0, 0])
-        cur[0] += int(dist)
+        cur[0] += int(dist or 0)
         cur[1] += 1
 
     ordered = sorted(sums.items(), key=lambda kv: (-kv[1][0], kv[0]))
