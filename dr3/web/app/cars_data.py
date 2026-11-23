@@ -71,7 +71,7 @@ def fastest_stages_by_location(vid: int) -> dict[str, list[dict]]:
     time on — overall (fastest of any car) and in-class (fastest among cars
     sharing this car's class). A stage is one route (location + track model);
     the best is the fastest clean finish posted by any driver in any run type.
-    Each row carries the stage names it wins ('stages')."""
+    Each row carries the stages it wins ('stages' — {name, track_id} entries)."""
     from dr2server.game_data import VEHICLES
 
     from .db import db
@@ -101,15 +101,15 @@ def fastest_stages_by_location(vid: int) -> dict[str, list[dict]]:
                 in_class[key] = (ms, vehicle)
 
     def summarize(best_map: dict[tuple, tuple]) -> list[dict]:
-        by_loc: dict[int, list[str]] = {}
+        by_loc: dict[int, list[tuple[str, int]]] = {}
         for (loc, track), (_ms, vehicle) in best_map.items():
             if vehicle == vid:
-                by_loc.setdefault(loc, []).append(stage_name(track))
+                by_loc.setdefault(loc, []).append((stage_name(track), track))
         out = []
-        for loc, names in by_loc.items():
-            names.sort(key=lambda s: s.lower())
-            out.append({'location': location_name(loc), 'count': len(names),
-                        'stages': names})
+        for loc, items in by_loc.items():
+            items.sort(key=lambda it: it[0].lower())
+            out.append({'location': location_name(loc), 'count': len(items),
+                        'stages': [{'name': n, 'track_id': t} for n, t in items]})
         out.sort(key=lambda r: (-r['count'], r['location'].lower()))
         return out
 

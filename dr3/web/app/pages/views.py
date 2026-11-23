@@ -918,7 +918,7 @@ def _car_page_data(vid: int) -> dict:
         distance_driven_by_user,
         fastest_stages_by_location,
     )
-    from ..scoring import vehicle_meta
+    from ..scoring import VEHICLES, vehicle_meta
 
     title, class_label = vehicle_meta(vid)
     info = car_info(vid)
@@ -930,6 +930,7 @@ def _car_page_data(vid: int) -> dict:
         'vehicle_id': int(vid),
         'title': title,
         'class_label': class_label,
+        'class_id': VEHICLES.get(vid, {}).get('class'),
         'image_url': car_image_url(vid),
         'stats': [list(s) for s in info.get('stats', [])],
         'fastest_class': fastest['in_class'],

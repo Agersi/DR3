@@ -45,7 +45,7 @@
             {% for row in fastest_class %}
             <tr class="fastest-row"><td>{{ row.location }}</td><td class="num">{{ row.count }}</td></tr>
             {% for s in row.stages %}
-            <tr class="fastest-detail"><td colspan="2"><div class="fd-wrap"><div class="fd-inner">{{ s }}</div></div></td></tr>
+            <tr class="fastest-detail"><td colspan="2"><div class="fd-wrap"><div class="fd-inner"><a class="driver-link" href="{{ url_for('pages.leaderboard', stage=s.track_id, car=('class-%d' % class_id) if class_id is not none else none) }}">{{ s.name }}</a></div></div></td></tr>
             {% endfor %}
             {% else %}
             <tr><td colspan="2" class="dim">No stages yet.</td></tr>
@@ -62,7 +62,7 @@
             {% for row in fastest_overall %}
             <tr class="fastest-row"><td>{{ row.location }}</td><td class="num">{{ row.count }}</td></tr>
             {% for s in row.stages %}
-            <tr class="fastest-detail"><td colspan="2"><div class="fd-wrap"><div class="fd-inner">{{ s }}</div></div></td></tr>
+            <tr class="fastest-detail"><td colspan="2"><div class="fd-wrap"><div class="fd-inner"><a class="driver-link" href="{{ url_for('pages.leaderboard', stage=s.track_id) }}">{{ s.name }}</a></div></div></td></tr>
             {% endfor %}
             {% else %}
             <tr><td colspan="2" class="dim">No stages yet.</td></tr>
@@ -144,6 +144,7 @@
   var distanceBody = document.getElementById('car-distance-body');
   var DATA_URL = '{{ url_for("pages.vehicles_data") }}';
   var PAGE_BASE = '{{ url_for("pages.vehicles_index") }}';
+  var LB_URL = '{{ url_for("pages.leaderboard") }}';
 
   function emptyRow(tbody, text) {
     tbody.innerHTML = '';
@@ -156,7 +157,13 @@
     tbody.appendChild(tr);
   }
 
-  function renderFastest(tbody, rows) {
+  function stageHref(track, withClass, classId) {
+    var h = LB_URL + '?stage=' + track;
+    if (withClass && classId != null) h += '&car=class-' + classId;
+    return h;
+  }
+
+  function renderFastest(tbody, rows, withClass, classId) {
     tbody.innerHTML = '';
     if (!rows.length) { emptyRow(tbody, 'No stages yet.'); return; }
     rows.forEach(function (r) {
@@ -179,7 +186,11 @@
         wrapDiv.className = 'fd-wrap';
         var innerDiv = document.createElement('div');
         innerDiv.className = 'fd-inner';
-        innerDiv.textContent = s;
+        var a = document.createElement('a');
+        a.className = 'driver-link';
+        a.href = stageHref(s.track_id, withClass, classId);
+        a.textContent = s.name;
+        innerDiv.appendChild(a);
         wrapDiv.appendChild(innerDiv);
         dtd.appendChild(wrapDiv);
         dtr.appendChild(dtd);
@@ -269,8 +280,8 @@
           img.remove();
         }
         renderStats(d.stats);
-        renderFastest(fastestClassBody, d.fastest_class || []);
-        renderFastest(fastestOverallBody, d.fastest_overall || []);
+        renderFastest(fastestClassBody, d.fastest_class || [], true, d.class_id);
+        renderFastest(fastestOverallBody, d.fastest_overall || [], false, null);
         renderDistance(d.distance || []);
         document.title = d.title + ' — DR3';
         history.replaceState(null, '', PAGE_BASE + '?vehicle=' + select.value);

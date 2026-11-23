@@ -282,9 +282,10 @@ def main() -> int:
           and '.car-distance th:last-child, .car-distance td:last-child { text-align: right; }' in css
           and 'table th:last-child, table td:last-child { padding-right: .5rem; }' in css
           and '.car-fastest tr.fastest-detail td:last-child { padding-right: 0; }' in css, '')
-    check('car page fastest tables: rows expand to stage names (one row per stage, animated)',
+    check('car page fastest tables: rows expand to linked stage names (in-class link carries the class, overall does not)',
           'class="fastest-row"' in r.get_data(as_text=True)
-          and '<tr class="fastest-detail"><td colspan="2"><div class="fd-wrap"><div class="fd-inner">Tolt Valley Sprint Forward</div></div></td></tr>' in r.get_data(as_text=True)
+          and '<tr class="fastest-detail"><td colspan="2"><div class="fd-wrap"><div class="fd-inner"><a class="driver-link" href="/leaderboard?stage=636&amp;car=class-107">Tolt Valley Sprint Forward</a></div></div></td></tr>' in r.get_data(as_text=True)
+          and '<tr class="fastest-detail"><td colspan="2"><div class="fd-wrap"><div class="fd-inner"><a class="driver-link" href="/leaderboard?stage=636">Tolt Valley Sprint Forward</a></div></div></td></tr>' in r.get_data(as_text=True)
           and '.car-fastest tbody tr.fastest-row { cursor: pointer; font-weight: 600; user-select: none; }' in css
           and '.car-fastest tr:nth-child(even) td { background: transparent; }' in css
           and '.fd-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.15s ease; }' in css
