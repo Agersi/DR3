@@ -920,6 +920,8 @@ details.create-club .plus, .hover-tip, .champ-center, .round-thumb, .round-class
 .lb-mode-toggle label + label { border-left: 2px solid var(--line); }
 .lb-mode-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .lb-mode-toggle label:has(input:checked) { background: var(--accent); color: var(--bg); }
-.lb-filter-row select[name=stage], .lb-filter-row select[name=car] { width: 24rem; }
-.lb-extra-row[hidden] { display: none; }
+.lb-filter-row .cselect:has(select[name=stage]), .lb-filter-row .cselect:has(select[name=car]) { width: 24rem; }
+.lb-extra-row { display: grid; grid-template-rows: 0fr; margin-top: 0; transition: grid-template-rows 0.15s ease; }
+.lb-extra-row.open { grid-template-rows: 1fr; }
+.lb-extra-inner { display: flex; gap: 0.9rem; flex-wrap: wrap; align-items: flex-end; min-height: 0; overflow: hidden; padding-top: 0.8rem; transition: padding 0.15s ease; }
 .lb-filters-btn { margin: 0; padding: .5rem .4rem; }

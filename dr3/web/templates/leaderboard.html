@@ -36,7 +36,8 @@
     </label>
     <button type="button" class="lb-filters-btn" id="lb-more-btn" aria-expanded="{{ 'true' if filters_active else 'false' }}">Filters {{ '▴' if filters_active else '▾' }}</button>
   </div>
-  <div class="lb-filter-row lb-extra-row"{% if not filters_active %} hidden{% endif %}>
+  <div class="lb-filter-row lb-extra-row{% if filters_active %} open{% endif %}">
+    <div class="lb-extra-inner">
     <label id="lb-cond-label">Weather
       <select name="conditions">
         <option value="">Any</option>
@@ -106,6 +107,7 @@
         {% endfor %}
       </select>
     </label>
+    </div>
   </div>
 </form>
 
@@ -300,8 +302,7 @@
   var extraRow = form.querySelector('.lb-extra-row');
   if (moreBtn && extraRow) {
     moreBtn.addEventListener('click', function () {
-      var open = extraRow.hasAttribute('hidden');
-      if (open) extraRow.removeAttribute('hidden'); else extraRow.setAttribute('hidden', '');
+      var open = extraRow.classList.toggle('open');
       moreBtn.setAttribute('aria-expanded', String(open));
       moreBtn.textContent = 'Filters ' + (open ? '▴' : '▾');
     });

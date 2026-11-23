@@ -59,6 +59,7 @@ def main() -> int:
           'class="lb-mode-toggle"' in lb_html
           and '<option value="">All cars</option>' in lb_html
           and 'id="lb-more-btn"' in lb_html
+          and 'class="lb-extra-inner"' in lb_html
           and '<th>Car</th>' not in client.get('/leaderboard?car=999999').get_data(as_text=True), '')
     check('leaderboard: distance mode swaps the board columns',
           client.get('/leaderboard?mode=distance').get_data(as_text=True)
@@ -69,9 +70,10 @@ def main() -> int:
           '.lb-filters { margin-bottom: 0.6rem; }' in lb_css
           and '.lb-filter-row { display: flex; gap: 0.9rem; flex-wrap: wrap; align-items: flex-end; }' in lb_css
           and '.lb-mode-toggle label:has(input:checked) { background: var(--accent); color: var(--bg); }' in lb_css, '')
-    check('leaderboard: stage/car select widths + hidden extra row actually hides',
-          '.lb-filter-row select[name=stage], .lb-filter-row select[name=car] { width: 24rem; }' in lb_css
-          and '.lb-extra-row[hidden] { display: none; }' in lb_css, '')
+    check('leaderboard: stage/car select widths + animated extra row (grid 0fr->1fr)',
+          '.lb-filter-row .cselect:has(select[name=stage]), .lb-filter-row .cselect:has(select[name=car]) { width: 24rem; }' in lb_css
+          and '.lb-extra-row { display: grid; grid-template-rows: 0fr; margin-top: 0; transition: grid-template-rows 0.15s ease; }' in lb_css
+          and '.lb-extra-row.open { grid-template-rows: 1fr; }' in lb_css, '')
 
     # clubs list: filter form + partial reload (only the results section swaps)
     html = client.get('/clubs').get_data(as_text=True)
