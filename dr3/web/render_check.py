@@ -55,6 +55,7 @@ def main() -> int:
           and 'id="lb-board-table"' in lb_html
           and           '<th class="car-col">Vehicle</th><th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th class="src-cell">Source</th>' in lb_html
           and "tbody.querySelectorAll('tr').forEach(applyTuning);" in lb_html, '')
+    check('site nav: leaderboard link visible', '<a href="/leaderboard">Leaderboard</a>' in lb_html, '')
     # stage=11 has smokedriver bests: car 2 with splits [101.0, 100.5], car 9
     # without — exercises both the value cells and the club-board fallback.
     lb_rows = client.get('/leaderboard?stage=11').get_data(as_text=True)
@@ -110,7 +111,7 @@ def main() -> int:
           and '#lb-board-table .src-cell { text-align: center; }' in lb_css
           and '.dmg-cond { margin-top: 0.6rem;' in lb_css
           and '#lb-board-table .car-col { width: 14.5rem; }' in lb_css
-          and '#lb-board-table th.car-col { padding-left: 49px; }' in lb_css
+          and '#lb-board-table th.car-col { padding-left: 51px; }' in lb_css
           and '#lb-board-table .pen-col { width: 4.5rem; }' in lb_css, '')
     # Rallycross stages (track 641 = Bikernieki) carry no penalty column —
     # the board is about best laps there; smoke fixtures keep 641 empty.

@@ -889,7 +889,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 table th:last-child, table td:last-child { padding-right: .5rem; }
 .car-fastest tr.fastest-detail td:last-child { padding-right: 0; }
 #lb-board-table .car-col { width: 14.5rem; }
-#lb-board-table th.car-col { padding-left: 49px; }
+#lb-board-table th.car-col { padding-left: 51px; }
 .board-empty td { text-align: center; color: var(--muted); padding: 1rem; }
 
 .standings-title { margin-top: 1.6rem; font-size: 1.15rem; }

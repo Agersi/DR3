@@ -133,7 +133,7 @@
     <nav class="site-nav">
       <a href="{{ url_for('pages.home') }}">Home</a>
       <a href="{{ url_for('clubs.clubs_list') }}">Clubs</a>
-      {# Leaderboard link hidden while the page is being styled #}
+      <a href="{{ url_for('pages.leaderboard') }}">Leaderboard</a>
       {% if session.get('user_id') %}
         <a href="{{ url_for('pages.dashboard') }}">Dashboard</a>
         <a href="{{ url_for('pages.account') }}">Account</a>
