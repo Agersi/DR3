@@ -53,8 +53,13 @@ def main() -> int:
     check('leaderboard: filter form + times board headers + hydration script',
           '<form class="panel lb-filters" method="get"' in lb_html
           and 'id="lb-board-table"' in lb_html
-          and '<th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th>Source</th>' in lb_html
+          and '<th>Car</th><th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th>Source</th>' in lb_html
           and "tbody.querySelectorAll('tr').forEach(applyTuning);" in lb_html, '')
+    check('leaderboard: mode toggle + filters button + car column only when no car picked',
+          'class="lb-mode-toggle"' in lb_html
+          and '<option value="">All cars</option>' in lb_html
+          and 'id="lb-more-btn"' in lb_html
+          and '<th>Car</th>' not in client.get('/leaderboard?car=999999').get_data(as_text=True), '')
     check('leaderboard: distance mode swaps the board columns',
           client.get('/leaderboard?mode=distance').get_data(as_text=True)
           .count('<th class="num">Stages</th><th class="num">Distance</th>') == 1
@@ -62,7 +67,8 @@ def main() -> int:
     lb_css = client.get('/static/css/style.css').get_data(as_text=True)
     check('leaderboard: filter panel CSS',
           '.lb-filters { margin-bottom: 0.6rem; }' in lb_css
-          and '.lb-filter-row { display: flex; gap: 0.9rem; flex-wrap: wrap; align-items: flex-end; }' in lb_css, '')
+          and '.lb-filter-row { display: flex; gap: 0.9rem; flex-wrap: wrap; align-items: flex-end; }' in lb_css
+          and '.lb-mode-toggle label:has(input:checked) { background: var(--accent); color: var(--bg); }' in lb_css, '')
 
     # clubs list: filter form + partial reload (only the results section swaps)
     html = client.get('/clubs').get_data(as_text=True)

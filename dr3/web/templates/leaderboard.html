@@ -5,12 +5,12 @@
 
 <form class="panel lb-filters" method="get" action="{{ url_for('pages.leaderboard') }}">
   <div class="lb-filter-row">
-    <label>Mode
-      <select name="mode">
-        <option value="times"{% if mode == 'times' %} selected{% endif %}>Best times</option>
-        <option value="distance"{% if mode == 'distance' %} selected{% endif %}>Distance driven</option>
-      </select>
-    </label>
+    <div class="lb-mode-toggle" id="lb-mode-toggle">
+      <label><input type="radio" name="mode" value="times"{% if mode == 'times' %} checked{% endif %}><span>Best times</span></label>
+      <label><input type="radio" name="mode" value="distance"{% if mode == 'distance' %} checked{% endif %}><span>Distance driven</span></label>
+    </div>
+  </div>
+  <div class="lb-filter-row">
     <label id="lb-stage-label">Stage
       <select name="stage">
         {% for loc, opts in stages %}
@@ -24,6 +24,7 @@
     </label>
     <label>Car
       <select name="car">
+        <option value="">All cars</option>
         {% for class_label, opts in cars %}
         <optgroup label="{{ class_label }}">
           {% for vid, name in opts %}
@@ -33,8 +34,9 @@
         {% endfor %}
       </select>
     </label>
+    <button type="button" class="lb-filters-btn" id="lb-more-btn" aria-expanded="{{ 'true' if filters_active else 'false' }}">Filters {{ '▴' if filters_active else '▾' }}</button>
   </div>
-  <div class="lb-filter-row">
+  <div class="lb-filter-row lb-extra-row"{% if not filters_active %} hidden{% endif %}>
     <label id="lb-cond-label">Weather
       <select name="conditions">
         <option value="">Any</option>
@@ -122,13 +124,14 @@
   <table class="board" id="lb-board-table">
     {% if mode == 'times' %}
     <thead>
-      <tr><th>#</th><th>Driver</th><th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th>Source</th><th class="num">Penalty</th><th class="num">Time</th><th class="num">Diff 1st</th></tr>
+      <tr><th>#</th><th>Driver</th>{% if not vehicle_id %}<th>Car</th>{% endif %}<th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th>Source</th><th class="num">Penalty</th><th class="num">Time</th><th class="num">Diff 1st</th></tr>
     </thead>
     <tbody id="lb-board-body">
       {% for r in rows %}
       <tr class="board-row">
         <td class="num">{{ r.pos }}</td>
         <td>{{ flag_img(r.flag_url) }}<a class="driver-link" href="{{ url_for('pages.profile', username=r.username) }}">{{ r.display_name }}</a></td>
+        {% if not vehicle_id %}<td class="car-cell">{{ r.car_name }}</td>{% endif %}
         <td class="tyre-cell" data-tyres="{{ r.tyres|tojson }}"></td>
         <td class="spare-cell num" data-spares="{{ '' if r.spares is none else r.spares }}"></td>
         <td class="input-cell" data-input="{{ r.input or '' }}" data-vr="{{ '1' if r.vr else '' }}" data-assists="{{ '1' if r.assists else '' }}"></td>
@@ -139,7 +142,7 @@
         <td class="num">{{ r.diff_str or '—' }}</td>
       </tr>
       {% else %}
-      <tr class="board-empty"><td colspan="10">No times yet.</td></tr>
+      <tr class="board-empty"><td colspan="{{ 11 if not vehicle_id else 10 }}">No times yet.</td></tr>
       {% endfor %}
     </tbody>
     {% else %}
@@ -282,12 +285,25 @@
 (function () {
   var form = document.querySelector('.lb-filters');
   if (!form) return;
+  function currentMode() {
+    var on = form.querySelector('input[name=mode]:checked');
+    return on ? on.value : 'times';
+  }
   function sync() {
-    var modeSel = form.querySelector('select[name=mode]');
-    var dist = modeSel.value === 'distance';
+    var dist = currentMode() === 'distance';
     ['lb-stage-label', 'lb-cond-label', 'lb-comp-label'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.style.display = dist ? 'none' : '';
+    });
+  }
+  var moreBtn = document.getElementById('lb-more-btn');
+  var extraRow = form.querySelector('.lb-extra-row');
+  if (moreBtn && extraRow) {
+    moreBtn.addEventListener('click', function () {
+      var open = extraRow.hasAttribute('hidden');
+      if (open) extraRow.removeAttribute('hidden'); else extraRow.setAttribute('hidden', '');
+      moreBtn.setAttribute('aria-expanded', String(open));
+      moreBtn.textContent = 'Filters ' + (open ? '▴' : '▾');
     });
   }
   form.addEventListener('change', function (e) {

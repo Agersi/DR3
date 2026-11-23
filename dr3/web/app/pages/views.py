@@ -939,8 +939,9 @@ def leaderboard():
     )
     from ..scoring import VEHICLES, vehicle_meta
     from dr2server.game_data import (
-        STAGE_CONDITIONS_LABELS,
         SURFACE_DEGRAD_LEVELS,
+        Track,
+        stage_conditions_options_for_location,
     )
 
     stages = stage_options()
@@ -983,19 +984,32 @@ def leaderboard():
     hardcore = _bool_arg('hardcore')
     country = (request.args.get('country') or '').strip() or None
 
-    # Defaults: first catalog stage + first catalog car (car-page convention).
+    # Default: first catalog stage; the car is optional (None = all cars).
     if track is None and stages:
         track = stages[0][1][0][0]
-    if vehicle_id is None and cars:
-        vehicle_id = cars[0][1][0][0]
+
+    # Weather options are scoped to the selected stage's location — the same
+    # per-location lighting sweep the club event creation offers. A selection
+    # that is not available on this stage is dropped rather than filtering the
+    # board down to nothing.
+    conditions_options = []
+    if track is not None:
+        try:
+            conditions_options = stage_conditions_options_for_location(
+                Track(int(track)).location)
+        except (ValueError, TypeError):
+            conditions_options = []
+    if conditions is not None and \
+            conditions not in {cid for cid, _ in conditions_options}:
+        conditions = None
 
     board = {}
-    if mode == 'times' and track is not None and vehicle_id is not None:
+    if mode == 'times' and track is not None:
         board = best_times_board(
             track, vehicle_id, conditions=conditions, compound=compound,
             degrad_level=degrad_level, input_method=input_method, camera=camera,
             vr=vr, assists=assists, hardcore=hardcore, country=country)
-    elif mode == 'distance' and vehicle_id is not None:
+    elif mode == 'distance':
         board = distance_board(
             vehicle_id, degrad_level=degrad_level, input_method=input_method,
             camera=camera, vr=vr, assists=assists, hardcore=hardcore,
@@ -1017,7 +1031,10 @@ def leaderboard():
         stage_info=stage_info(track) if track else {},
         car_name=car_name,
         car_class=car_class,
-        conditions_options=sorted(STAGE_CONDITIONS_LABELS.items()),
+        conditions_options=conditions_options,
+        filters_active=any(v is not None for v in (
+            conditions, compound, degrad_level, input_method, camera, vr,
+            assists, hardcore, country)),
         compound_opts=compound_options(),
         degrad_options=SURFACE_DEGRAD_LEVELS,
         camera_options=CAMERA_POSITIONS,

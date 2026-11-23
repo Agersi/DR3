@@ -21,6 +21,7 @@ from .results_view import (
     format_ms,
     gap_text,
 )
+from .scoring import vehicle_meta
 from dr2server.game_data import Location, Track
 
 # Tyre compound id -> static image slug (mirrors the club board's TYRE_FILE).
@@ -155,19 +156,23 @@ class SimpleRun:
 def best_times_board(track, vehicle_id, *, conditions=None, compound=None,
                      degrad_level=None, input_method=None, camera=None,
                      vr=None, assists=None, hardcore=None, country=None) -> dict:
-    """Best time per driver on one stage + car, across all run types.
+    """Best time per driver on one stage, across all run types.
 
-    Without a conditions/compound filter each driver's fastest row across
-    conditions and compounds wins; with them the board is scoped to that cell.
-    Run-based filters only see rows whose best still points at a stored run —
-    legacy rows without a run_id are dropped whenever any such filter is on.
+    With a car selected: one row per driver (their fastest row for that car).
+    Without (vehicle_id is None): every car on the stage — one row per
+    driver + car, so a driver can appear several times.  Without a
+    conditions/compound filter each group's fastest row across conditions and
+    compounds wins; with them the board is scoped to that cell.  Run-based
+    filters only see rows whose best still points at a stored run — legacy
+    rows without a run_id are dropped whenever any such filter is on.
     """
     from .db import db
     from .models import StageRun, TimeTrialEntry, User
 
     q = db.session.query(TimeTrialEntry).filter(
-        TimeTrialEntry.track == str(track)[:8],
-        TimeTrialEntry.vehicle_id == int(vehicle_id))
+        TimeTrialEntry.track == str(track)[:8])
+    if vehicle_id is not None:
+        q = q.filter(TimeTrialEntry.vehicle_id == int(vehicle_id))
     if conditions is not None:
         q = q.filter(TimeTrialEntry.conditions == str(conditions))
     if compound is not None:
@@ -183,7 +188,8 @@ def best_times_board(track, vehicle_id, *, conditions=None, compound=None,
 
     need_run = _any_run_filter(degrad_level=degrad_level, input_method=input_method,
                                camera=camera, vr=vr, assists=assists, hardcore=hardcore)
-    by_user: dict[str, TimeTrialEntry] = {}
+    # One row per driver + car (a single-car board collapses to per-driver).
+    by_group: dict[tuple, TimeTrialEntry] = {}
     for e in entries:
         run = runs.get(e.run_id) if e.run_id else None
         if need_run and not _run_matches(
@@ -194,31 +200,34 @@ def best_times_board(track, vehicle_id, *, conditions=None, compound=None,
             u = users.get(e.username)
             if (u.country or '' if u else '') != country:
                 continue
-        cur = by_user.get(e.username)
+        key = (e.username, e.vehicle_id)
+        cur = by_group.get(key)
         if cur is None or (e.stage_time_ms or 0) < (cur.stage_time_ms or 0):
-            by_user[e.username] = e
+            by_group[key] = e
 
     # Spares + penalties for club rows: stage entry of the producing run's slot.
-    slots: dict[str, tuple] = {}
+    slots: dict[tuple, tuple] = {}
     event_ids: set = set()
-    for name, e in by_user.items():
+    for key, e in by_group.items():
         run = runs.get(e.run_id) if e.run_id else None
         if run and run.source_type == 'club' and run.event_id \
                 and run.flat_stage_index is not None:
-            slots[name] = (run.event_id, run.flat_stage_index)
+            slots[key] = (run.event_id, run.flat_stage_index)
             event_ids.add(run.event_id)
     stage_entries = _stage_entries_by_slot(event_ids)
 
     raw = []
-    for name, e in by_user.items():
+    for key, e in by_group.items():
+        name, vid = key
         run = runs.get(e.run_id) if e.run_id else None
         se = None
-        key = slots.get(name)
-        if key:
-            se = stage_entries.get((key[0], name, key[1]))
+        slot = slots.get(key)
+        if slot:
+            se = stage_entries.get((slot[0], name, slot[1]))
         u = users.get(name)
         raw.append({
             'username': name,
+            'car_name': vehicle_meta(vid)[0],
             'time_ms': e.stage_time_ms or 0,
             'compound': int(e.tyre_compound) if e.tyre_compound else None,
             'spares': _spare_tyres(se),
@@ -241,6 +250,7 @@ def best_times_board(track, vehicle_id, *, conditions=None, compound=None,
             'pos': i + 1,
             'username': r['username'],
             'display_name': (u.display_name or r['username']) if u else r['username'],
+            'car_name': r['car_name'],
             'flag_url': r['flag_url'],
             'tyres': [r['compound']] if r['compound'] else [],
             'spares': r['spares'],
@@ -258,22 +268,23 @@ def best_times_board(track, vehicle_id, *, conditions=None, compound=None,
 
 def distance_board(vehicle_id, *, degrad_level=None, input_method=None, camera=None,
                    vr=None, assists=None, hardcore=None, country=None) -> dict:
-    """Total distance driven per driver in one car, across all run types and
-    stages.  DNF runs carry no distance_m and are excluded by the query."""
+    """Total distance driven per driver across all run types and stages —
+    in one car when selected, over every car when vehicle_id is None.  DNF
+    runs carry no distance_m and are excluded by the query."""
     from .db import db
     from .models import StageRun, User
 
     users = {u.username: u for u in User.query.all()}
-    rows = (db.session.query(
-                StageRun.username, StageRun.distance_m,
-                StageRun.surface_degradation_level, StageRun.input_method,
-                StageRun.camera_position, StageRun.vr_enabled,
-                StageRun.assists_enabled, StageRun.using_assists,
-                StageRun.hardcore_damage)
-            .filter(StageRun.vehicle_id == int(vehicle_id),
-                    StageRun.distance_m.isnot(None),
-                    StageRun.distance_m > 0)
-            .all())
+    q = db.session.query(
+        StageRun.username, StageRun.distance_m,
+        StageRun.surface_degradation_level, StageRun.input_method,
+        StageRun.camera_position, StageRun.vr_enabled,
+        StageRun.assists_enabled, StageRun.using_assists,
+        StageRun.hardcore_damage)
+    if vehicle_id is not None:
+        q = q.filter(StageRun.vehicle_id == int(vehicle_id))
+    rows = q.filter(StageRun.distance_m.isnot(None),
+                    StageRun.distance_m > 0).all()
 
     sums: dict[str, list] = {}  # username -> [meters, stage count]
     for user, dist, level, inp, cam, vr_e, ass_e, ass_u, hc in rows:
