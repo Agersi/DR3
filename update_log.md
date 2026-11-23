@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.82**
+- Opening DR3 while it's already running now just brings the open window to the front. Updates install themselves: DR3 closes briefly, updates, and reopens on its own.
+
 **v0.1.81**
 - Simplified telemetry setup — DR3 always uses its own dedicated data connection, so there is nothing to configure.
 

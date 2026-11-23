@@ -9,8 +9,11 @@
 - _apply_update performs the full swap in temp dirs: new contents land in the
   install dir, the previous one is kept as DR3.bak-<ver>, the staged zip and
   the staging folder are removed; a vanished install dir aborts cleanly;
-- after a successful swap the child opens the install folder in Explorer so
-  the user can relaunch (a failed install must not);
+- after a successful swap a `relaunch` child starts the new DR3.exe (like a
+  double-click would: CWD = install dir, detached); if that Popen fails it
+  falls back to opening the install folder in Explorer; a non-relaunch child
+  (stale zip from an earlier session) keeps the legacy explorer behavior; a
+  failed install must trigger neither;
 - the `--apply-update` CLI branch exits before any Tk/logging machinery
   (source mode: not an installed bundle -> rc 0, note in update.log);
 - the real GUI boots with the gold bar hidden, and end-to-end against a local
@@ -276,9 +279,12 @@ def check_cwd_swap(mod, f):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def check_explorer_open(mod, f):
-    """After a successful swap the detached child opens the install folder in
-    Explorer (so the user can relaunch DR3.exe); a failed install must not."""
+def check_relaunch(mod, f):
+    """After a successful swap: a `relaunch` child (this session downloaded the
+    zip) starts the new DR3.exe like a double-click would; if that Popen fails
+    it falls back to Explorer. A non-relaunch child (stale zip from an earlier
+    session) keeps the legacy explorer behavior. A failed install triggers
+    neither."""
     import types
 
     tmp = Path(tempfile.mkdtemp(prefix="dr3_upd_"))
@@ -291,7 +297,8 @@ def check_explorer_open(mod, f):
     calls = []
     real_subprocess = mod.subprocess
     fake_subprocess = types.SimpleNamespace(
-        Popen=lambda *a, **k: calls.append((a, k)))
+        Popen=lambda *a, **k: calls.append((a, k)),
+        DEVNULL=subprocess.DEVNULL)
     old_dr3_dir = mod.DR3_DIR
     old_install_dir = mod._install_dir
     old_cwd = Path.cwd()
@@ -300,36 +307,86 @@ def check_explorer_open(mod, f):
         mod.DR3_DIR = tmp / "appdata" / "DR3"
         mod._install_dir = lambda: install
 
+        # 1) relaunch child, success -> Popen the new exe (CWD = install dir,
+        #    detached, stdio to DEVNULL), no explorer.
         zip_ok = staged / "DR3-windows-9.9.6.zip"
         _make_update_zip(zip_ok, b"new exe")
-        rc = mod._run_apply_update(str(zip_ok), "-1")
+        rc = mod._run_apply_update(str(zip_ok), "-1", relaunch=True)
         if rc != 0:
             f["n"] += 1
             print(f"FAIL _run_apply_update success path rc={rc}")
+        elif len(calls) != 1:
+            f["n"] += 1
+            print(f"FAIL expected exactly one Popen, got {calls!r}")
+        else:
+            args, kw = calls[0]
+            want_args = ([str(install / "DR3.exe")],)
+            if args != want_args or kw.get("cwd") != str(install) \
+                    or kw.get("stdin") is not mod.subprocess.DEVNULL \
+                    or not kw.get("creationflags"):
+                f["n"] += 1
+                print(f"FAIL relaunch Popen wrong: args={args!r} kw={kw!r}")
+            else:
+                print("OK   successful install relaunches the new DR3.exe "
+                      "(CWD = install dir, detached)")
+        log = mod.DR3_DIR / "update.log"
+        if f"relaunched {install / 'DR3.exe'}" not in log.read_text():
+            f["n"] += 1
+            print("FAIL update.log missing the relaunch note")
+        else:
+            print("OK   update.log carries the relaunch note")
+
+        # 2) relaunch child, Popen raises -> fall back to Explorer.
+        calls.clear()
+
+        def flaky_popen(*a, **k):
+            if a and a[0] and str(a[0][0]).endswith("DR3.exe"):
+                raise OSError("nope")
+            calls.append((a, k))
+
+        mod.subprocess = types.SimpleNamespace(
+            Popen=flaky_popen, DEVNULL=subprocess.DEVNULL)
+        zip_ok2 = staged / "DR3-windows-9.9.55.zip"
+        _make_update_zip(zip_ok2, b"new exe")
+        rc = mod._run_apply_update(str(zip_ok2), "-1", relaunch=True)
+        if rc != 0:
+            f["n"] += 1
+            print(f"FAIL fallback path rc={rc}")
         elif calls != [((["explorer", str(install)],), {})]:
             f["n"] += 1
-            print(f"FAIL explorer not opened on success: {calls!r}")
+            print(f"FAIL relaunch failure did not fall back to Explorer: {calls!r}")
         else:
-            print("OK   install folder opened in Explorer after successful install")
-        log = mod.DR3_DIR / "update.log"
-        if "install folder opened in Explorer" not in log.read_text():
-            f["n"] += 1
-            print("FAIL update.log missing the explorer note")
-        else:
-            print("OK   update.log carries the explorer note")
+            print("OK   relaunch Popen failure falls back to Explorer")
+        mod.subprocess = fake_subprocess
 
+        # 3) non-relaunch child (stale zip from an earlier session) -> legacy
+        #    explorer behavior.
         calls.clear()
-        bad = staged / "DR3-windows-9.9.5.zip"
+        zip_legacy = staged / "DR3-windows-9.9.5.zip"
+        _make_update_zip(zip_legacy, b"new exe")
+        rc = mod._run_apply_update(str(zip_legacy), "-1", relaunch=False)
+        if rc != 0:
+            f["n"] += 1
+            print(f"FAIL legacy path rc={rc}")
+        elif calls != [((["explorer", str(install)],), {})]:
+            f["n"] += 1
+            print(f"FAIL stale-zip install should open Explorer: {calls!r}")
+        else:
+            print("OK   earlier-session zip keeps the legacy Explorer behavior")
+
+        # 4) failed install -> neither relaunch nor explorer.
+        calls.clear()
+        bad = staged / "DR3-windows-9.9.4.zip"
         bad.write_bytes(b"not a zip")
-        rc = mod._run_apply_update(str(bad), "-1")
+        rc = mod._run_apply_update(str(bad), "-1", relaunch=True)
         if rc == 0:
             f["n"] += 1
             print("FAIL invalid staged zip should not give rc=0")
         elif calls:
             f["n"] += 1
-            print(f"FAIL explorer opened on failed install: {calls!r}")
+            print(f"FAIL failed install triggered a Popen: {calls!r}")
         else:
-            print("OK   failed install does not open Explorer")
+            print("OK   failed install does not relaunch or open Explorer")
     finally:
         mod.subprocess = real_subprocess
         mod.DR3_DIR = old_dr3_dir
@@ -348,22 +405,24 @@ def check_cli_source_mode(mod, f):
             env["APPDATA"] = str(tmp / "appdata")
         else:
             env["XDG_CONFIG_HOME"] = str(tmp / "xdg")
-        proc = subprocess.run(
-            [sys.executable, str(dr3_app), "--apply-update",
-             str(tmp / "missing.zip"), "0"],
-            capture_output=True, text=True, timeout=60, env=env,
-        )
+        for extra in ((), ("relaunch",)):
+            proc = subprocess.run(
+                [sys.executable, str(dr3_app), "--apply-update",
+                 str(tmp / "missing.zip"), "0", *extra],
+                capture_output=True, text=True, timeout=60, env=env,
+            )
+            if proc.returncode != 0:
+                f["n"] += 1
+                print(f"FAIL --apply-update {extra} in source mode "
+                      f"rc={proc.returncode} stderr={proc.stderr[:200]!r}")
         log = tmp / ("appdata" if sys.platform == "win32" else "xdg")
         logs = list(log.rglob("update.log"))
-        if proc.returncode != 0:
-            f["n"] += 1
-            print(f"FAIL --apply-update in source mode rc={proc.returncode} "
-                  f"stderr={proc.stderr[:200]!r}")
-        elif not logs or "not an installed DR3.exe bundle" not in logs[0].read_text():
+        if not logs or "not an installed DR3.exe bundle" not in logs[0].read_text():
             f["n"] += 1
             print(f"FAIL update.log missing the source-mode note: {logs}")
         else:
-            print("OK   --apply-update CLI branch runs pre-Tk, rc=0 in source mode")
+            print("OK   --apply-update CLI branch (with/without relaunch arg) "
+                  "runs pre-Tk, rc=0 in source mode")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -430,7 +489,13 @@ def check_gui(mod, f):
         deadline = time.time() + 15
 
         def tick():
-            text = str(label.cget("text")) if label is not None else ""
+            try:
+                text = str(label.cget("text")) if label is not None else ""
+            except tk.TclError:
+                # The app closed itself (auto-close fired before this tick) —
+                # that IS the new expected end state.
+                captured["closed_by_app"] = True
+                return
             if "Update v9.9.9 ready" in text or time.time() > deadline:
                 captured["final_text"] = text
                 captured["final_mapped"] = (
@@ -454,8 +519,14 @@ def check_gui(mod, f):
         cfg["auto_start_server"] = False
         return cfg
 
+    # The auto-close -> _finish_close path spawns a real --apply-update child;
+    # point its profile at the temp dir so its update.log stays local. (The
+    # GUI process itself already has DR3_DIR computed at import time.)
+    env_key = "APPDATA" if sys.platform == "win32" else "XDG_CONFIG_HOME"
+    orig_env = os.environ.get(env_key)
     orig_mainloop = tk.Tk.mainloop
     try:
+        os.environ[env_key] = str(tmp / "appdata")
         mod.VERSION_CHECK_URL = f"http://127.0.0.1:{port}/version.json"
         mod.UPDATES_DIR = updates
         mod._install_dir = lambda: install_stub
@@ -463,6 +534,10 @@ def check_gui(mod, f):
         tk.Tk.mainloop = fake_mainloop
         mod.run_gui()
     finally:
+        if orig_env is None:
+            os.environ.pop(env_key, None)
+        else:
+            os.environ[env_key] = orig_env
         tk.Tk.mainloop = orig_mainloop
         mod.load_config = orig_load_config
         httpd.shutdown()
@@ -483,20 +558,23 @@ def check_gui(mod, f):
     else:
         print("OK   update bar exists, hidden at boot")
 
-    text = str(captured.get("final_text", ""))
-    if "Update v9.9.9 ready — installs when DR3 closes" not in text \
-            or not captured.get("final_mapped"):
-        f["n"] += 1
-        print(f"FAIL banner did not reach ready state, got {text!r}")
+    if captured.get("closed_by_app"):
+        # Even better than the banner: the app closed itself to install.
+        print("OK   app closed itself after the download (auto-close fired)")
     else:
-        print("OK   check -> auto-download -> 'ready' banner (end-to-end)")
-
-    if captured.get("final_binding"):
-        f["n"] += 1
-        print(f"FAIL ready banner is still clickable: "
-              f"{captured['final_binding']!r}")
-    else:
-        print("OK   ready banner is not clickable (no browser download)")
+        text = str(captured.get("final_text", ""))
+        if "Update v9.9.9 ready — closing to install" not in text \
+                or not captured.get("final_mapped"):
+            f["n"] += 1
+            print(f"FAIL banner did not reach ready state, got {text!r}")
+        else:
+            print("OK   check -> auto-download -> 'ready' banner (end-to-end)")
+        if captured.get("final_binding"):
+            f["n"] += 1
+            print(f"FAIL ready banner is still clickable: "
+                  f"{captured['final_binding']!r}")
+        else:
+            print("OK   ready banner is not clickable (no browser download)")
 
     staged = list(updates.glob("DR3-windows-*.zip"))
     if len(staged) != 1 or not mod._validate_update_zip(staged[0]):
@@ -517,7 +595,7 @@ def main() -> int:
     check_download_failure(mod, f)
     check_apply(mod, f)
     check_cwd_swap(mod, f)
-    check_explorer_open(mod, f)
+    check_relaunch(mod, f)
     check_cli_source_mode(mod, f)
     check_gui(mod, f)
     if f["n"]:

@@ -1,6 +1,6 @@
 """Verify the close flow + window geometry in dr3_app.py:
 
-- the window is the fixed 440x610 size (tall enough that the update banner
+- the window is the fixed 440x630 size (tall enough that the update banner
   never forces a scrollbar on Main/Logs);
 - with the update bar shown, Main and Logs still fit (no scrollbar) while
   Overlay keeps its scrollbar; Main also fits with the telemetry row packed;
@@ -93,11 +93,11 @@ def check_geometry_and_banner_fit(mod) -> int:
 
     geom = root.winfo_geometry()
     size = geom.split("+")[0]
-    if size != "440x610":
+    if size != "440x630":
         failures += 1
-        print(f"FAIL window geometry is {size}, expected 440x610")
+        print(f"FAIL window geometry is {size}, expected 440x630")
     else:
-        print("OK   window is fixed 440x610")
+        print("OK   window is fixed 440x630")
 
     bar, label = _find_update_bar(root)
     if bar is None or label is None:

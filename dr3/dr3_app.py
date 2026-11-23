@@ -721,16 +721,108 @@ def has_port_capability(binary: Path) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Single instance
+#
+# Only one DR3 client may run at a time. A second launch detects the running
+# instance, brings its window to the foreground, and exits without touching
+# debug.log — the check runs BEFORE _setup_file_logging on purpose, since
+# rotating the log here would scatter the live session into debug.prev.log.
+# The `--apply-update` / `--admin-helper` children bypass the lock: they run
+# while the GUI is alive and must never be blocked by it.
+# ---------------------------------------------------------------------------
+
+SINGLE_INSTANCE_MUTEX = "DR3.SingleInstance.Mutex"
+_ERROR_ALREADY_EXISTS = 183
+
+_single_instance_handle = None    # Windows mutex handle (kept for the process lifetime)
+_single_instance_lock_file = None  # Linux flock file (kept open)
+
+
+def _acquire_single_instance_lock() -> bool:
+    """Claim the single-instance handle. True when this process owns it,
+    False when another DR3 instance already runs. Fails open (True) on any
+    platform hiccup so a lock glitch can never leave the user without a GUI."""
+    if IS_WIN:
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.CreateMutexW(None, False, SINGLE_INSTANCE_MUTEX)
+        if not handle:
+            return True  # fail open — don't block the GUI on a Win32 hiccup
+        if kernel32.GetLastError() == _ERROR_ALREADY_EXISTS:
+            kernel32.CloseHandle(handle)
+            return False
+        global _single_instance_handle
+        _single_instance_handle = handle
+        return True
+    import fcntl
+    global _single_instance_lock_file
+    try:
+        DR3_DIR.mkdir(parents=True, exist_ok=True)
+        _single_instance_lock_file = open(DR3_DIR / "single-instance.lock", "a+")
+        fcntl.flock(_single_instance_lock_file.fileno(),
+                    fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (BlockingIOError, OSError):
+        return False
+    return True
+
+
+def _focus_existing_instance() -> bool:
+    """Bring the running DR3 window to the foreground. Best effort — returns
+    False when no candidate window is found (the caller just exits)."""
+    if IS_WIN:
+        user32 = ctypes.windll.user32
+        found = {"hwnd": None}
+
+        @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+        def _enum(hwnd, _lparam):
+            if found["hwnd"]:
+                return False
+            length = user32.GetWindowTextLengthW(hwnd)
+            if not length:
+                return True
+            buf = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buf, length + 1)
+            if buf.value.startswith("DR3 v"):
+                found["hwnd"] = hwnd
+                return False
+            return True
+
+        try:
+            user32.EnumWindows(_enum, None)
+        except OSError:
+            return False
+        if not found["hwnd"]:
+            return False
+        user32.ShowWindow(found["hwnd"], 9)  # SW_RESTORE (un-minimizes too)
+        user32.SetForegroundWindow(found["hwnd"])
+        return True
+    for tool in ("xdotool",):
+        if not shutil.which(tool):
+            continue
+        try:
+            subprocess.run([tool, "search", "--name", "^DR3 v", "windowactivate"],
+                           capture_output=True, timeout=5)
+            return True
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return False
+
+
+# ---------------------------------------------------------------------------
 # Auto-updater (backlog #51)
 #
 # The Windows build is a PyInstaller --onedir bundle: DR3.exe plus _internal/
 # are locked while the process runs, so files can only be swapped AFTER exit.
-# Flow: the GUI checks VERSION_CHECK_URL at startup and every 30 minutes,
-# auto-downloads a newer zip into UPDATES_DIR, and on window close spawns a
-# detached child of itself (`DR3.exe --apply-update <zip> <parent_pid>`) that
-# waits for the parent to die, then swaps the install folder (the previous one
-# is kept as DR3.bak-<oldver>, like the VPS keeps .bak zips). No relaunch —
-# the next manual start runs the new version.
+# Flow: the GUI checks VERSION_CHECK_URL at startup and every 30 minutes and
+# auto-downloads a newer zip into UPDATES_DIR. When a download lands in THIS
+# session the app closes itself (server stop flow first if it's up) and a
+# detached child of itself (`DR3.exe --apply-update <zip> <parent_pid>
+# relaunch`) waits for the parent to die, swaps the install folder (the
+# previous one is kept as DR3.bak-<oldver>, like the VPS keeps .bak zips),
+# and relaunches DR3.exe — so an auto-start user lands back in the new
+# version without touching anything. A zip staged by an EARLIER session
+# (e.g. a previous install attempt that failed) is still installed on exit,
+# but WITHOUT relaunch or auto-close: a repeatedly failing swap must not loop
+# close->install forever.
 # ---------------------------------------------------------------------------
 
 def _version_tuple(tag: str) -> Optional[tuple]:
@@ -902,12 +994,15 @@ def _apply_update(zip_path: Path, install_dir: Path, parent_pid: int,
     return 0
 
 
-def _run_apply_update(zip_arg: str, pid_arg: str) -> int:
+def _run_apply_update(zip_arg: str, pid_arg: str, relaunch: bool = False) -> int:
     """Entry point for the detached `--apply-update` child.
 
     Runs BEFORE _setup_file_logging() on purpose: the parent GUI is still
     alive holding debug.log open, and rotating it here would scatter the tail
-    of the parent session into debug.prev.log. Logs to update.log instead."""
+    of the parent session into debug.prev.log. Logs to update.log instead.
+    ``relaunch`` (the optional 4th CLI arg) means this session downloaded the
+    zip — the close was an install restart, so start the new DR3.exe after a
+    successful swap."""
     log_path = DR3_DIR / "update.log"
 
     def note(msg: str) -> None:
@@ -937,13 +1032,33 @@ def _run_apply_update(zip_arg: str, pid_arg: str) -> int:
         return 9
     note(f"apply-update done rc={rc}")
     if rc == 0 and os.name == "nt":
-        # The app just closed itself to install the update — open the install
-        # folder so the user can double-click DR3.exe and relaunch.
-        try:
-            subprocess.Popen(["explorer", str(install_dir)])
-            note("install folder opened in Explorer")
-        except OSError as exc:
-            note(f"could not open install folder: {exc}")
+        exe = install_dir / "DR3.exe"
+        if relaunch:
+            # The app closed itself to install this update — start the new
+            # version so the user lands back in DR3 (auto-start applies there).
+            # Start it like a double-click would: CWD is the install dir.
+            try:
+                subprocess.Popen(
+                    [str(exe)], cwd=str(install_dir),
+                    creationflags=0x00000008 | 0x00000200,  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                note(f"relaunched {exe}")
+            except OSError as exc:
+                note(f"relaunch failed ({exc}) — opening install folder instead")
+                try:
+                    subprocess.Popen(["explorer", str(install_dir)])
+                except OSError:
+                    pass
+        else:
+            # Staged by an earlier session — the user closed DR3 normally, so
+            # just point at the new install (legacy behavior).
+            try:
+                subprocess.Popen(["explorer", str(install_dir)])
+                note("install folder opened in Explorer")
+            except OSError as exc:
+                note(f"could not open install folder: {exc}")
     return rc
 
 
@@ -1177,8 +1292,9 @@ def run_gui():
 
     # --- Auto-updater (backlog #51) ---
     # Gold bar above the tabs. Installed Windows builds: a newer version is
-    # downloaded automatically and installed by a detached child on exit (see
-    # _apply_update / _run_apply_update). Source runs keep the old
+    # downloaded automatically; when the download lands the app closes itself
+    # and a detached child swaps the install on exit + relaunches DR3.exe
+    # (see _apply_update / _run_apply_update). Source runs keep the old
     # click-to-download banner. The bar is only clickable in the manual
     # fallback state — while downloading or ready there is nothing to fetch,
     # so clicking does nothing.
@@ -1187,7 +1303,13 @@ def run_gui():
     update_label = tk.Label(update_bar, text="", font=(UI_FONT, 9, "bold"),
                             fg=BG, bg=GOLD, cursor="hand2")
     update_label.pack(padx=10, pady=4)
-    update_state = {"mode": "idle"}  # idle | downloading | ready | manual
+    update_state = {
+        "mode": "idle",          # idle | downloading | ready | manual
+        "pending": False,         # an update is being fetched/installed
+        "first_check_done": False,  # the startup check finished (any outcome)
+        "autoclose_at": None,     # epoch s when the app closes to install
+        "relaunch_after_install": False,  # this session downloaded the zip
+    }
 
     def _set_update_bar(text: str, url: Optional[str] = None):
         def show():
@@ -1233,8 +1355,10 @@ def run_gui():
                 return
             staged = _staged_update()
             if staged and staged[1] == remote:
-                # Nothing to fetch — the install happens on exit, so the bar
-                # is informational only (no click action).
+                # Staged by an EARLIER session (this one only auto-closes for
+                # downloads it fetched itself — a repeatedly failing install
+                # must not loop close->install). The install happens on exit,
+                # so the bar is informational only (no click action).
                 update_state["mode"] = "ready"
                 _set_update_bar(
                     f"Update v{remote_tag} ready — installs when DR3 closes")
@@ -1248,6 +1372,7 @@ def run_gui():
                 path = _download_update(dl_url, remote_tag, on_progress)
                 if path is None:
                     update_state["mode"] = "manual"
+                    update_state["pending"] = False
                     _set_update_bar(manual_text, dl_url)
                     return
                 # Only the newest staged zip can install — drop older ones.
@@ -1258,13 +1383,22 @@ def run_gui():
                         except OSError:
                             pass
                 update_state["mode"] = "ready"
+                # The download landed in THIS session — close shortly so the
+                # detached child can swap + relaunch (auto-start applies in
+                # the new instance). A failed download clears `pending` so a
+                # gated auto-start is not held hostage by a bad update.
+                update_state["relaunch_after_install"] = True
+                update_state["autoclose_at"] = time.time() + 2.0
                 _set_update_bar(
-                    f"Update v{remote_tag} ready — installs when DR3 closes")
+                    f"Update v{remote_tag} ready — closing to install")
 
             update_state["mode"] = "downloading"
+            update_state["pending"] = True
             threading.Thread(target=download, daemon=True).start()
         except Exception:
             pass  # Silent fail — update check is best-effort
+        finally:
+            update_state["first_check_done"] = True
 
     update_tick = {"id": None}
 
@@ -1275,6 +1409,36 @@ def run_gui():
 
     threading.Thread(target=_check_for_updates, daemon=True).start()
     update_tick["id"] = root.after(UPDATE_CHECK_INTERVAL_MS, _update_check_tick)
+
+    # A download that lands while the app is open ends in a self-close: the
+    # detached child then swaps the install after exit and relaunches DR3.exe,
+    # so an auto-start user lands back in the new version untouched. (The
+    # names resolved at call time — closing/_stop_cleanup/log are defined
+    # further down in run_gui, all before mainloop runs.)
+    update_autoclose_tick = {"id": None}
+
+    def _close_for_update():
+        if closing["in_progress"]:
+            return
+        log("Update downloaded — closing to install it. DR3 will reopen shortly.")
+        if server_running.is_set():
+            # Same stop flow as the STOP button — restores hosts, then closes.
+            closing["in_progress"] = True
+            stop_btn.configure(state="disabled")
+            shutdown_flag.set()
+            _stop_cleanup(_finish_close)
+        else:
+            _finish_close()
+
+    def _update_autoclose_poll():
+        at = update_state.get("autoclose_at")
+        if at is not None and time.time() >= at:
+            update_state["autoclose_at"] = None
+            _close_for_update()
+            return
+        update_autoclose_tick["id"] = root.after(1000, _update_autoclose_poll)
+
+    update_autoclose_tick["id"] = root.after(1000, _update_autoclose_poll)
 
     # --- Tabbed layout (each tab is scrollable so long content stays
     #     reachable at the fixed window size) ---
@@ -2405,23 +2569,46 @@ def run_gui():
     # Auto-click START when we were just relaunched after a successful setcap,
     # or when the "start automatically" option is on AND a token is set (it's
     # off by default on a fresh install). on_start disables the START button
-    # first, so a manual click can't double-start.
+    # first, so a manual click can't double-start. An update that is still
+    # downloading at boot holds auto-start until it settles: if it lands, the
+    # app self-closes to install + relaunch instead (the new instance then
+    # auto-starts on its own).
     if os.environ.pop("DR3_AUTO_START", "") == "1" \
             or (config.get("auto_start_server", False) and config.get("game_token")):
-        root.after(800, on_start)
+
+        def _auto_start_gate():
+            deadline = time.time() + 30.0
+            while not update_state.get("first_check_done") \
+                    and time.time() < deadline:
+                time.sleep(0.2)
+            while update_state.get("pending") and time.time() < deadline:
+                time.sleep(0.5)
+            if update_state.get("pending") or update_state.get("autoclose_at") is not None:
+                log("Update in progress — skipping auto-start; DR3 will reopen after the install.")
+                return
+            root.after(0, on_start)
+
+        threading.Thread(target=_auto_start_gate, daemon=True).start()
 
     def _spawn_update_on_exit():
         """Hand a staged update to a detached child that swaps the install
-        folder once this process has fully exited (backlog #51)."""
+        folder once this process has fully exited (backlog #51). The `relaunch`
+        arg is only passed when THIS session downloaded the zip — then the
+        close was an install restart, so the child starts the new DR3.exe;
+        otherwise (stale zip from a failed earlier attempt) it just points at
+        the install folder."""
         staged = _staged_update()
         install_dir = _install_dir()
         if not staged or install_dir is None:
             return
         zip_path, ver = staged
+        args = [*_self_invocation_args(), "--apply-update", str(zip_path),
+                str(os.getpid())]
+        if update_state.get("relaunch_after_install"):
+            args.append("relaunch")
         try:
             subprocess.Popen(
-                [*_self_invocation_args(), "--apply-update", str(zip_path),
-                 str(os.getpid())],
+                args,
                 creationflags=(0x00000008 | 0x00000200) if IS_WIN else 0,
                 # Windows refuses to rename a directory that is any process's
                 # current working directory — the GUI's CWD is usually the
@@ -2441,7 +2628,7 @@ def run_gui():
         # Cancel the pending status-tick so teardown has no queued callback
         # left (Tkinter prints a Tcl error for events that outlive their
         # Python wrapper).
-        for tick in (tel_tick, update_tick):
+        for tick in (tel_tick, update_tick, update_autoclose_tick):
             if tick["id"] is not None:
                 try:
                     root.after_cancel(tick["id"])
@@ -2546,7 +2733,17 @@ if __name__ == "__main__":
     # the parent GUI is still alive holding debug.log open, and rotating it
     # here would scatter the tail of the parent session into debug.prev.log.
     if len(sys.argv) >= 4 and sys.argv[1] == "--apply-update":
-        sys.exit(_run_apply_update(sys.argv[2], sys.argv[3]))
+        sys.exit(_run_apply_update(
+            sys.argv[2], sys.argv[3],
+            len(sys.argv) >= 5 and sys.argv[4] == "relaunch"))
+    # Single instance: a duplicate launch focuses the running client and
+    # exits. Runs BEFORE _setup_file_logging on purpose — rotating debug.log
+    # here would scatter the live session into debug.prev.log; the two child
+    # branches above already bypass it.
+    if not _acquire_single_instance_lock():
+        print("[DR3] another instance is already running — focusing it")
+        _focus_existing_instance()
+        sys.exit(0)
     _setup_file_logging()
     # Elevated-helper entry: when re-launched via UAC/pkexec with
     # `--admin-helper <op>`, do the privileged work and exit before
