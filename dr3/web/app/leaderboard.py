@@ -282,22 +282,23 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
             'conditions_label': cond_label,
         })
     # Split columns: rally stages follow the game's max-time limit (15 min ->
-    # 4 sectors, 30 min -> 8); RX limits are per-lap and need event context the
-    # site-wide board doesn't have, so unknown counts mirror the longest splits
-    # actually recorded on this stage, defaulting to the common 4-sector shape
-    # (the club board's fallback).
+    # 4 sectors, 30 min -> 8). The RX board is about the best LAP — an RX event
+    # can be anything from 2 to 12 laps, so there is no meaningful split shape
+    # here and the columns are omitted entirely.
     is_rx = False
     try:
         is_rx = Track(int(track)).location.display_name in RX_LOCATIONS
     except (ValueError, TypeError):
         pass
     split_count: int | None = None
-    if not is_rx:
+    if is_rx:
+        split_count = 0
+    else:
         limit = stage_limit_ms(int(track))
         split_count = split_count_for_limit(limit) if limit else None
-    if not split_count:
-        split_count = max((len(r['splits']) for r in raw if r.get('splits')),
-                          default=4)
+        if not split_count:
+            split_count = max((len(r['splits']) for r in raw if r.get('splits')),
+                              default=4)
 
     raw.sort(key=lambda r: (r['time_ms'], r['username']))
     leader = raw[0]['time_ms'] if raw else None

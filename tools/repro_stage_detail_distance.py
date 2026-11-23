@@ -218,7 +218,9 @@ def test_tt_timeout_flush_e2e(app, posts):
     app.dispatcher._stash_posttime_distance(565, 4550)
     buf = app.stage_detail
     old_timeout = buf.FLUSH_TIMEOUT_S
+    old_tt_timeout = buf.TT_FLUSH_TIMEOUT_S
     buf.FLUSH_TIMEOUT_S = 0.3
+    buf.TT_FLUSH_TIMEOUT_S = 0.3  # TT records use the longer timeout by default
     try:
         dm = {
             "challenge_id": 0, "event_index": 0, "stage_index": 0,
@@ -234,6 +236,7 @@ def test_tt_timeout_flush_e2e(app, posts):
         buf.feed_datamining(dm)
     finally:
         buf.FLUSH_TIMEOUT_S = old_timeout
+        buf.TT_FLUSH_TIMEOUT_S = old_tt_timeout
 
     deadline = time.time() + 5.0
     while not posts and time.time() < deadline:

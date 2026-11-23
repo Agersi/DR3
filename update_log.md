@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.83**
+- Rallycross stages no longer record a huge fake penalty after finishing, and their lap times are now correct.
+
 **v0.1.82**
 - Opening DR3 while it's already running now just brings the open window to the front. Updates install themselves: DR3 closes briefly, updates, and reopens on its own.
 

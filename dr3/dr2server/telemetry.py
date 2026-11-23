@@ -72,8 +72,11 @@ PENALTY_JUMP_S = 4.0
 
 # Keep only the most recent completed runs. A run is claimed by take_*() right
 # after its stage closes, so a small ring is enough; it bounds memory if a run
-# goes unclaimed (e.g. a DNF that never produces a clean StageComplete).
-_MAX_COMPLETED = 6
+# goes unclaimed (e.g. a DNF that never produces a clean StageComplete). On a
+# multi-lap circuit one run is produced per lap, and the whole set is claimed
+# only at the final StageComplete — the ring must hold a full stage's laps
+# (12 observed) plus margin.
+_MAX_COMPLETED = 32
 
 
 # ---------------------------------------------------------------------------
@@ -594,6 +597,19 @@ class TelemetryListener:
                 if self._completed[i].finish_wall >= cutoff:
                     return self._completed.pop(i)
         return None
+
+    def take_runs_since(self, since_wall: float, margin: float = 1.0) -> List[StageRun]:
+        """Claim and return EVERY completed run that FINISHED at or after
+        ``since_wall`` (a small margin absorbs clock skew), oldest first. Empty
+        when none exist. On a multi-lap circuit whose distance counter resets
+        at the line, one run is produced per lap — this is how a whole stage's
+        laps are claimed together at its StageComplete."""
+        cutoff = since_wall - margin
+        with self._lock:
+            taken = [r for r in self._completed if r.finish_wall >= cutoff]
+            self._completed = [r for r in self._completed
+                               if r.finish_wall < cutoff]
+        return taken
 
     def take_latest_completed(self) -> Optional[StageRun]:
         """Claim and return the most recent completed run (any start time)."""

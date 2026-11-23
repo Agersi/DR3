@@ -34,6 +34,13 @@ Handler = Callable[[Dict[str, Any]], Union[Dict[str, Any], bytes]]
 # one constant governs both penalty sources.
 PENALTY_FLOOR_MS = int(PENALTY_JUMP_S * 1000)
 
+# Multi-lap stages: max |reported total - sum of per-lap clocks| (ms) for the
+# claimed lap set to be trusted. Clock drift is sub-second; a real report-time
+# addition (service over-time) stays far below one lap; a MISSING lap opens a
+# gap of at least a full lap (~45s on the shortest circuit), so anything above
+# this means telemetry dropped laps and must not be turned into a penalty.
+_MULTI_LAP_SUM_TOL_MS = 30_000
+
 # Sentinel to indicate the handler returned raw EgoNet binary bytes
 # that should be sent directly without re-encoding.
 RAW_BINARY_MARKER = "__raw_binary__"
@@ -3639,21 +3646,46 @@ class RpcDispatcher:
         flat_index = None
         penalties_ms = 0
         if event_id and self.api_client is not None and finished_cleanly:
-            run = (self.telemetry.take_run_since(self._telemetry_arm_wall)
-                   if self.telemetry is not None else None)
-            if run is None and self.telemetry is not None:
+            runs = (self.telemetry.take_runs_since(self._telemetry_arm_wall)
+                    if self.telemetry is not None else [])
+            if not runs and self.telemetry is not None:
                 self._warn_no_telemetry()
-            try:
-                splits = self._compute_stage_splits(
-                    event_id, sub_index, req.stage_index, time_ms, run)
-            except Exception as exc:
-                print(f"[STAGE] split computation raised: {exc}")
             flat_index = (self._stage_offset(event_id, sub_index)
                           + req.stage_index)
-            try:
-                penalties_ms = self._stage_penalty_ms(run, time_ms)
-            except Exception as exc:
-                print(f"[STAGE] penalty detection raised: {exc}")
+            if len(runs) > 1:
+                # Multi-lap circuit (rallycross): one telemetry run per lap.
+                # The splits are the per-lap stage clocks — the game records
+                # each lap as its own single-lap best, and the clock at the
+                # line crossing equals the official lap time. The reported
+                # total covers EVERY lap, so a penalty measured against one
+                # lap's finish clock would fabricate ~total-minus-lap; it is
+                # measured against the sum of all laps instead. A sum that
+                # falls well short of the reported total means laps went
+                # unrecorded — refusing beats inventing a penalty from the gap.
+                laps_s = [round(r.total_time_s, 3) for r in runs]
+                lap_sum_ms = int(round(sum(r.total_time_s for r in runs) * 1000))
+                if abs(time_ms - lap_sum_ms) <= _MULTI_LAP_SUM_TOL_MS:
+                    splits = laps_s
+                    try:
+                        penalties_ms = self._stage_penalty_ms_multi(runs, time_ms)
+                    except Exception as exc:
+                        print(f"[STAGE] penalty detection raised: {exc}")
+                else:
+                    print(f"[STAGE] multi-lap telemetry incomplete "
+                          f"({len(runs)} laps summing to {lap_sum_ms / 1000.0:.3f}s "
+                          f"vs reported {time_ms / 1000.0:.3f}s); no splits, "
+                          "no penalty")
+            else:
+                run = runs[0] if runs else None
+                try:
+                    splits = self._compute_stage_splits(
+                        event_id, sub_index, req.stage_index, time_ms, run)
+                except Exception as exc:
+                    print(f"[STAGE] split computation raised: {exc}")
+                try:
+                    penalties_ms = self._stage_penalty_ms(run, time_ms)
+                except Exception as exc:
+                    print(f"[STAGE] penalty detection raised: {exc}")
 
         # Per-stage run detail: feed the RPC half of the merge (the StageEnded
         # snapshot half arrives from httpd under the same key). Clean finishes
@@ -4088,6 +4120,27 @@ class RpcDispatcher:
             print(f"[STAGE] penalties {total}ms (in-run jumps {in_run_ms}ms, "
                   f"report-time {report_time_ms}ms; finish clock "
                   f"{run.total_time_s:.3f}s vs reported {time_ms / 1000.0:.3f}s)")
+        return total
+
+    def _stage_penalty_ms_multi(self, runs: List[StageRun], time_ms: int) -> int:
+        """Penalty for a multi-lap stage from its per-lap telemetry runs — the
+        same two sources as _stage_penalty_ms, summed over every lap: in-run
+        clock jumps (each lap accumulates its own) plus the report-time excess
+        of the reported total over the SUM of the laps' finish clocks (the
+        single-run floor applies to that excess)."""
+        if not runs or time_ms <= 0:
+            return 0
+        in_run_ms = int(round(sum(r.penalty_s for r in runs) * 1000))
+        finish_clock_ms = int(round(sum(r.total_time_s for r in runs) * 1000))
+        report_time_ms = max(0, time_ms - finish_clock_ms)
+        if report_time_ms < PENALTY_FLOOR_MS:
+            report_time_ms = 0
+        total = in_run_ms + report_time_ms
+        if total > 0:
+            print(f"[STAGE] penalties {total}ms (in-run jumps {in_run_ms}ms, "
+                  f"report-time {report_time_ms}ms; lap clocks sum "
+                  f"{finish_clock_ms / 1000.0:.3f}s vs reported "
+                  f"{time_ms / 1000.0:.3f}s)")
         return total
 
     def _compute_stage_splits(self, event_id: str, sub_index: int,

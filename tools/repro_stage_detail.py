@@ -428,6 +428,9 @@ def test_posttime_splits_e2e():
         def take_run_since(self, wall):
             return self.run
 
+        def take_runs_since(self, wall):
+            return [self.run] if self.run is not None else []
+
     app.dispatcher.telemetry = _Tel()
 
     handler = httpd.RequestHandler.__new__(httpd.RequestHandler)

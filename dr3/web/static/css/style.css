@@ -448,7 +448,7 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .drivers-box { max-height: none; overflow-y: visible; }
 .drivers-box th:nth-child(2), .drivers-box td:nth-child(2) { width: 6rem; }
 .drivers-box th:nth-child(3), .drivers-box td:nth-child(3) { width: 6rem; }
-.drivers-box th:nth-child(4), .drivers-box td:nth-child(4) { width: 7rem; padding-right: .5rem; }
+.drivers-box th:nth-child(4), .drivers-box td:nth-child(4) { width: 7rem; }
 .recent-box.drivers-box .num { text-align: right; }
 .flag { height: .95em; width: auto; vertical-align: -0.18em; margin-right: 0.3em; }
 
@@ -512,7 +512,6 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .club-champs th:nth-child(2), .club-champs td:nth-child(2) { text-align: center; }
 .club-champs .btn.danger.small { padding: .25rem; margin: .1rem; font-size: .75rem; float: right; }
 .club-members th:first-child, .club-champs th:first-child, .club-members td:first-child, .club-champs td:first-child { padding-left: .5rem; }
-.club-members th:last-child, .club-champs th:last-child, .club-members td:last-child, .club-champs td:last-child { padding-right: .5rem; }
 .club-members thead th:first-child { padding-left: calc(40px + .5rem); }
 .club-members th:nth-child(2), .club-members td:nth-child(2) { text-align: center; }
 .club-members form.inline { float: right; margin: .1rem; }
@@ -534,10 +533,10 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .car-fastest-duo { display: flex; gap: 1rem; flex-wrap: wrap; }
 .car-fastest-col { flex: 1 1 240px; min-width: 0; }
 .car-fastest th:first-child, .car-fastest td:first-child { padding-left: .5rem; }
-.car-fastest th:last-child, .car-fastest td:last-child { width: 4rem; text-align: center; padding-right: .5rem; }
+.car-fastest th:last-child, .car-fastest td:last-child { width: 4rem; text-align: center; }
 .car-distance th:first-child, .car-distance td:first-child { padding-left: .5rem; }
 .car-distance thead th:first-child { padding-left: calc(40px + .5rem); }
-.car-distance th:last-child, .car-distance td:last-child { text-align: right; padding-right: .5rem; }
+.car-distance th:last-child, .car-distance td:last-child { text-align: right; }
 .car-fastest tbody tr.fastest-row { cursor: pointer; font-weight: 600; user-select: none; }
 .car-fastest tbody tr.fastest-row:hover td { background: rgba(24, 28, 20, 0.18); }
 .car-fastest tr:nth-child(even) td { background: transparent; }
@@ -883,7 +882,9 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .splits-row td { background: var(--bg); color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 #lb-board-table .diff-col { width: 5.5rem; }
 #lb-board-table .src-cell { text-align: center; }
-#lb-board-table tr > :last-child { padding-right: 0.5rem; }
+table th:last-child, table td:last-child { padding-right: .5rem; }
+.car-fastest tr.fastest-detail td:last-child { padding-right: 0; }
+#lb-board-table .car-col { width: 14rem; }
 .board-empty td { text-align: center; color: var(--muted); padding: 1rem; }
 
 .standings-title { margin-top: 1.6rem; font-size: 1.15rem; }

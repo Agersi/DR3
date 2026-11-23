@@ -106,6 +106,10 @@ class FakeTelemetry:
         self.claims += 1
         return self.run
 
+    def take_runs_since(self, wall):
+        self.claims += 1
+        return [self.run] if self.run is not None else []
+
 
 def make_dispatcher(telemetry=None, last_tt=(107, 636, 5, 2)):
     store = AccountStore(Path(r"D:\CODE\DR2\build\tt_club_skip_accounts") / "u")

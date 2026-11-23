@@ -618,6 +618,9 @@ def event_board(event: dict, round_index: int, mode: str,
             limit = stage_limit_ms(tid) if tid else 0
             split_count = split_count_for_limit(limit) if limit else None
 
+    if info is not None and is_rx and split_count:
+        info['laps'] = split_count
+
     entries = entries_for_event(event['id'])
     entries_by_user = {e.get('username'): e for e in entries}
     runs_by_user = _stage_runs_by_user(event['id'])

@@ -36,7 +36,8 @@ from .events import (
 )
 from .models import Club, ClubMember, GameToken, StageRun, TimeTrialEntry, User, utcnow
 from .scoring import car_label, championship_points, overall_rank_key
-from .tables import normalize_championship
+from .tables import RX_LOCATIONS, normalize_championship
+from dr2server.game_data import Track
 
 game_api_bp = Blueprint('game_api', __name__)
 
@@ -442,6 +443,34 @@ def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
         db.session.delete(vessel)
 
 
+# Rallycross best rows are single-lap PostTime records — no stage-run row ever
+# exists for an individual lap, so _upsert_best can never point them at the run
+# that drove it. Tolerance for matching a stored lap against one of the
+# finishing run's per-lap times when stamping its run_id (the game's own
+# PostTime floats, exact to the ms apart from scaling rounding).
+_RX_LAP_MATCH_MS = 250
+
+
+def _stamp_rx_run_id(username: str, vehicle_id: int, track_model_id: int,
+                     conditions: str, laps_s: list | None, run_id: int) -> None:
+    """Point every still-unattributed best row in the group at the run that
+    drove its stored lap time (within _RX_LAP_MATCH_MS). laps_s are per-lap
+    times in seconds (the splits_json convention); rows store ms. Rows already
+    pointing at a run are left alone — their payload may belong to an older
+    run whose lap merely landed within tolerance of this one."""
+    if not laps_s:
+        return
+    for row in db.session.query(TimeTrialEntry).filter(
+            TimeTrialEntry.username == username,
+            TimeTrialEntry.vehicle_id == vehicle_id,
+            TimeTrialEntry.track == str(track_model_id)[:8],
+            TimeTrialEntry.conditions == str(conditions)[:8],
+            TimeTrialEntry.run_id.is_(None)).all():
+        if any(abs((row.stage_time_ms or 0) - lap * 1000) <= _RX_LAP_MATCH_MS
+               for lap in laps_s):
+            row.run_id = run_id
+
+
 @game_api_bp.route('/api/game/stage-complete', methods=['POST'])
 @csrf.exempt  # type: ignore[untyped-decorator]
 @game_auth_required
@@ -708,12 +737,15 @@ def api_game_stage_detail():
 
     # Distance: the RPC's per-stage integer is exact (MetersDriven is cumulative
     # across stages, so it is never a source); fall back to the camera-metres
-    # sum. DNF close-outs carry stale/cumulative values on both channels, so
-    # their partial distances are not trusted. A DNF can arrive as an RPC-only
-    # half (no snapshot), in which case the RPC's own race flags carry it.
+    # sum. DNF close-outs carry their genuine partial values — an RPC-only half
+    # (no snapshot) simply has none and stays None naturally.
     end_status = _int('player_end_status') or 0
     race_status = _int('race_status')
-    is_dnf = (end_status != 0
+    player_finished = _bool('player_finished')
+    # Lapped rallycross finishes report player_end_status 10/48/77 while still
+    # finished; every real DNF carries player_finished=0, so the end-status code
+    # only counts when the game says the driver did not finish.
+    is_dnf = ((end_status != 0 and not player_finished)
               or (race_status is not None and race_status != 0)
               or bool(data.get('recov_to_service')))
     distance_m = _int('distance_driven') or 0
@@ -723,7 +755,8 @@ def api_game_stage_detail():
                 'metres_cam_bonnet', 'metres_cam_bumper', 'metres_cam_chase_close',
                 'metres_cam_chase_far', 'metres_cam_dash', 'metres_cam_head',
             ))))
-    if is_dnf:
+    if distance_m == 0:
+        # No channel reported a value (a half that never carried any) — unknown.
         distance_m = None
 
     # Source type from the snapshot's challenge_type (-1 TT / 1 official / 2 club).
@@ -795,11 +828,10 @@ def api_game_stage_detail():
         'chase_far': fields['cam_chase_far_m'],
         'dash': fields['cam_dash_m'], 'head': fields['cam_head_m'],
     }
-    # DNF close-outs carry stale camera state (same as their distances), so the
-    # active camera is only trusted on clean finishes.
+    # The camera that accumulated the most metres this stage is the active one;
+    # an RPC-only half (no snapshot) has none and stays None.
     fields['camera_position'] = (max(cam_metres, key=cam_metres.get)
-                                  if not is_dnf and any(cam_metres.values())
-                                  else None)
+                                  if any(cam_metres.values()) else None)
 
     # The game can retransmit a StageComplete (observed at +15 s); when the
     # client buffer's timeout flushes a half row in between, one run arrives
@@ -854,6 +886,18 @@ def api_game_stage_detail():
             tyre_compound=fields['tyre_compound'],
             splits=json.loads(fields['splits_json']) if fields['splits_json'] else None,
             run_id=run_row.id)
+        # Rallycross: the best row is a single lap with no stage-run of its own —
+        # point it at this run when one of this run's laps set the record.
+        try:
+            loc = Track(int(fields['track_model_id'])).location
+        except (ValueError, TypeError):
+            loc = None
+        if loc is not None and loc.display_name in RX_LOCATIONS:
+            _stamp_rx_run_id(
+                user.username, fields['vehicle_id'], fields['track_model_id'],
+                fields['conditions_id'] or '0',
+                json.loads(fields['splits_json']) if fields['splits_json'] else None,
+                run_row.id)
     db.session.commit()
 
     return jsonify({'ok': True})

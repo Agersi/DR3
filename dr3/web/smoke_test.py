@@ -612,8 +612,8 @@ def main() -> int:
     })
     check('stage-detail merged-after-half ok', (r.get_json() or {}).get('ok') is True)
 
-    # DNF close-out: untrusted distance dropped; unknown source + event_id
-    # resolves to club.
+    # DNF close-out: the per-stage distance + camera are genuine partial
+    # values and are kept; unknown source + event_id resolves to club.
     r = client.post('/api/game/stage-detail', headers=headers, json={
         'challenge_id': 900004, 'event_index': 0, 'stage_index': 3,
         'vehicle_id': 565, 'event_id': 'evt-smoke', 'player_finished': False,
@@ -639,12 +639,13 @@ def main() -> int:
           _h is not None and _h.track_id == 636 and _h.input_name == 'Simucube 2 Pro'
           and _h.player_finished is True, f'row={_h}')
     _d = _by_slot.get((900004, 3))
-    check('stage-detail: DNF row drops untrusted distance, club source',
-          _d is not None and _d.distance_m is None and _d.source_type == 'club'
-          and _d.player_end_status == 5, f'row={_d}')
+    check('stage-detail: DNF row keeps its per-stage distance + camera, club source',
+          _d is not None and _d.distance_m == 228330 and _d.source_type == 'club'
+          and _d.player_end_status == 5 and _d.camera_position == 'head',
+          f'row={_d}')
 
-    # RPC-only DNF half (no snapshot arrived): the RPC's own race flags must
-    # still drop the stale cumulative distance + camera.
+    # RPC-only DNF half (no snapshot arrived): the RPC's per-stage distance +
+    # its camera metres are still genuine partial values.
     r = client.post('/api/game/stage-detail', headers=headers, json={
         'challenge_id': 900005, 'event_index': 1, 'stage_index': 4,
         'vehicle_id': 565, 'event_id': 'evt-smoke', 'race_status': 5,
@@ -657,9 +658,9 @@ def main() -> int:
         _d2 = (db.session.query(StageRun)
                .filter_by(username='smokedriver', challenge_id=900005,
                           stage_index=4).first())
-    check('stage-detail: rpc-only DNF drops distance + camera via race flags',
-          _d2 is not None and _d2.distance_m is None
-          and _d2.camera_position is None and _d2.player_finished is False,
+    check('stage-detail: rpc-only DNF keeps its per-stage distance + camera',
+          _d2 is not None and _d2.distance_m == 32120
+          and _d2.camera_position == 'bonnet' and _d2.player_finished is False,
           f'row={_d2}')
 
     # A clean stage-detail finish files the driver's personal best for car +

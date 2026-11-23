@@ -53,7 +53,7 @@ def main() -> int:
     check('leaderboard: filter form + times board headers + hydration script',
           '<form class="panel lb-filters" method="get"' in lb_html
           and 'id="lb-board-table"' in lb_html
-          and '<th>Car</th><th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th class="src-cell">Source</th>' in lb_html
+          and '<th class="car-col">Car</th><th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th class="src-cell">Source</th>' in lb_html
           and "tbody.querySelectorAll('tr').forEach(applyTuning);" in lb_html, '')
     # stage=11 has smokedriver bests: car 2 with splits [101.0, 100.5], car 9
     # without — exercises both the value cells and the club-board fallback.
@@ -73,14 +73,14 @@ def main() -> int:
           and '<option value="">All cars</option>' in lb_html
           and 'id="lb-more-btn"' in lb_html
           and 'class="lb-extra-inner"' in lb_html
-          and '<th>Car</th>' not in client.get('/leaderboard?car=999999').get_data(as_text=True), '')
+          and '<th class="car-col">Car</th>' not in client.get('/leaderboard?car=999999').get_data(as_text=True), '')
     from dr2server.game_data import VEHICLE_CLASSES as _VCS
     _cls_cid = next(iter(_VCS))
     check('leaderboard: class options select every car of the class',
           'value="class-' in lb_html
           and '(all cars)' in lb_html
           and client.get('/leaderboard?car=class-999999').status_code == 200
-          and '<th>Car</th>' in client.get(f'/leaderboard?car=class-{_cls_cid}').get_data(as_text=True), '')
+          and '<th class="car-col">Car</th>' in client.get(f'/leaderboard?car=class-{_cls_cid}').get_data(as_text=True), '')
     # strict tag equality: a stray char after `selected` (e.g. `selected}`)
     # silently kills the default selection in browsers
     check('leaderboard: car/class selection renders a clean selected attribute',
@@ -104,7 +104,8 @@ def main() -> int:
     check('leaderboard: diff-col width + centered source + popup weather line (CSS)',
           '#lb-board-table .diff-col { width: 5.5rem; }' in lb_css
           and '#lb-board-table .src-cell { text-align: center; }' in lb_css
-          and '.dmg-cond { margin-top: 0.6rem;' in lb_css, '')
+          and '.dmg-cond { margin-top: 0.6rem;' in lb_css
+          and '#lb-board-table .car-col { width: 14rem; }' in lb_css, '')
 
     # clubs list: filter form + partial reload (only the results section swaps)
     html = client.get('/clubs').get_data(as_text=True)
@@ -235,10 +236,12 @@ def main() -> int:
           '<h2>Distance by User</h2>' in r.get_data(as_text=True)
           and 'Total distance driven in this car, per driver.' not in r.get_data(as_text=True)
           and '.car-fastest th:first-child, .car-fastest td:first-child { padding-left: .5rem; }' in css
-          and '.car-fastest th:last-child, .car-fastest td:last-child { width: 4rem; text-align: center; padding-right: .5rem; }' in css
+          and '.car-fastest th:last-child, .car-fastest td:last-child { width: 4rem; text-align: center; }' in css
           and '.car-distance th:first-child, .car-distance td:first-child { padding-left: .5rem; }' in css
           and '.car-distance thead th:first-child { padding-left: calc(40px + .5rem); }' in css
-          and '.car-distance th:last-child, .car-distance td:last-child { text-align: right; padding-right: .5rem; }' in css, '')
+          and '.car-distance th:last-child, .car-distance td:last-child { text-align: right; }' in css
+          and 'table th:last-child, table td:last-child { padding-right: .5rem; }' in css
+          and '.car-fastest tr.fastest-detail td:last-child { padding-right: 0; }' in css, '')
     check('car page fastest tables: rows expand to stage names (one row per stage, animated)',
           'class="fastest-row"' in r.get_data(as_text=True)
           and '<tr class="fastest-detail"><td colspan="2"><div class="fd-wrap"><div class="fd-inner">Tolt Valley Sprint Forward</div></div></td></tr>' in r.get_data(as_text=True)
@@ -343,10 +346,11 @@ def main() -> int:
           and '<th class="num">Stages driven</th><th class="num">Stages completed</th><th class="num">Distance</th>' in drv_html,
           f'status={r.status_code}')
     # #56: /drivers stats are computed from stage_runs (the stored users
-    # counters are retired) — the smoke driver's clean rows (48210 + 1200 m)
-    # are what shows up, not the old double-counted user columns.
+    # counters are retired) — the smoke driver's rows (48210 + 1200 m clean,
+    # plus the two DNF close-outs' genuine partials 228330 + 32120 m) are what
+    # shows up, not the old double-counted user columns.
     check('drivers page: distance comes from stage_runs (#56)',
-          '49.4 km' in drv_html, '')
+          '309.9 km' in drv_html, '')
     # Stages completed is a % (4 of the smoke driver's 7 runs finished — the
     # board-cum fixture adds two clean rows for the car-resolution check).
     check('drivers page: stages completed shown as a percentage',
@@ -531,7 +535,7 @@ def main() -> int:
               and '</tbody>' in det
               and '.club-members .num, .club-champs .num { text-align: right; font-variant-numeric: tabular-nums; }' in board_css
               and '.club-members th:first-child, .club-champs th:first-child, .club-members td:first-child, .club-champs td:first-child { padding-left: .5rem; }' in board_css
-              and '.club-members th:last-child, .club-champs th:last-child, .club-members td:last-child, .club-champs td:last-child { padding-right: .5rem; }' in board_css
+              and 'table th:last-child, table td:last-child { padding-right: .5rem; }' in board_css
               and '.club-members thead th:first-child { padding-left: calc(40px + .5rem); }' in board_css
               and '.club-members th:nth-child(2), .club-members td:nth-child(2) { text-align: center; }' in board_css
               and '.club-members form.inline { float: right; margin: .1rem; }' in board_css
