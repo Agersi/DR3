@@ -77,7 +77,8 @@ def main() -> int:
           '.lb-filters { margin-bottom: 0.6rem; padding: 1rem; }' in lb_css
           and           '.lb-filter-row { display: flex; gap: 0.9rem; flex-wrap: wrap; }' in lb_css
           and '.lb-mode-toggle label:has(input:checked) { background: var(--accent); color: var(--bg); }' in lb_css
-          and '.lb-filters-btn { margin: 0; padding: .5rem .4rem; align-self: flex-end; }' in lb_css, '')
+          and '.lb-filters-btn { margin: 0 0 .2rem 0; padding: .2rem .53rem; align-self: flex-end; font-size: .9rem; }' in lb_css
+          and '.lb-filters .cselect-btn { position: relative; width: 100%; padding: 0.5rem 2.1rem 0.5rem 0.6rem;' in lb_css, '')
     check('leaderboard: stage/car select widths + animated extra row (grid 0fr->1fr)',
           '.lb-filter-row .cselect:has(select[name=stage]), .lb-filter-row .cselect:has(select[name=car]) { width: 24rem; }' in lb_css
           and '.lb-extra-row { display: grid; grid-template-rows: 0fr; margin-top: 0; transition: grid-template-rows 0.15s ease; }' in lb_css
