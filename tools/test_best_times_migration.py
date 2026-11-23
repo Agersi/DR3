@@ -129,6 +129,37 @@ def main() -> int:
                    and {u: r.tyre_compound for u, r in first.items()}
                    == {u: r.tyre_compound for u, r in second.items()}))
 
+    # Scenario B (production 2026-11-23): a DB that already went through the
+    # compound migration but predates run_id. The compound backfill full-SELECTs
+    # TimeTrialEntry rows (which now carry run_id), so the run_id column must be
+    # added BEFORE it runs — with the wrong order the boot crashes with
+    # "Unknown column 'best_times.run_id'". carol's zero row keeps the
+    # backfill path active.
+    eng3 = create_engine(f'sqlite:///{db_path}')
+    with eng3.begin() as conn:
+        conn.execute(text('DROP INDEX IF EXISTS ix_best_times_run_id'))
+        conn.execute(text('ALTER TABLE best_times DROP COLUMN run_id'))
+    eng3.dispose()
+    try:
+        third = best_rows()  # boot 3 — the migrations must re-add run_id
+        with create_app().app_context():
+            cols_b = {c['name'] for c in
+                      db.inspect(db.engine).get_columns('best_times')}
+            ix_b = {ix['name']: tuple(ix['column_names'])
+                    for ix in db.inspect(db.engine).get_indexes('best_times')}
+    except Exception as e:  # noqa: BLE001 — a boot crash is the failure mode
+        checks.append(('run_id migration precedes the compound backfill '
+                       f'(boot crashed: {type(e).__name__}: {e})', False))
+    else:
+        checks.extend([
+            ('run_id migration precedes the compound backfill (boot ok)', True),
+            ('run_id column + index re-added on boot 3',
+             'run_id' in cols_b and ix_b.get('ix_best_times_run_id') == ('run_id',)),
+            ('scenario B data intact (carol still unresolvable at 0)',
+             third['carol'].tyre_compound == 0
+             and first['alice'].stage_time_ms == third['alice'].stage_time_ms),
+        ])
+
     failed = 0
     for name, ok in checks:
         print(f'[{"ok" if ok else "FAIL"}] {name}')

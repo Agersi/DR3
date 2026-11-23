@@ -252,6 +252,10 @@ class TimeTrialEntry(db.Model):
     ghost_data_b64: str | None = db.Column(
         db.Text().with_variant(mysql.MEDIUMTEXT, 'mysql'))
     splits_json: str | None = db.Column(db.Text)
+    # The StageRun that produced this best (NULL for pre-run_id rows and for
+    # time-trial submits without a snapshot). Join target for leaderboard
+    # run-metadata filters (source, input, camera, degradation, event slot).
+    run_id: int | None = db.Column(db.Integer, index=True)
     submitted_at: datetime | None = db.Column(db.DateTime, default=utcnow)
 
     __table_args__ = (

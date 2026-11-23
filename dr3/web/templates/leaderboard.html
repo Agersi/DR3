@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}Leaderboard — DR3{% endblock %}
+{% block content %}
+<h1>Leaderboard</h1>
+
+<form class="panel lb-filters" method="get" action="{{ url_for('pages.leaderboard') }}">
+  <div class="lb-filter-row">
+    <label>Mode
+      <select name="mode">
+        <option value="times"{% if mode == 'times' %} selected{% endif %}>Best times</option>
+        <option value="distance"{% if mode == 'distance' %} selected{% endif %}>Distance driven</option>
+      </select>
+    </label>
+    <label id="lb-stage-label">Stage
+      <select name="stage">
+        {% for loc, opts in stages %}
+        <optgroup label="{{ loc }}">
+          {% for tid, label in opts %}
+          <option value="{{ tid }}"{% if tid == track %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </optgroup>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Car
+      <select name="car">
+        {% for class_label, opts in cars %}
+        <optgroup label="{{ class_label }}">
+          {% for vid, name in opts %}
+          <option value="{{ vid }}"{% if vid == vehicle_id %} selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </optgroup>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="lb-filter-row">
+    <label id="lb-cond-label">Weather
+      <select name="conditions">
+        <option value="">Any</option>
+        {% for cid, label in conditions_options %}
+        <option value="{{ cid }}"{% if sel_conditions == cid %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label id="lb-comp-label">Tyre compound
+      <select name="compound">
+        <option value="">Any</option>
+        {% for cid, name in compound_opts %}
+        <option value="{{ cid }}"{% if sel_compound == cid %} selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Degradation
+      <select name="degrad">
+        <option value="">Any</option>
+        {% for label, val in degrad_options %}
+        <option value="{{ val }}"{% if sel_degrad is not none and (sel_degrad|float) == (val|float) %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Input
+      <select name="input">
+        <option value="">Any</option>
+        {% for m in input_options %}
+        <option value="{{ m }}"{% if sel_input == m %} selected{% endif %}>{{ m|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Camera
+      <select name="camera">
+        <option value="">Any</option>
+        {% for c in camera_options %}
+        <option value="{{ c }}"{% if sel_camera == c %} selected{% endif %}>{{ c|replace('_', ' ')|title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>VR
+      <select name="vr">
+        <option value=""{% if sel_vr is none %} selected{% endif %}>Any</option>
+        <option value="1"{% if sel_vr is sameas true %} selected{% endif %}>On</option>
+        <option value="0"{% if sel_vr is sameas false %} selected{% endif %}>Off</option>
+      </select>
+    </label>
+    <label>Assists
+      <select name="assists">
+        <option value=""{% if sel_assists is none %} selected{% endif %}>Any</option>
+        <option value="1"{% if sel_assists is sameas true %} selected{% endif %}>On</option>
+        <option value="0"{% if sel_assists is sameas false %} selected{% endif %}>Off</option>
+      </select>
+    </label>
+    <label>Hardcore damage
+      <select name="hardcore">
+        <option value=""{% if sel_hardcore is none %} selected{% endif %}>Any</option>
+        <option value="1"{% if sel_hardcore is sameas true %} selected{% endif %}>On</option>
+        <option value="0"{% if sel_hardcore is sameas false %} selected{% endif %}>Off</option>
+      </select>
+    </label>
+    <label>Country
+      <select name="country">
+        <option value="">Any</option>
+        {% for c in country_options %}
+        <option value="{{ c }}"{% if sel_country == c %} selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+</form>
+
+<div class="board-info">
+  <div class="board-info-row">
+    {% if mode == 'times' and stage_info %}
+    <span class="chip chip-accent">Stage: {{ stage_info.name }}</span>
+    {% if stage_info.location %}<span class="chip">{{ stage_info.location }}</span>{% endif %}
+    {% if stage_info.length_km %}<span class="chip">Length: {{ '%.2f'|format(stage_info.length_km) }} km</span>{% endif %}
+    {% endif %}
+    {% if car_name %}<span class="chip">{{ car_name }}{% if car_class %} ({{ car_class }}){% endif %}</span>{% endif %}
+  </div>
+</div>
+
+<div class="table-wrap board-wrap" id="lb-board-box">
+  <table class="board" id="lb-board-table">
+    {% if mode == 'times' %}
+    <thead>
+      <tr><th>#</th><th>Driver</th><th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th>Source</th><th class="num">Penalty</th><th class="num">Time</th><th class="num">Diff 1st</th></tr>
+    </thead>
+    <tbody id="lb-board-body">
+      {% for r in rows %}
+      <tr class="board-row">
+        <td class="num">{{ r.pos }}</td>
+        <td>{{ flag_img(r.flag_url) }}<a class="driver-link" href="{{ url_for('pages.profile', username=r.username) }}">{{ r.display_name }}</a></td>
+        <td class="tyre-cell" data-tyres="{{ r.tyres|tojson }}"></td>
+        <td class="spare-cell num" data-spares="{{ '' if r.spares is none else r.spares }}"></td>
+        <td class="input-cell" data-input="{{ r.input or '' }}" data-vr="{{ '1' if r.vr else '' }}" data-assists="{{ '1' if r.assists else '' }}"></td>
+        <td class="cam-cell" data-camera="{{ r.camera or '' }}"></td>
+        <td>{% if r.source %}<span class="chip">{{ r.source }}</span>{% else %}<span class="ink">—</span>{% endif %}</td>
+        <td class="num">{% if r.penalty_text %}{{ r.penalty_text }}{% else %}<span class="ink">—</span>{% endif %}</td>
+        <td class="num">{{ r.time_text }}</td>
+        <td class="num">{{ r.diff_str or '—' }}</td>
+      </tr>
+      {% else %}
+      <tr class="board-empty"><td colspan="10">No times yet.</td></tr>
+      {% endfor %}
+    </tbody>
+    {% else %}
+    <thead>
+      <tr><th>#</th><th>Driver</th><th class="num">Stages</th><th class="num">Distance</th></tr>
+    </thead>
+    <tbody id="lb-board-body">
+      {% for r in rows %}
+      <tr class="board-row">
+        <td class="num">{{ r.pos }}</td>
+        <td>{{ flag_img(r.flag_url) }}<a class="driver-link" href="{{ url_for('pages.profile', username=r.username) }}">{{ r.display_name }}</a></td>
+        <td class="num">{{ r.stages }}</td>
+        <td class="num">{{ r.km_text }} km</td>
+      </tr>
+      {% else %}
+      <tr class="board-empty"><td colspan="4">No distance yet.</td></tr>
+      {% endfor %}
+    </tbody>
+    {% endif %}
+  </table>
+</div>
+
+<script>
+(function () {
+  var box = document.getElementById('lb-board-box');
+  var tbody = document.getElementById('lb-board-body');
+  if (!box || !tbody) return;
+  var STATIC = '{{ request.script_root or '' }}/static/';
+  var INPUT_ICON = { wheel: 'wheel.png', controller: 'controller.png', keyboard: 'keyboard.png' };
+  var TYRE_FILE = {
+    1: '1_soft_gravel', 2: '2_medium_gravel', 3: '3_hard_gravel', 4: '4_wet_tarmac',
+    6: '6_soft_tarmac', 7: '7_medium_tarmac', 8: '8_hard_tarmac', 9: '9_winter',
+    10: '10_snow', 11: '11_wet_rx', 13: '13_dry_rx'
+  };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function tyreName(slug) {
+    if (slug === '#_unknown') return 'Unknown';
+    var s = slug.replace(/^\d+_/, '').replace(/_/g, ' ');
+    return s.replace(/\b\w/g, function (c) { return c.toUpperCase(); }).replace(/\bRx\b/g, 'RX');
+  }
+
+  function tyreCell(tyres) {
+    if (!tyres || !tyres.length) return '<span class="ink">—</span>';
+    return tyres.map(function (t) {
+      var slug = TYRE_FILE[t] || '#_unknown';
+      var name = esc(tyreName(slug));
+      return '<span class="tyre-img" data-tip="' + name + '"><img src="' + STATIC + 'tyres/' + slug + '.png" alt="" aria-label="' + name + '"></span>';
+    }).join(' ');
+  }
+
+  function spareCell(v) {
+    if (v == null) return '<span class="ink">—</span>';
+    var n = Number(v);
+    var tip = n === 0 ? 'No spare tyres' : (n + (n === 1 ? ' spare tyre' : ' spare tyres'));
+    return '<span data-tip="' + tip + '">' + n + '</span>';
+  }
+
+  function inputCell(v, vr, assists) {
+    var parts = [];
+    var tips = [];
+    if (v && INPUT_ICON[v]) {
+      parts.push('<img class="input-icon" src="' + STATIC + 'icons/' + INPUT_ICON[v] + '" alt="' + esc(v) + '">');
+      tips.push(v.charAt(0).toUpperCase() + v.slice(1));
+    } else if (v) {
+      parts.push(esc(v));
+    }
+    if (vr === true) {
+      parts.push('<img class="input-icon" src="' + STATIC + 'icons/vr.png" alt="VR">');
+      tips.push('VR');
+    }
+    if (assists === true) {
+      parts.push('<img class="input-icon" src="' + STATIC + 'icons/assist.png" alt="Assists on">');
+      tips.push('Assists');
+    }
+    if (!parts.length) return '<span class="ink">—</span>';
+    if (!tips.length) return parts.join(' ');
+    return '<span class="input-tip" data-tip="' + esc(tips.join('\n')) + '">' + parts.join(' ') + '</span>';
+  }
+
+  function camCell(v) {
+    if (!v) return '<span class="ink">—</span>';
+    var s = String(v).replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+    return esc(s);
+  }
+
+  function applyTuning(tr) {
+    var t = tr.querySelector('td.tyre-cell');
+    if (t) t.innerHTML = tyreCell(JSON.parse(t.dataset.tyres || '[]'));
+    t = tr.querySelector('td.spare-cell');
+    if (t) t.innerHTML = spareCell(t.dataset.spares === '' ? null : Number(t.dataset.spares));
+    t = tr.querySelector('td.input-cell');
+    if (t) t.innerHTML = inputCell(t.dataset.input || null, t.dataset.vr === '1', t.dataset.assists === '1');
+    t = tr.querySelector('td.cam-cell');
+    if (t) t.innerHTML = camCell(t.dataset.camera || null);
+  }
+
+  tbody.querySelectorAll('tr').forEach(applyTuning);
+
+  // Board tooltips flow OUT of the scroll wrapper: one fixed-position element
+  // on <body>, so nothing inside can clip it or grow its scroll area.
+  var tip = document.createElement('div');
+  tip.className = 'hover-tip';
+  document.body.appendChild(tip);
+  var tipTarget = null;
+  function showTip(el) {
+    var text = el.getAttribute('data-tip') || '';
+    tip.textContent = text;
+    tip.style.whiteSpace = text.indexOf('\n') >= 0 ? 'pre-line' : 'nowrap';
+    tip.classList.add('show');
+    var r = el.getBoundingClientRect();
+    var rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    var left = Math.min(Math.max(8, r.left + r.width / 2 - tip.offsetWidth / 2), window.innerWidth - tip.offsetWidth - 8);
+    var top = r.top - 0.3 * rem - tip.offsetHeight;
+    if (top < 4) top = r.bottom + 0.3 * rem;
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  }
+  function hideTip() {
+    tipTarget = null;
+    tip.classList.remove('show');
+  }
+  tbody.addEventListener('mouseover', function (e) {
+    var el = e.target.closest('[data-tip]');
+    if (el === tipTarget) return;
+    tipTarget = el;
+    if (el) showTip(el); else hideTip();
+  });
+  tbody.addEventListener('mouseleave', hideTip);
+  box.addEventListener('scroll', hideTip, { passive: true });
+  window.addEventListener('scroll', hideTip, { passive: true });
+})();
+</script>
+<script>
+(function () {
+  var form = document.querySelector('.lb-filters');
+  if (!form) return;
+  function sync() {
+    var modeSel = form.querySelector('select[name=mode]');
+    var dist = modeSel.value === 'distance';
+    ['lb-stage-label', 'lb-cond-label', 'lb-comp-label'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = dist ? 'none' : '';
+    });
+  }
+  form.addEventListener('change', function (e) {
+    if (e.target.name === 'mode') sync();
+    form.submit();
+  });
+  sync();
+})();
+</script>
+{% endblock %}

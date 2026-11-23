@@ -41,12 +41,28 @@ def main() -> int:
 
     anon_pages = [('/', 200), ('/events', 404), ('/clubs', 200), ('/install', 200),
                   ('/about', 200), ('/login', 200), ('/register', 200),
-                  ('/forgot_password', 200), ('/cars', 200),
+                  ('/forgot_password', 200), ('/cars', 200), ('/leaderboard', 200),
                   ('/static/css/style.css', 200),
                   ('/static/logo.png', 200), ('/nope', 404)]
     for path, want in anon_pages:
         r = client.get(path)
         check(f'anon GET {path}', r.status_code == want, f'status={r.status_code}')
+
+    # leaderboard: filter form + server-rendered board with data-* hydration
+    lb_html = client.get('/leaderboard').get_data(as_text=True)
+    check('leaderboard: filter form + times board headers + hydration script',
+          '<form class="panel lb-filters" method="get"' in lb_html
+          and 'id="lb-board-table"' in lb_html
+          and '<th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th>Source</th>' in lb_html
+          and "tbody.querySelectorAll('tr').forEach(applyTuning);" in lb_html, '')
+    check('leaderboard: distance mode swaps the board columns',
+          client.get('/leaderboard?mode=distance').get_data(as_text=True)
+          .count('<th class="num">Stages</th><th class="num">Distance</th>') == 1
+          and '<th>Tyres</th>' not in client.get('/leaderboard?mode=distance').get_data(as_text=True), '')
+    lb_css = client.get('/static/css/style.css').get_data(as_text=True)
+    check('leaderboard: filter panel CSS',
+          '.lb-filters { margin-bottom: 0.6rem; }' in lb_css
+          and '.lb-filter-row { display: flex; gap: 0.9rem; flex-wrap: wrap; align-items: flex-end; }' in lb_css, '')
 
     # clubs list: filter form + partial reload (only the results section swaps)
     html = client.get('/clubs').get_data(as_text=True)

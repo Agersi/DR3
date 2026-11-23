@@ -923,6 +923,118 @@ def _car_page_data(vid: int) -> dict:
     }
 
 
+@pages_bp.route('/leaderboard')
+def leaderboard():
+    """Site-wide personal-best leaderboards: best time per driver on a stage +
+    car (all run types) or total distance driven in a car (?mode=distance)."""
+    from ..leaderboard import (
+        CAMERA_POSITIONS,
+        INPUT_METHODS,
+        best_times_board,
+        car_options,
+        compound_options,
+        distance_board,
+        stage_info,
+        stage_options,
+    )
+    from ..scoring import VEHICLES, vehicle_meta
+    from dr2server.game_data import (
+        STAGE_CONDITIONS_LABELS,
+        SURFACE_DEGRAD_LEVELS,
+    )
+
+    stages = stage_options()
+    cars = car_options()
+
+    def _int_arg(name):
+        raw = (request.args.get(name) or '').strip()
+        return int(raw) if raw.isdigit() else None
+
+    def _float_arg(name, allowed):
+        raw = (request.args.get(name) or '').strip()
+        try:
+            v = float(raw)
+        except ValueError:
+            return None
+        return v if any(abs(v - lvl) < 1e-9 for _, lvl in allowed) else None
+
+    def _bool_arg(name):
+        raw = (request.args.get(name) or '').strip()
+        if raw == '1':
+            return True
+        if raw == '0':
+            return False
+        return None
+
+    def _str_arg(name, allowed):
+        raw = (request.args.get(name) or '').strip()
+        return raw if raw in allowed else None
+
+    mode = 'distance' if request.args.get('mode') == 'distance' else 'times'
+    track = _int_arg('stage')
+    vehicle_id = _int_arg('car')
+    conditions = _int_arg('conditions')
+    compound = _int_arg('compound')
+    degrad_level = _float_arg('degrad', SURFACE_DEGRAD_LEVELS)
+    input_method = _str_arg('input', set(INPUT_METHODS))
+    camera = _str_arg('camera', set(CAMERA_POSITIONS))
+    vr = _bool_arg('vr')
+    assists = _bool_arg('assists')
+    hardcore = _bool_arg('hardcore')
+    country = (request.args.get('country') or '').strip() or None
+
+    # Defaults: first catalog stage + first catalog car (car-page convention).
+    if track is None and stages:
+        track = stages[0][1][0][0]
+    if vehicle_id is None and cars:
+        vehicle_id = cars[0][1][0][0]
+
+    board = {}
+    if mode == 'times' and track is not None and vehicle_id is not None:
+        board = best_times_board(
+            track, vehicle_id, conditions=conditions, compound=compound,
+            degrad_level=degrad_level, input_method=input_method, camera=camera,
+            vr=vr, assists=assists, hardcore=hardcore, country=country)
+    elif mode == 'distance' and vehicle_id is not None:
+        board = distance_board(
+            vehicle_id, degrad_level=degrad_level, input_method=input_method,
+            camera=camera, vr=vr, assists=assists, hardcore=hardcore,
+            country=country)
+
+    car_name, car_class = ('', '')
+    if vehicle_id is not None and vehicle_id in VEHICLES:
+        car_name, car_class = vehicle_meta(vehicle_id)
+
+    countries = sorted({u.country for u in User.query.all() if u.country})
+
+    return render_template(
+        'leaderboard.html',
+        mode=mode,
+        stages=stages,
+        cars=cars,
+        track=track,
+        vehicle_id=vehicle_id,
+        stage_info=stage_info(track) if track else {},
+        car_name=car_name,
+        car_class=car_class,
+        conditions_options=sorted(STAGE_CONDITIONS_LABELS.items()),
+        compound_opts=compound_options(),
+        degrad_options=SURFACE_DEGRAD_LEVELS,
+        camera_options=CAMERA_POSITIONS,
+        input_options=INPUT_METHODS,
+        country_options=countries,
+        sel_conditions=conditions,
+        sel_compound=compound,
+        sel_degrad=degrad_level,
+        sel_input=input_method,
+        sel_camera=camera,
+        sel_vr=vr,
+        sel_assists=assists,
+        sel_hardcore=hardcore,
+        sel_country=country,
+        **board)
+
+
 @pages_bp.route('/install')
 def install():
     return render_template('install.html')

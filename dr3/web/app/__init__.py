@@ -209,6 +209,10 @@ def _create_schema(db) -> None:
     _ensure_tt_splits_column(db)
     _ensure_tt_ghost_column(db)
     _ensure_tt_vehicle_key(db)
+    # Must precede every ORM full-SELECT on best_times (the key dedupe and the
+    # compound backfill both query TimeTrialEntry rows, which now carry run_id):
+    # on a live DB missing the column, any earlier SELECT crashes the boot.
+    _ensure_best_times_run_column(db)
     _ensure_best_times_key(db)
     _ensure_best_times_compound(db)
     _ensure_stage_run_columns(db)
@@ -841,6 +845,41 @@ def _ensure_stage_run_columns(db) -> None:
                     conn.execute(text(
                         f'CREATE INDEX IF NOT EXISTS {name} ON stage_runs '
                         f'({", ".join(columns)})'))
+        except OperationalError as e:
+            # Lost the boot race to another worker adding the same index.
+            if '1061' not in str(e) and 'already exists' not in str(e):
+                raise
+
+
+def _ensure_best_times_run_column(db) -> None:
+    """Additive migration for databases created before TimeTrialEntry.run_id +
+    its index (create_all only creates missing tables)."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+
+    insp = db.inspect(db.engine)
+    cols = {c['name'] for c in insp.get_columns('best_times')}
+    dialect = db.engine.dialect.name
+    if 'run_id' not in cols:
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text(
+                    'ALTER TABLE best_times ADD COLUMN run_id INTEGER NULL'))
+        except OperationalError as e:
+            # Lost the boot race to another worker adding the same column.
+            if '1060' not in str(e) and 'duplicate column' not in str(e):
+                raise
+
+    have = {ix['name']: tuple(ix['column_names']) for ix in insp.get_indexes('best_times')}
+    if have.get('ix_best_times_run_id') != ('run_id',):
+        try:
+            with db.engine.begin() as conn:
+                if dialect == 'mysql':
+                    conn.execute(text(
+                        'ALTER TABLE best_times ADD INDEX `ix_best_times_run_id` (run_id)'))
+                else:  # sqlite (only reachable on a stale dev DB)
+                    conn.execute(text(
+                        'CREATE INDEX IF NOT EXISTS ix_best_times_run_id ON best_times (run_id)'))
         except OperationalError as e:
             # Lost the boot race to another worker adding the same index.
             if '1061' not in str(e) and 'already exists' not in str(e):

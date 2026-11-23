@@ -309,7 +309,8 @@ _BEST_TOL_MS = 1000
 def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
                  category=None, vclass=None, livery_id=None,
                  using_wheel=None, using_assists=None,
-                 ghost_b64=None, splits=None, tyre_compound=None) -> None:
+                 ghost_b64=None, splits=None, tyre_compound=None,
+                 run_id=None) -> None:
     """Update the driver's personal best (best_times) for car + track +
     conditions + tyre compound. Every run type posts here — club/official/TT
     PostTimes (with the run's ghost, no compound) and clean stage-detail
@@ -323,7 +324,10 @@ def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
     it (the ghost belongs to the best run, so it is replaced too when carried);
     an EQUAL-ms submission is the same run arriving over the second channel —
     it only fills in pieces the first one lacked (ghost / splits / category);
-    a slower time never touches the record. Missing key pieces skip entirely."""
+     a slower time never touches the record. Missing key pieces skip entirely.
+     run_id (the producing StageRun row) follows the same rules: set on new
+     rows, replaced when this run becomes the best, absorbed on the equal-ms
+     follow-up — so it always points at the run whose payload is stored."""
     if not username or not vehicle_id or not track or not time_ms or time_ms <= 0:
         return
     tm = int(time_ms)
@@ -387,7 +391,8 @@ def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
             username=username, stage_time_ms=tm, vehicle_id=vehicle_id,
             livery_id=livery_id, tyre_compound=compound,
             using_wheel=using_wheel, using_assists=using_assists,
-            ghost_data_b64=ghost_b64 or None, splits_json=splits_json))
+            ghost_data_b64=ghost_b64 or None, splits_json=splits_json,
+            run_id=run_id))
         return
 
     if tm < (entry.stage_time_ms or 0):
@@ -407,6 +412,10 @@ def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
         # channel can still fill them in).
         entry.ghost_data_b64 = ghost_b64 or None
         entry.splits_json = splits_json
+        # The stored payload is now THIS run's — point the run pointer at it
+        # when we know it (the equal-ms follow-up settles it otherwise).
+        if run_id is not None:
+            entry.run_id = run_id
         entry.submitted_at = utcnow()
     elif tm == (entry.stage_time_ms or 0):
         # Same run, second channel: absorb only what the stored row lacks.
@@ -419,6 +428,12 @@ def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
             changed = True
         if category and not entry.category:
             entry.category = int(category)
+            changed = True
+        # The equal-ms follow-up (stage-detail after the PostTime placeholder,
+        # or a faster-run's snapshot after its PostTime) carries the run id —
+        # replace whatever was stored so the pointer matches the payload.
+        if run_id is not None and entry.run_id != run_id:
+            entry.run_id = run_id
             changed = True
         if changed:
             entry.submitted_at = utcnow()
@@ -813,12 +828,14 @@ def api_game_stage_detail():
                 existing = cand
                 break
     same_run = existing is not None
+    run_row = existing
     if same_run:
         if _detail_rich_score(fields) > _detail_rich_score(existing):
             for key, value in fields.items():
                 setattr(existing, key, value)
     else:
-        db.session.add(StageRun(username=user.username, **fields))
+        run_row = StageRun(username=user.username, **fields)
+        db.session.add(run_row)
 
     # Personal best: a clean finish updates the driver's best for car + track
     # + conditions. The PostTime that preceded this StageComplete usually got
@@ -826,6 +843,7 @@ def api_game_stage_detail():
     # the splits; when the PostTime POST failed, it lands the best outright.
     if (not is_dnf and time_ms > 0 and fields['vehicle_id']
             and fields['track_model_id']):
+        db.session.flush()
         _upsert_best(
             user.username, fields['vehicle_id'], fields['track_model_id'],
             fields['conditions_id'] or '0', time_ms,
@@ -834,7 +852,8 @@ def api_game_stage_detail():
             using_wheel=data.get('using_wheel'),
             using_assists=data.get('using_assists'),
             tyre_compound=fields['tyre_compound'],
-            splits=json.loads(fields['splits_json']) if fields['splits_json'] else None)
+            splits=json.loads(fields['splits_json']) if fields['splits_json'] else None,
+            run_id=run_row.id)
     db.session.commit()
 
     return jsonify({'ok': True})
