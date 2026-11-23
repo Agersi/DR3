@@ -69,6 +69,9 @@ def main() -> int:
           '.lb-filters { margin-bottom: 0.6rem; }' in lb_css
           and '.lb-filter-row { display: flex; gap: 0.9rem; flex-wrap: wrap; align-items: flex-end; }' in lb_css
           and '.lb-mode-toggle label:has(input:checked) { background: var(--accent); color: var(--bg); }' in lb_css, '')
+    check('leaderboard: stage/car select widths + hidden extra row actually hides',
+          '.lb-filter-row select[name=stage], .lb-filter-row select[name=car] { width: 24rem; }' in lb_css
+          and '.lb-extra-row[hidden] { display: none; }' in lb_css, '')
 
     # clubs list: filter form + partial reload (only the results section swaps)
     html = client.get('/clubs').get_data(as_text=True)
