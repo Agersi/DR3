@@ -834,6 +834,8 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
   margin: .4em;
 }
 .split-col { white-space: nowrap; width: 4rem; }
+.split-best { color: var(--muted); }
+.split-worse { color: var(--warning); }
 .dash-tip { position: relative; display: inline-block; cursor: help; color: var(--muted); }
 .hover-tip {
   position: fixed;
@@ -926,7 +928,7 @@ details.create-club .plus, .hover-tip, .champ-center, .round-thumb, .round-class
 .lb-mode-toggle label + label { border-left: 2px solid var(--line); }
 .lb-mode-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .lb-mode-toggle label:has(input:checked) { background: var(--accent); color: var(--bg); }
-.lb-filter-row .cselect:has(select[name=stage]), .lb-filter-row .cselect:has(select[name=car]) { width: 24rem; }
+.lb-filter-row .cselect:has(select[name=loc]), .lb-filter-row .cselect:has(select[name=stage]), .lb-filter-row .cselect:has(select[name=car]) { width: 24rem; }
 .lb-extra-row { display: grid; grid-template-rows: 0fr; margin-top: 0; transition: grid-template-rows 0.15s ease; }
 .lb-extra-row.open { grid-template-rows: 1fr; }
 .lb-extra-inner { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end; min-height: 0; overflow: hidden; padding-top: 0.8rem; transition: padding 0.15s ease; }

@@ -941,6 +941,7 @@ def leaderboard():
     from dr2server.game_data import (
         SURFACE_DEGRAD_LEVELS,
         VEHICLE_CLASSES,
+        Location,
         Track,
         stage_conditions_options_for_location,
     )
@@ -995,9 +996,44 @@ def leaderboard():
     hardcore = _bool_arg('hardcore')
     country = (request.args.get('country') or '').strip() or None
 
-    # Default: first catalog stage; the car is optional (None = all cars).
+    # Two-select location/stage UI: ?stage= alone still works (the location is
+    # derived from it); a picked location without a valid stage of its own
+    # falls back to the first stage of that location (the only one for RX).
+    _loc_by_name = {l.display_name: l for l in Location}
+    loc_sel = None
+    raw_loc = (request.args.get('loc') or '').strip()
+    if raw_loc.isdigit():
+        try:
+            loc_sel = Location(int(raw_loc))
+        except ValueError:
+            loc_sel = None
+    if track is not None:
+        try:
+            loc_sel = Track(int(track)).location
+        except (ValueError, TypeError):
+            # Out-of-catalog stage id: keep it for the query, no location.
+            loc_sel = None
+    elif loc_sel is not None:
+        opts = next((o for n, o in stages if _loc_by_name.get(n) is loc_sel), [])
+        track = opts[0][0] if opts else None
     if track is None and stages:
         track = stages[0][1][0][0]
+
+    # Select options: every location with catalog stages + the stage list of
+    # the resolved location.
+    try:
+        cur_loc = Track(int(track)).location if track is not None else None
+    except (ValueError, TypeError):
+        cur_loc = None  # out-of-catalog stage id
+    locations = []
+    stage_opts = []
+    for name, opts in stages:
+        l = _loc_by_name.get(name)
+        if l is None:
+            continue
+        locations.append((int(l), name))
+        if cur_loc is not None and l is cur_loc:
+            stage_opts = opts
 
     # Weather options are scoped to the selected stage's location — the same
     # per-location lighting sweep the club event creation offers. A selection
@@ -1043,7 +1079,9 @@ def leaderboard():
     return render_template(
         'leaderboard.html',
         mode=mode,
-        stages=stages,
+        locations=locations,
+        cur_loc=int(cur_loc) if cur_loc is not None else None,
+        stage_opts=stage_opts,
         cars=cars,
         class_ids={label: int(cid) for cid, label in VEHICLE_CLASSES.items()},
         track=track,

@@ -11,14 +11,17 @@
     </div>
   </div>
   <div class="lb-filter-row">
+    <label id="lb-loc-label">Location
+      <select name="loc">
+        {% for lid, name in locations %}
+        <option value="{{ lid }}"{% if lid == cur_loc %} selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
     <label id="lb-stage-label">Stage
       <select name="stage">
-        {% for loc, opts in stages %}
-        <optgroup label="{{ loc }}">
-          {% for tid, label in opts %}
-          <option value="{{ tid }}"{% if tid == track %} selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </optgroup>
+        {% for tid, label in stage_opts %}
+        <option value="{{ tid }}"{% if tid == track %} selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
     </label>
@@ -251,6 +254,28 @@
 
   tbody.querySelectorAll('tr').forEach(applyTuning);
 
+  // Split coloring: a row holding its column's best split time goes green,
+  // every other filled cell red; blank cells stay uncolored.
+  (function () {
+    var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr.board-row'));
+    if (!rows.length) return;
+    var cols = {};
+    rows.forEach(function (tr) {
+      tr.querySelectorAll('td.split-col').forEach(function (td, i) {
+        if (td.querySelector('.dash-tip')) return;
+        var v = parseFloat(td.textContent);
+        if (isNaN(v)) return;
+        (cols[i] = cols[i] || []).push([td, v]);
+      });
+    });
+    Object.keys(cols).forEach(function (i) {
+      var best = Math.min.apply(null, cols[i].map(function (c) { return c[1]; }));
+      cols[i].forEach(function (c) {
+        c[0].classList.add(c[1] === best ? 'split-best' : 'split-worse');
+      });
+    });
+  })();
+
   // Board tooltips flow OUT of the scroll wrapper: one fixed-position element
   // on <body>, so nothing inside can clip it or grow its scroll area.
   var tip = document.createElement('div');
@@ -456,7 +481,7 @@
   }
   function sync() {
     var dist = currentMode() === 'distance';
-    ['lb-stage-label', 'lb-cond-label', 'lb-comp-label'].forEach(function (id) {
+    ['lb-loc-label', 'lb-stage-label', 'lb-cond-label', 'lb-comp-label'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.style.display = dist ? 'none' : '';
     });

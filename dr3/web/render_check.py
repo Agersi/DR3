@@ -98,7 +98,7 @@ def main() -> int:
           and '.lb-filters-btn { margin: 0 0 .2rem 0; padding: .2rem .53rem; align-self: flex-end; font-size: .9rem; }' in lb_css
           and '.lb-filters .cselect-btn { position: relative; width: 100%; padding: 0.5rem 2.1rem 0.5rem 0.6rem;' in lb_css, '')
     check('leaderboard: stage/car select widths + animated extra row (grid 0fr->1fr)',
-          '.lb-filter-row .cselect:has(select[name=stage]), .lb-filter-row .cselect:has(select[name=car]) { width: 24rem; }' in lb_css
+           '.lb-filter-row .cselect:has(select[name=loc]), .lb-filter-row .cselect:has(select[name=stage]), .lb-filter-row .cselect:has(select[name=car]) { width: 24rem; }' in lb_css
           and '.lb-extra-row { display: grid; grid-template-rows: 0fr; margin-top: 0; transition: grid-template-rows 0.15s ease; }' in lb_css
           and '.lb-extra-row.open { grid-template-rows: 1fr; }' in lb_css, '')
     check('leaderboard: diff-col width + centered source + popup weather line (CSS)',
@@ -114,6 +114,24 @@ def main() -> int:
           '<th class="num pen-col">Penalty</th>' in lb_html
           and 'pen-col' not in _rx_lb
           and '<td colspan="10">No times yet.</td>' in _rx_lb, '')
+    # The stage filter is split into Location + Stage selects; picking an RX
+    # location auto-selects its only stage (track 639 = Mettet).
+    def _stage_select(page_html):
+        i = page_html.find('<select name="stage">')
+        return page_html[i:page_html.find('</select>', i)] if i >= 0 else ''
+    check('leaderboard: location + stage split into two selects (no optgroups in the stage list)',
+          '<label id="lb-loc-label">Location' in lb_html
+          and '<select name="loc">' in lb_html
+          and 'optgroup' not in _stage_select(lb_html)
+          and 'id="lb-loc-label"' in client.get('/leaderboard?mode=distance').get_data(as_text=True), '')
+    _rx_loc_html = client.get('/leaderboard?loc=39').get_data(as_text=True)  # Mettet RX
+    check('leaderboard: RX location auto-selects its only stage',
+          _stage_select(_rx_loc_html).count('<option') == 1
+          and '<option value="639" selected>' in _stage_select(_rx_loc_html), '')
+    check('split coloring: column best green, others red (leaderboard JS + CSS)',
+          '.split-best { color: var(--muted); }' in lb_css
+          and '.split-worse { color: var(--warning); }' in lb_css
+          and "c[1] === best ? 'split-best' : 'split-worse'" in lb_html, '')
 
     # clubs list: filter form + partial reload (only the results section swaps)
     html = client.get('/clubs').get_data(as_text=True)
@@ -734,6 +752,9 @@ def main() -> int:
         check('club detail: DNF rows use the muted-red --warning color',
               '--warning: #C4635A;' in board_css
               and '.board-row.dnf td { color: var(--warning); }' in board_css, '')
+        check('club detail: split cells colored green on column best, red otherwise',
+              "Number(r.splits[i]) === bestOf[i] ? 'split-best' : 'split-worse'" in det
+              and 'bestOf[bi] = bvals.length ? Math.min.apply(null, bvals) : null;' in det, '')
         check('club detail: empty board/standings cells use an ink dash (no muted)',
               "if (!tyres || !tyres.length) return '<span class=\"ink\">—</span>';" in det
               and "if (v == null) return '<span class=\"ink\">—</span>';" in det

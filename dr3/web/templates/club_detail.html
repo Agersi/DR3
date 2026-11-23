@@ -567,6 +567,17 @@
       body.innerHTML = '<tr class="board-empty"><td colspan="' + span + '">No results yet.</td></tr>';
       return;
     }
+    // Column bests for split coloring: green on the column's best time, red
+    // on every other filled cell, blanks uncolored.
+    var bestOf = {};
+    if (open) {
+      for (var bi = 0; bi < spec.n; bi++) {
+        var bvals = rows.map(function (r) {
+          return (r.splits && r.splits[bi] != null) ? Number(r.splits[bi]) : null;
+        }).filter(function (v) { return v != null; });
+        bestOf[bi] = bvals.length ? Math.min.apply(null, bvals) : null;
+      }
+    }
     body.innerHTML = rows.map(function (r) {
       var cells =
         '<td class="num">' + r.pos + '</td>' +
@@ -582,7 +593,11 @@
       if (open) {
         for (var i = 0; i < spec.n; i++) {
           var v = (r.splits && r.splits[i] != null) ? Number(r.splits[i]).toFixed(2) : null;
-          cells += '<td class="num split-col">' + (v != null ? v : '<span class="dash-tip" data-tip="Configure Telemetry">-</span>') + '</td>';
+          var cls = '';
+          if (v != null && bestOf[i] != null) {
+            cls = ' ' + (Number(r.splits[i]) === bestOf[i] ? 'split-best' : 'split-worse');
+          }
+          cells += '<td class="num split-col' + cls + '">' + (v != null ? v : '<span class="dash-tip" data-tip="Configure Telemetry">-</span>') + '</td>';
         }
       }
       if (state.mode === 'stage') {
