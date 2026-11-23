@@ -265,6 +265,7 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
         car_name, car_class = vehicle_meta(vid)
         raw.append({
             'username': name,
+            'vehicle_id': vid,
             'car_name': car_name,
             'car_class': car_class,
             'time_ms': e.stage_time_ms or 0,
@@ -311,6 +312,7 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
         rows.append({
             'pos': i + 1,
             'username': r['username'],
+            'vehicle_id': r['vehicle_id'],
             'display_name': (u.display_name or r['username']) if u else r['username'],
             'car_name': r['car_name'],
             'car_class': r['car_class'],

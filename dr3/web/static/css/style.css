@@ -888,7 +888,8 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 #lb-board-table .src-cell { text-align: center; }
 table th:last-child, table td:last-child { padding-right: .5rem; }
 .car-fastest tr.fastest-detail td:last-child { padding-right: 0; }
-#lb-board-table .car-col { width: 16rem; }
+#lb-board-table .car-col { width: 14.5rem; }
+#lb-board-table th.car-col { padding-left: 49px; }
 .board-empty td { text-align: center; color: var(--muted); padding: 1rem; }
 
 .standings-title { margin-top: 1.6rem; font-size: 1.15rem; }
@@ -929,7 +930,7 @@ details.create-club .plus, .hover-tip, .champ-center, .round-thumb, .round-class
 .lb-mode-toggle label + label { border-left: 2px solid var(--line); }
 .lb-mode-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .lb-mode-toggle label:has(input:checked) { background: var(--accent); color: var(--bg); }
-.lb-filter-row .cselect:has(select[name=loc]), .lb-filter-row .cselect:has(select[name=stage]), .lb-filter-row .cselect:has(select[name=car]) { width: 24rem; }
+.lb-filter-row .cselect:has(select[name=loc]), .lb-filter-row .cselect:has(select[name=stage]), .lb-filter-row .cselect:has(select[name=car]) { width: 27.2rem; }
 .lb-extra-row { display: grid; grid-template-rows: 0fr; margin-top: 0; transition: grid-template-rows 0.15s ease; }
 .lb-extra-row.open { grid-template-rows: 1fr; }
 .lb-extra-inner { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end; min-height: 0; overflow: hidden; padding-top: 0.8rem; transition: padding 0.15s ease; }

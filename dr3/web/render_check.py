@@ -64,8 +64,8 @@ def main() -> int:
           and '<span class="dash-tip" data-tip="Configure Telemetry">-</span>' in lb_rows, '')
     # stage=13 has a Rally GT car (565) — the vehicle cell carries the class thumbnail.
     _lb_cls = client.get('/leaderboard?stage=13').get_data(as_text=True)
-    check('leaderboard: class image in front of the vehicle name',
-          '<td class="car-cell car-col"><img class="class-thumb" src="/static/classes/rally-gt.png" alt="" loading="lazy"> Porsche 911 RGT Rally Spec</td>' in _lb_cls, '')
+    check('leaderboard: class image in front of the vehicle name + car page link',
+          '<td class="car-cell car-col"><img class="class-thumb" src="/static/classes/rally-gt.png" alt="" loading="lazy"> <a class="driver-link" href="/cars?car=565">Porsche 911 RGT Rally Spec</a></td>' in _lb_cls, '')
     check('leaderboard: tyre cell carries damage payload + weather for the popup',
           'data-td="' in lb_rows and 'data-cond="' in lb_rows
           and "dmg.className = 'dmg-popup'" in lb_rows
@@ -102,14 +102,15 @@ def main() -> int:
           and '.lb-filters-btn { margin: 0 0 .2rem 0; padding: .2rem .53rem; align-self: flex-end; font-size: .9rem; }' in lb_css
           and '.lb-filters .cselect-btn { position: relative; width: 100%; padding: 0.5rem 2.1rem 0.5rem 0.6rem;' in lb_css, '')
     check('leaderboard: stage/car select widths + animated extra row (grid 0fr->1fr)',
-           '.lb-filter-row .cselect:has(select[name=loc]), .lb-filter-row .cselect:has(select[name=stage]), .lb-filter-row .cselect:has(select[name=car]) { width: 24rem; }' in lb_css
+            '.lb-filter-row .cselect:has(select[name=loc]), .lb-filter-row .cselect:has(select[name=stage]), .lb-filter-row .cselect:has(select[name=car]) { width: 27.2rem; }' in lb_css
           and '.lb-extra-row { display: grid; grid-template-rows: 0fr; margin-top: 0; transition: grid-template-rows 0.15s ease; }' in lb_css
           and '.lb-extra-row.open { grid-template-rows: 1fr; }' in lb_css, '')
     check('leaderboard: diff-col width + centered source + popup weather line (CSS)',
           '#lb-board-table .diff-col { width: 5.5rem; }' in lb_css
           and '#lb-board-table .src-cell { text-align: center; }' in lb_css
           and '.dmg-cond { margin-top: 0.6rem;' in lb_css
-          and '#lb-board-table .car-col { width: 16rem; }' in lb_css
+          and '#lb-board-table .car-col { width: 14.5rem; }' in lb_css
+          and '#lb-board-table th.car-col { padding-left: 49px; }' in lb_css
           and '#lb-board-table .pen-col { width: 4.5rem; }' in lb_css, '')
     # Rallycross stages (track 641 = Bikernieki) carry no penalty column —
     # the board is about best laps there; smoke fixtures keep 641 empty.

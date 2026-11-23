@@ -1070,6 +1070,12 @@ def leaderboard():
             input_method=input_method, camera=camera, vr=vr, assists=assists,
             hardcore=hardcore, country=country)
 
+    # Vehicle names link to the car page with that car pre-selected — only
+    # for catalog ids (legacy rows store 0/unknown and stay plain text).
+    for row in board.get('rows', []):
+        vid = row.get('vehicle_id')
+        row['car_url'] = url_for('pages.cars_index', car=vid) if vid in VEHICLES else ''
+
     # Distance mode (and an empty times board) carries no split metadata.
     board.setdefault('split_count', 0)
     board.setdefault('split_word', 'Split')

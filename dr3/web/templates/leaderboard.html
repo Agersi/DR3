@@ -139,7 +139,7 @@
       <tr class="board-row">
         <td class="num">{{ r.pos }}</td>
         <td>{{ flag_img(r.flag_url) }}<a class="driver-link" href="{{ url_for('pages.profile', username=r.username) }}">{{ r.display_name }}</a></td>
-        {% if not vehicle_id %}<td class="car-cell car-col">{% set cthumb = class_thumb_url(r.car_class) %}{% if cthumb %}<img class="class-thumb" src="{{ cthumb }}" alt="" loading="lazy"> {% endif %}{{ r.car_name }}</td>{% endif %}
+        {% if not vehicle_id %}<td class="car-cell car-col">{% set cthumb = class_thumb_url(r.car_class) %}{% if cthumb %}<img class="class-thumb" src="{{ cthumb }}" alt="" loading="lazy"> {% endif %}{% if r.car_url %}<a class="driver-link" href="{{ r.car_url }}">{{ r.car_name }}</a>{% else %}{{ r.car_name }}{% endif %}</td>{% endif %}
         <td class="tyre-cell" data-tyres="{{ r.tyres|tojson }}" data-td="{{ r.tyre_damage|tojson|forceescape }}" data-cond="{{ r.conditions_label or '' }}"></td>
         <td class="spare-cell num" data-spares="{{ '' if r.spares is none else r.spares }}"></td>
         <td class="input-cell" data-input="{{ r.input or '' }}" data-vr="{{ '1' if r.vr else '' }}" data-assists="{{ '1' if r.assists else '' }}"></td>
