@@ -8,7 +8,11 @@
   returns False without crashing;
 - end-to-end: with the lock held in-process, launching `python dr3_app.py`
   as a real subprocess exits 0, prints the focus notice, and never creates
-  debug.log (the check runs before _setup_file_logging).
+  debug.log (the check runs before _setup_file_logging);
+- regression: with the lock held in-process, an elevated-style
+  `python dr3_app.py --admin-helper <op>` child bypasses the guard (an
+  unknown op exits BAD_OP=1 without the focus notice — before v0.1.84 the
+  child hit the guard and exited 0 without doing any privileged work).
 
 Run with no other DR3 instance open (a live one would hold the mutex).
 Exits non-zero on any failure.
@@ -132,8 +136,31 @@ def main() -> int:
     else:
         print("OK   duplicate launch never creates debug.log (pre-logging check)")
 
+    # --- Regression: elevated --admin-helper children bypass the lock ---
+    # The UAC helper runs while the GUI parent holds the mutex; if it hit the
+    # single-instance guard it would exit 0 without any privileged work (hosts
+    # never configured). An unknown op exits BAD_OP(1) with zero system side
+    # effects, so this is safe to run un-elevated.
+    helper_tmp = Path(tempfile.mkdtemp(prefix="dr3_si_helper_"))
+    helper_env = _profile_env(helper_tmp)
+    proc = subprocess.run(
+        [sys.executable, str(dr3_app), "--admin-helper", "no-such-op"],
+        capture_output=True, text=True, timeout=60, env=helper_env,
+    )
+    if "[DR3] another instance is already running" in proc.stdout:
+        print("FAIL admin-helper child hit the single-instance guard "
+              "(would exit 0 without configuring hosts)")
+        failures += 1
+    elif proc.returncode != 1:
+        print(f"FAIL admin-helper child rc={proc.returncode} (expected BAD_OP=1): "
+              f"stdout={proc.stdout[:200]!r} stderr={proc.stderr[:200]!r}")
+        failures += 1
+    else:
+        print("OK   admin-helper child bypasses the single-instance lock")
+
     import shutil
     shutil.rmtree(tmp, ignore_errors=True)
+    shutil.rmtree(helper_tmp, ignore_errors=True)
     if failures:
         print(f"\n{failures} check(s) FAILED")
         return 1

@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.84**
+- Fixed a bug where DR3 could not connect after you approved the Windows security prompt.
+
 **v0.1.83**
 - Rallycross stages no longer record a huge fake penalty after finishing, and their lap times are now correct.
 

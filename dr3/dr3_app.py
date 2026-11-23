@@ -733,6 +733,12 @@ def has_port_capability(binary: Path) -> bool:
 
 SINGLE_INSTANCE_MUTEX = "DR3.SingleInstance.Mutex"
 _ERROR_ALREADY_EXISTS = 183
+# A just-killed instance's handles can linger in the kernel object namespace
+# for a short window after its process object is signaled (observed <50 ms).
+# Without this retry, a relaunch right after close (or the auto-updater's
+# relaunch while the old instance tears down) would see the dying mutex and
+# exit with "another instance is already running".
+SINGLE_INSTANCE_RETRY_DELAY_SECONDS = 0.25
 
 _single_instance_handle = None    # Windows mutex handle (kept for the process lifetime)
 _single_instance_lock_file = None  # Linux flock file (kept open)
@@ -744,15 +750,21 @@ def _acquire_single_instance_lock() -> bool:
     platform hiccup so a lock glitch can never leave the user without a GUI."""
     if IS_WIN:
         kernel32 = ctypes.windll.kernel32
-        handle = kernel32.CreateMutexW(None, False, SINGLE_INSTANCE_MUTEX)
-        if not handle:
-            return True  # fail open — don't block the GUI on a Win32 hiccup
-        if kernel32.GetLastError() == _ERROR_ALREADY_EXISTS:
+        for _attempt in range(2):
+            # Clear the thread's last-error first: CreateMutexW does not set
+            # one on success, so a stale ERROR_ALREADY_EXISTS from an earlier
+            # Win32 call would masquerade as a live second instance.
+            kernel32.SetLastError(0)
+            handle = kernel32.CreateMutexW(None, False, SINGLE_INSTANCE_MUTEX)
+            if not handle:
+                return True  # fail open — don't block the GUI on a Win32 hiccup
+            if kernel32.GetLastError() != _ERROR_ALREADY_EXISTS:
+                global _single_instance_handle
+                _single_instance_handle = handle
+                return True
             kernel32.CloseHandle(handle)
-            return False
-        global _single_instance_handle
-        _single_instance_handle = handle
-        return True
+            time.sleep(SINGLE_INSTANCE_RETRY_DELAY_SECONDS)
+        return False
     import fcntl
     global _single_instance_lock_file
     try:
@@ -2736,6 +2748,14 @@ if __name__ == "__main__":
         sys.exit(_run_apply_update(
             sys.argv[2], sys.argv[3],
             len(sys.argv) >= 5 and sys.argv[4] == "relaunch"))
+    # Elevated-helper child: re-launched via UAC while the GUI parent is alive
+    # and holding the single-instance mutex, so it must bypass that lock too —
+    # otherwise the guard below focuses the parent and exits 0 without doing
+    # any privileged work (hosts never configured). File logging still runs:
+    # the helper tees its stderr into debug.log for diagnosis.
+    if len(sys.argv) >= 3 and sys.argv[1] == "--admin-helper":
+        _setup_file_logging()
+        sys.exit(_run_admin_helper(sys.argv[2]))
     # Single instance: a duplicate launch focuses the running client and
     # exits. Runs BEFORE _setup_file_logging on purpose — rotating debug.log
     # here would scatter the live session into debug.prev.log; the two child
@@ -2745,13 +2765,5 @@ if __name__ == "__main__":
         _focus_existing_instance()
         sys.exit(0)
     _setup_file_logging()
-    # Elevated-helper entry: when re-launched via UAC/pkexec with
-    # `--admin-helper <op>`, do the privileged work and exit before
-    # importing/initializing any Tk machinery. The elevated child must
-    # never show a GUI — otherwise users see a phantom second window
-    # and the privileged work silently never happens (the original Win11
-    # symptom).
-    if len(sys.argv) >= 3 and sys.argv[1] == "--admin-helper":
-        sys.exit(_run_admin_helper(sys.argv[2]))
 
     run_gui()
