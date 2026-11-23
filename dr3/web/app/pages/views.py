@@ -996,9 +996,11 @@ def leaderboard():
     hardcore = _bool_arg('hardcore')
     country = (request.args.get('country') or '').strip() or None
 
-    # Two-select location/stage UI: ?stage= alone still works (the location is
-    # derived from it); a picked location without a valid stage of its own
-    # falls back to the first stage of that location (the only one for RX).
+    # Two-select location/stage UI: the form always submits BOTH selects, so a
+    # just-picked Location still carries the previous Stage — on that conflict
+    # the picked location wins (its first stage is auto-selected). ?stage=
+    # alone still works; a location without a valid stage of its own falls back
+    # to the first stage of that location (the only one for RX).
     _loc_by_name = {l.display_name: l for l in Location}
     loc_sel = None
     raw_loc = (request.args.get('loc') or '').strip()
@@ -1007,12 +1009,16 @@ def leaderboard():
             loc_sel = Location(int(raw_loc))
         except ValueError:
             loc_sel = None
+    track_loc = None
     if track is not None:
         try:
-            loc_sel = Track(int(track)).location
+            track_loc = Track(int(track)).location
         except (ValueError, TypeError):
-            # Out-of-catalog stage id: keep it for the query, no location.
-            loc_sel = None
+            pass  # out-of-catalog stage id: keep it for the query, no location
+    if track_loc is not None and loc_sel is not None and track_loc is not loc_sel:
+        track = None  # stale stage from another location — the picked one wins
+    if track is not None and track_loc is not None:
+        loc_sel = track_loc
     elif loc_sel is not None:
         opts = next((o for n, o in stages if _loc_by_name.get(n) is loc_sel), [])
         track = opts[0][0] if opts else None

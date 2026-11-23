@@ -128,6 +128,12 @@ def main() -> int:
     check('leaderboard: RX location auto-selects its only stage',
           _stage_select(_rx_loc_html).count('<option') == 1
           and '<option value="639" selected>' in _stage_select(_rx_loc_html), '')
+    # The form always submits BOTH selects: a just-picked Location still carries
+    # the previous Stage — the picked location must win that conflict.
+    _conf_html = client.get('/leaderboard?loc=39&stage=612').get_data(as_text=True)  # Mettet + stale Argentina stage
+    check('leaderboard: picked location wins over a stale stage from another location',
+          '<option value="639" selected>' in _stage_select(_conf_html)
+          and '<option value="39" selected>' in _conf_html, '')
     check('split coloring: column best green, others red (leaderboard JS + CSS)',
           '.split-best { color: var(--muted); }' in lb_css
           and '.split-worse { color: var(--warning); }' in lb_css

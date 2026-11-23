@@ -836,7 +836,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .split-col { white-space: nowrap; width: 4rem; }
 .split-best { color: var(--muted); }
 .split-worse { color: var(--warning); }
-.dash-tip { position: relative; display: inline-block; cursor: help; color: var(--muted); }
+.dash-tip { position: relative; display: inline-block; cursor: help; }
 .hover-tip {
   position: fixed;
   background: var(--bg);
