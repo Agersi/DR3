@@ -55,7 +55,10 @@ def main() -> int:
           and 'id="lb-board-table"' in lb_html
           and           '<th class="car-col">Vehicle</th><th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th class="src-cell">Source</th>' in lb_html
           and "tbody.querySelectorAll('tr').forEach(applyTuning);" in lb_html, '')
-    check('site nav: leaderboard link visible', '<a href="/leaderboard">Leaderboard</a>' in lb_html, '')
+    check('site nav: vehicles link between clubs and leaderboard',
+          '<a href="/vehicles">Vehicles</a>' in lb_html
+          and '<a href="/leaderboard">Leaderboard</a>' in lb_html
+          and lb_html.find('/clubs">Clubs') < lb_html.find('/vehicles">Vehicles') < lb_html.find('/leaderboard">Leaderboard'), '')
     # stage=11 has smokedriver bests: car 2 with splits [101.0, 100.5], car 9
     # without — exercises both the value cells and the club-board fallback.
     lb_rows = client.get('/leaderboard?stage=11').get_data(as_text=True)
