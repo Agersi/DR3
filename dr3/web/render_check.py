@@ -68,7 +68,7 @@ def main() -> int:
     lb_css = client.get('/static/css/style.css').get_data(as_text=True)
     check('leaderboard: filter panel CSS',
           '.lb-filters { margin-bottom: 0.6rem; }' in lb_css
-          and '.lb-filter-row { display: flex; gap: 0.9rem; flex-wrap: wrap; align-items: flex-end; }' in lb_css
+          and           '.lb-filter-row { display: flex; gap: 0.9rem; flex-wrap: wrap; }' in lb_css
           and '.lb-mode-toggle label:has(input:checked) { background: var(--accent); color: var(--bg); }' in lb_css, '')
     check('leaderboard: stage/car select widths + animated extra row (grid 0fr->1fr)',
           '.lb-filter-row .cselect:has(select[name=stage]), .lb-filter-row .cselect:has(select[name=car]) { width: 24rem; }' in lb_css

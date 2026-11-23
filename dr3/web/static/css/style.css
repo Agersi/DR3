@@ -911,7 +911,7 @@ details.create-club .plus, .hover-tip, .champ-center, .round-thumb, .round-class
 }
 /* ── Leaderboard filter panel ─────────────────────────── */
 .lb-filters { margin-bottom: 0.6rem; }
-.lb-filter-row { display: flex; gap: 0.9rem; flex-wrap: wrap; align-items: flex-end; }
+.lb-filter-row { display: flex; gap: 0.9rem; flex-wrap: wrap; }
 .lb-filter-row + .lb-filter-row { margin-top: 0.8rem; }
 .lb-filter-row label { margin: 0 0 0.2rem; font-size: 0.82rem; color: var(--muted); }
 .lb-filter-row .cselect { width: 9.5rem; }
