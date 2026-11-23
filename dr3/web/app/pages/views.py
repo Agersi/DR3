@@ -1024,22 +1024,23 @@ def leaderboard():
         track = opts[0][0] if opts else None
     if track is None and stages:
         track = stages[0][1][0][0]
-
-    # Select options: every location with catalog stages + the stage list of
-    # the resolved location.
+    # Select options: every location with catalog stages, grouped by
+    # discipline for the optgrouped select + the stage list of the resolved
+    # location.
     try:
         cur_loc = Track(int(track)).location if track is not None else None
     except (ValueError, TypeError):
         cur_loc = None  # out-of-catalog stage id
-    locations = []
-    stage_opts = []
+
+    rally_locs, rx_locs, stage_opts = [], [], []
     for name, opts in stages:
         l = _loc_by_name.get(name)
         if l is None:
             continue
-        locations.append((int(l), name))
+        (rx_locs if l.discipline == 'rallycross' else rally_locs).append((int(l), name))
         if cur_loc is not None and l is cur_loc:
             stage_opts = opts
+    loc_groups = [('Rally', rally_locs), ('Rallycross', rx_locs)]
 
     # Weather options are scoped to the selected stage's location — the same
     # per-location lighting sweep the club event creation offers. A selection
@@ -1085,7 +1086,7 @@ def leaderboard():
     return render_template(
         'leaderboard.html',
         mode=mode,
-        locations=locations,
+        loc_groups=loc_groups,
         cur_loc=int(cur_loc) if cur_loc is not None else None,
         stage_opts=stage_opts,
         cars=cars,

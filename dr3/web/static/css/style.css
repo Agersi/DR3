@@ -451,6 +451,7 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .drivers-box th:nth-child(4), .drivers-box td:nth-child(4) { width: 7rem; }
 .recent-box.drivers-box .num { text-align: right; }
 .flag { height: .95em; width: auto; vertical-align: -0.18em; margin-right: 0.3em; }
+.class-thumb { height: 1.3em; width: auto; vertical-align: -0.32em; margin-right: .4em; }
 
 /* ── Profile driving stats: two-column layout ───────── */
 
@@ -887,7 +888,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 #lb-board-table .src-cell { text-align: center; }
 table th:last-child, table td:last-child { padding-right: .5rem; }
 .car-fastest tr.fastest-detail td:last-child { padding-right: 0; }
-#lb-board-table .car-col { width: 14rem; }
+#lb-board-table .car-col { width: 16rem; }
 .board-empty td { text-align: center; color: var(--muted); padding: 1rem; }
 
 .standings-title { margin-top: 1.6rem; font-size: 1.15rem; }

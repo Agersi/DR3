@@ -262,9 +262,11 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
         except (ValueError, TypeError):
             cond_id = 0
         cond_label = STAGE_CONDITIONS_LABELS.get(cond_id, '') if cond_id else ''
+        car_name, car_class = vehicle_meta(vid)
         raw.append({
             'username': name,
-            'car_name': vehicle_meta(vid)[0],
+            'car_name': car_name,
+            'car_class': car_class,
             'time_ms': e.stage_time_ms or 0,
             'compound': int(e.tyre_compound) if e.tyre_compound else None,
             'spares': _spare_tyres(se),
@@ -311,6 +313,7 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
             'username': r['username'],
             'display_name': (u.display_name or r['username']) if u else r['username'],
             'car_name': r['car_name'],
+            'car_class': r['car_class'],
             'flag_url': r['flag_url'],
             'tyres': [r['compound']] if r['compound'] else [],
             'spares': r['spares'],

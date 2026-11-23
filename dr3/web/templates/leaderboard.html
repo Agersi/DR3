@@ -13,8 +13,10 @@
   <div class="lb-filter-row">
     <label id="lb-loc-label">Location
       <select name="loc">
-        {% for lid, name in locations %}
-        <option value="{{ lid }}"{% if lid == cur_loc %} selected{% endif %}>{{ name }}</option>
+        {% for gname, opts in loc_groups %}
+        <optgroup label="{{ gname }}">
+          {% for lid, name in opts %}<option value="{{ lid }}"{% if lid == cur_loc %} selected{% endif %}>{{ name }}</option>{% endfor %}
+        </optgroup>
         {% endfor %}
       </select>
     </label>
@@ -130,14 +132,14 @@
   <table class="board" id="lb-board-table">
     {% if mode == 'times' %}
     <thead>
-      <tr><th>#</th><th>Driver</th>{% if not vehicle_id %}<th class="car-col">Car</th>{% endif %}<th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th class="src-cell">Source</th><th class="num">Time</th><th class="num diff-col">Diff 1st</th>{% for i in range(split_count) %}<th class="num split-col">{{ split_word }} #{{ i + 1 }}</th>{% endfor %}{% if not is_rx %}<th class="num pen-col">Penalty</th>{% endif %}</tr>
+      <tr><th>#</th><th>Driver</th>{% if not vehicle_id %}<th class="car-col">Vehicle</th>{% endif %}<th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th class="src-cell">Source</th><th class="num">Time</th><th class="num diff-col">Diff 1st</th>{% for i in range(split_count) %}<th class="num split-col">{{ split_word }} #{{ i + 1 }}</th>{% endfor %}{% if not is_rx %}<th class="num pen-col">Penalty</th>{% endif %}</tr>
     </thead>
     <tbody id="lb-board-body">
       {% for r in rows %}
       <tr class="board-row">
         <td class="num">{{ r.pos }}</td>
         <td>{{ flag_img(r.flag_url) }}<a class="driver-link" href="{{ url_for('pages.profile', username=r.username) }}">{{ r.display_name }}</a></td>
-        {% if not vehicle_id %}<td class="car-cell car-col">{{ r.car_name }}</td>{% endif %}
+        {% if not vehicle_id %}<td class="car-cell car-col">{% set cthumb = class_thumb_url(r.car_class) %}{% if cthumb %}<img class="class-thumb" src="{{ cthumb }}" alt="" loading="lazy"> {% endif %}{{ r.car_name }}</td>{% endif %}
         <td class="tyre-cell" data-tyres="{{ r.tyres|tojson }}" data-td="{{ r.tyre_damage|tojson|forceescape }}" data-cond="{{ r.conditions_label or '' }}"></td>
         <td class="spare-cell num" data-spares="{{ '' if r.spares is none else r.spares }}"></td>
         <td class="input-cell" data-input="{{ r.input or '' }}" data-vr="{{ '1' if r.vr else '' }}" data-assists="{{ '1' if r.assists else '' }}"></td>

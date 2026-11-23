@@ -53,7 +53,7 @@ def main() -> int:
     check('leaderboard: filter form + times board headers + hydration script',
           '<form class="panel lb-filters" method="get"' in lb_html
           and 'id="lb-board-table"' in lb_html
-          and '<th class="car-col">Car</th><th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th class="src-cell">Source</th>' in lb_html
+          and           '<th class="car-col">Vehicle</th><th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th class="src-cell">Source</th>' in lb_html
           and "tbody.querySelectorAll('tr').forEach(applyTuning);" in lb_html, '')
     # stage=11 has smokedriver bests: car 2 with splits [101.0, 100.5], car 9
     # without — exercises both the value cells and the club-board fallback.
@@ -62,25 +62,29 @@ def main() -> int:
           '<th class="num diff-col">Diff 1st</th><th class="num split-col">Split #1</th>' in lb_rows
           and '<td class="num split-col">101.00</td>' in lb_rows
           and '<span class="dash-tip" data-tip="Configure Telemetry">-</span>' in lb_rows, '')
+    # stage=13 has a Rally GT car (565) — the vehicle cell carries the class thumbnail.
+    _lb_cls = client.get('/leaderboard?stage=13').get_data(as_text=True)
+    check('leaderboard: class image in front of the vehicle name',
+          '<td class="car-cell car-col"><img class="class-thumb" src="/static/classes/rally-gt.png" alt="" loading="lazy"> Porsche 911 RGT Rally Spec</td>' in _lb_cls, '')
     check('leaderboard: tyre cell carries damage payload + weather for the popup',
           'data-td="' in lb_rows and 'data-cond="' in lb_rows
           and "dmg.className = 'dmg-popup'" in lb_rows
           and 'No damage data for this stage.' in lb_rows, '')
     check('leaderboard: tyre images carry data-tdx (popup indexes the set arrays)',
           '" data-tdx="' in lb_rows, '')
-    check('leaderboard: mode toggle + filters button + car column only when no car picked',
+    check('leaderboard: mode toggle + filters button + vehicle column only when no car picked',
           'class="lb-mode-toggle"' in lb_html
           and '<option value="">All cars</option>' in lb_html
           and 'id="lb-more-btn"' in lb_html
           and 'class="lb-extra-inner"' in lb_html
-          and '<th class="car-col">Car</th>' not in client.get('/leaderboard?car=999999').get_data(as_text=True), '')
+          and '<th class="car-col">Vehicle</th>' not in client.get('/leaderboard?car=999999').get_data(as_text=True), '')
     from dr2server.game_data import VEHICLE_CLASSES as _VCS
     _cls_cid = next(iter(_VCS))
     check('leaderboard: class options select every car of the class',
           'value="class-' in lb_html
           and '(all cars)' in lb_html
           and client.get('/leaderboard?car=class-999999').status_code == 200
-          and '<th class="car-col">Car</th>' in client.get(f'/leaderboard?car=class-{_cls_cid}').get_data(as_text=True), '')
+          and '<th class="car-col">Vehicle</th>' in client.get(f'/leaderboard?car=class-{_cls_cid}').get_data(as_text=True), '')
     # strict tag equality: a stray char after `selected` (e.g. `selected}`)
     # silently kills the default selection in browsers
     check('leaderboard: car/class selection renders a clean selected attribute',
@@ -105,7 +109,7 @@ def main() -> int:
           '#lb-board-table .diff-col { width: 5.5rem; }' in lb_css
           and '#lb-board-table .src-cell { text-align: center; }' in lb_css
           and '.dmg-cond { margin-top: 0.6rem;' in lb_css
-          and '#lb-board-table .car-col { width: 14rem; }' in lb_css
+          and '#lb-board-table .car-col { width: 16rem; }' in lb_css
           and '#lb-board-table .pen-col { width: 4.5rem; }' in lb_css, '')
     # Rallycross stages (track 641 = Bikernieki) carry no penalty column —
     # the board is about best laps there; smoke fixtures keep 641 empty.
@@ -119,9 +123,11 @@ def main() -> int:
     def _stage_select(page_html):
         i = page_html.find('<select name="stage">')
         return page_html[i:page_html.find('</select>', i)] if i >= 0 else ''
-    check('leaderboard: location + stage split into two selects (no optgroups in the stage list)',
+    check('leaderboard: location + stage split into two selects, locations grouped by discipline (no optgroups in the stage list)',
           '<label id="lb-loc-label">Location' in lb_html
           and '<select name="loc">' in lb_html
+          and '<optgroup label="Rally">' in lb_html
+          and '<optgroup label="Rallycross">' in lb_html
           and 'optgroup' not in _stage_select(lb_html)
           and 'id="lb-loc-label"' in client.get('/leaderboard?mode=distance').get_data(as_text=True), '')
     _rx_loc_html = client.get('/leaderboard?loc=39').get_data(as_text=True)  # Mettet RX
