@@ -831,7 +831,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
   font-size: .8rem;
   line-height: .8;
   padding: .3rem;
-  margin: .2em;
+  margin: .4em;
 }
 .split-col { white-space: nowrap; width: 4rem; }
 .dash-tip { position: relative; display: inline-block; cursor: help; color: var(--muted); }

@@ -590,7 +590,7 @@ def main() -> int:
               and det.find("'<th class=\"num split-col\">'") < det.find("'<th class=\"expand-head\">'")
               and "data-tip=\"' + (open ? 'Hide Splits' : 'Show Splits') + '\"" in det
                 and '.expand-head, .expand-cell { width: 2rem; text-align: center; white-space: nowrap; }' in board_css
-              and ".expand-btn {\n  position: relative;\n  background: none;\n  border: none;\n  cursor: pointer;\n  color: var(--accent);\n  font-size: .8rem;\n  line-height: .8;\n  padding: .3rem;\n  margin: .2em;\n}" in board_css
+              and ".expand-btn {\n  position: relative;\n  background: none;\n  border: none;\n  cursor: pointer;\n  color: var(--accent);\n  font-size: .8rem;\n  line-height: .8;\n  padding: .3rem;\n  margin: .4em;\n}" in board_css
               and '.hover-tip.show { opacity: 1; }' in board_css
               and "tip.className = 'hover-tip';" in det
               and "document.body.appendChild(tip);" in det
