@@ -924,4 +924,4 @@ details.create-club .plus, .hover-tip, .champ-center, .round-thumb, .round-class
 .lb-extra-row { display: grid; grid-template-rows: 0fr; margin-top: 0; transition: grid-template-rows 0.15s ease; }
 .lb-extra-row.open { grid-template-rows: 1fr; }
 .lb-extra-inner { display: flex; gap: 0.9rem; flex-wrap: wrap; align-items: flex-end; min-height: 0; overflow: hidden; padding-top: 0.8rem; transition: padding 0.15s ease; }
-.lb-filters-btn { margin: 0; padding: .5rem .4rem; }
+.lb-filters-btn { margin: 0; padding: .5rem .4rem; align-self: flex-end; }

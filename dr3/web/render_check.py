@@ -61,6 +61,13 @@ def main() -> int:
           and 'id="lb-more-btn"' in lb_html
           and 'class="lb-extra-inner"' in lb_html
           and '<th>Car</th>' not in client.get('/leaderboard?car=999999').get_data(as_text=True), '')
+    from dr2server.game_data import VEHICLE_CLASSES as _VCS
+    _cls_cid = next(iter(_VCS))
+    check('leaderboard: class options select every car of the class',
+          'value="class-' in lb_html
+          and '(all cars)' in lb_html
+          and client.get('/leaderboard?car=class-999999').status_code == 200
+          and '<th>Car</th>' in client.get(f'/leaderboard?car=class-{_cls_cid}').get_data(as_text=True), '')
     check('leaderboard: distance mode swaps the board columns',
           client.get('/leaderboard?mode=distance').get_data(as_text=True)
           .count('<th class="num">Stages</th><th class="num">Distance</th>') == 1
@@ -69,7 +76,8 @@ def main() -> int:
     check('leaderboard: filter panel CSS',
           '.lb-filters { margin-bottom: 0.6rem; }' in lb_css
           and           '.lb-filter-row { display: flex; gap: 0.9rem; flex-wrap: wrap; }' in lb_css
-          and '.lb-mode-toggle label:has(input:checked) { background: var(--accent); color: var(--bg); }' in lb_css, '')
+          and '.lb-mode-toggle label:has(input:checked) { background: var(--accent); color: var(--bg); }' in lb_css
+          and '.lb-filters-btn { margin: 0; padding: .5rem .4rem; align-self: flex-end; }' in lb_css, '')
     check('leaderboard: stage/car select widths + animated extra row (grid 0fr->1fr)',
           '.lb-filter-row .cselect:has(select[name=stage]), .lb-filter-row .cselect:has(select[name=car]) { width: 24rem; }' in lb_css
           and '.lb-extra-row { display: grid; grid-template-rows: 0fr; margin-top: 0; transition: grid-template-rows 0.15s ease; }' in lb_css

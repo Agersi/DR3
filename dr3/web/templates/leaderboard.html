@@ -27,8 +27,9 @@
         <option value="">All cars</option>
         {% for class_label, opts in cars %}
         <optgroup label="{{ class_label }}">
+          <option value="class-{{ class_ids[class_label] }}"{% if car_class_id is not none and class_ids[class_label] == car_class_id %} selected{% endif %}}>{{ class_label }} (all cars)</option>
           {% for vid, name in opts %}
-          <option value="{{ vid }}"{% if vid == vehicle_id %} selected{% endif %}>{{ name }}</option>
+          <option value="{{ vid }}"{% if vehicle_id is not none and vid == vehicle_id %} selected{% endif %}}>{{ name }}</option>
           {% endfor %}
         </optgroup>
         {% endfor %}

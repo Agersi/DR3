@@ -940,6 +940,7 @@ def leaderboard():
     from ..scoring import VEHICLES, vehicle_meta
     from dr2server.game_data import (
         SURFACE_DEGRAD_LEVELS,
+        VEHICLE_CLASSES,
         Track,
         stage_conditions_options_for_location,
     )
@@ -973,7 +974,17 @@ def leaderboard():
 
     mode = 'distance' if request.args.get('mode') == 'distance' else 'times'
     track = _int_arg('stage')
-    vehicle_id = _int_arg('car')
+    car_arg = (request.args.get('car') or '').strip()
+    vehicle_id = int(car_arg) if car_arg.isdigit() else None
+    # "class-<cid>" selects every catalog car of that class.
+    car_class_id = None
+    vehicle_ids = None
+    if car_arg.startswith('class-'):
+        tail = car_arg[len('class-'):]
+        if tail.isdigit():
+            car_class_id = int(tail)
+            vehicle_ids = sorted(vid for vid, meta in VEHICLES.items()
+                                 if int(meta['class']) == car_class_id)
     conditions = _int_arg('conditions')
     compound = _int_arg('compound')
     degrad_level = _float_arg('degrad', SURFACE_DEGRAD_LEVELS)
@@ -1006,18 +1017,21 @@ def leaderboard():
     board = {}
     if mode == 'times' and track is not None:
         board = best_times_board(
-            track, vehicle_id, conditions=conditions, compound=compound,
-            degrad_level=degrad_level, input_method=input_method, camera=camera,
-            vr=vr, assists=assists, hardcore=hardcore, country=country)
+            track, vehicle_id, vehicle_ids=vehicle_ids, conditions=conditions,
+            compound=compound, degrad_level=degrad_level,
+            input_method=input_method, camera=camera, vr=vr, assists=assists,
+            hardcore=hardcore, country=country)
     elif mode == 'distance':
         board = distance_board(
-            vehicle_id, degrad_level=degrad_level, input_method=input_method,
-            camera=camera, vr=vr, assists=assists, hardcore=hardcore,
-            country=country)
+            vehicle_id, vehicle_ids=vehicle_ids, degrad_level=degrad_level,
+            input_method=input_method, camera=camera, vr=vr, assists=assists,
+            hardcore=hardcore, country=country)
 
     car_name, car_class = ('', '')
     if vehicle_id is not None and vehicle_id in VEHICLES:
         car_name, car_class = vehicle_meta(vehicle_id)
+    elif car_class_id is not None:
+        car_name = VEHICLE_CLASSES.get(car_class_id, f'Class {car_class_id}')
 
     countries = sorted({u.country for u in User.query.all() if u.country})
 
@@ -1026,8 +1040,10 @@ def leaderboard():
         mode=mode,
         stages=stages,
         cars=cars,
+        class_ids={label: int(cid) for cid, label in VEHICLE_CLASSES.items()},
         track=track,
         vehicle_id=vehicle_id,
+        car_class_id=car_class_id,
         stage_info=stage_info(track) if track else {},
         car_name=car_name,
         car_class=car_class,

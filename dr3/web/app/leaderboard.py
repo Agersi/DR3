@@ -153,25 +153,29 @@ class SimpleRun:
 # Boards
 # ---------------------------------------------------------------------------
 
-def best_times_board(track, vehicle_id, *, conditions=None, compound=None,
-                     degrad_level=None, input_method=None, camera=None,
-                     vr=None, assists=None, hardcore=None, country=None) -> dict:
+def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
+                     compound=None, degrad_level=None, input_method=None,
+                     camera=None, vr=None, assists=None, hardcore=None,
+                     country=None) -> dict:
     """Best time per driver on one stage, across all run types.
 
     With a car selected: one row per driver (their fastest row for that car).
-    Without (vehicle_id is None): every car on the stage — one row per
-    driver + car, so a driver can appear several times.  Without a
-    conditions/compound filter each group's fastest row across conditions and
-    compounds wins; with them the board is scoped to that cell.  Run-based
-    filters only see rows whose best still points at a stored run — legacy
-    rows without a run_id are dropped whenever any such filter is on.
+    With vehicle_ids (a class selection): every catalog car of that class —
+    rendered like the no-car board (one row per driver + car).  Without any
+    car filter: every car on the stage.  Without a conditions/compound filter
+    each group's fastest row across conditions and compounds wins; with them
+    the board is scoped to that cell.  Run-based filters only see rows whose
+    best still points at a stored run — legacy rows without a run_id are
+    dropped whenever any such filter is on.
     """
     from .db import db
     from .models import StageRun, TimeTrialEntry, User
 
     q = db.session.query(TimeTrialEntry).filter(
         TimeTrialEntry.track == str(track)[:8])
-    if vehicle_id is not None:
+    if vehicle_ids is not None:
+        q = q.filter(TimeTrialEntry.vehicle_id.in_(list(vehicle_ids)))
+    elif vehicle_id is not None:
         q = q.filter(TimeTrialEntry.vehicle_id == int(vehicle_id))
     if conditions is not None:
         q = q.filter(TimeTrialEntry.conditions == str(conditions))
@@ -266,11 +270,13 @@ def best_times_board(track, vehicle_id, *, conditions=None, compound=None,
     return {'rows': rows, 'count': len(rows)}
 
 
-def distance_board(vehicle_id, *, degrad_level=None, input_method=None, camera=None,
-                   vr=None, assists=None, hardcore=None, country=None) -> dict:
+def distance_board(vehicle_id, *, vehicle_ids=None, degrad_level=None,
+                   input_method=None, camera=None, vr=None, assists=None,
+                   hardcore=None, country=None) -> dict:
     """Total distance driven per driver across all run types and stages —
-    in one car when selected, over every car when vehicle_id is None.  DNF
-    runs carry no distance_m and are excluded by the query."""
+    in one car when selected, over the cars of a class when vehicle_ids is
+    given, over every car when neither is set.  DNF runs carry no distance_m
+    and are excluded by the query."""
     from .db import db
     from .models import StageRun, User
 
@@ -281,7 +287,9 @@ def distance_board(vehicle_id, *, degrad_level=None, input_method=None, camera=N
         StageRun.camera_position, StageRun.vr_enabled,
         StageRun.assists_enabled, StageRun.using_assists,
         StageRun.hardcore_damage)
-    if vehicle_id is not None:
+    if vehicle_ids is not None:
+        q = q.filter(StageRun.vehicle_id.in_(list(vehicle_ids)))
+    elif vehicle_id is not None:
         q = q.filter(StageRun.vehicle_id == int(vehicle_id))
     rows = q.filter(StageRun.distance_m.isnot(None),
                     StageRun.distance_m > 0).all()
