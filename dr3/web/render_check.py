@@ -41,7 +41,7 @@ def main() -> int:
 
     anon_pages = [('/', 200), ('/events', 404), ('/clubs', 200), ('/install', 200),
                   ('/about', 200), ('/login', 200), ('/register', 200),
-                  ('/forgot_password', 200), ('/cars', 200), ('/leaderboard', 200),
+                  ('/forgot_password', 200), ('/vehicles', 200), ('/cars', 302), ('/leaderboard', 200),
                   ('/static/css/style.css', 200),
                   ('/static/logo.png', 200), ('/nope', 404)]
     for path, want in anon_pages:
@@ -66,7 +66,7 @@ def main() -> int:
     # stage=13 has a Rally GT car (565) — the vehicle cell carries the class thumbnail.
     _lb_cls = client.get('/leaderboard?stage=13').get_data(as_text=True)
     check('leaderboard: class image in front of the vehicle name + car page link',
-          '<td class="car-cell car-col"><img class="class-thumb" src="/static/classes/rally-gt.png" alt="" loading="lazy"> <a class="driver-link" href="/cars?car=565">Porsche 911 RGT Rally Spec</a></td>' in _lb_cls, '')
+          '<td class="car-cell car-col"><img class="class-thumb" src="/static/classes/rally-gt.png" alt="" loading="lazy"> <a class="driver-link" href="/vehicles?vehicle=565">Porsche 911 RGT Rally Spec</a></td>' in _lb_cls, '')
     check('leaderboard: tyre cell carries damage payload + weather for the popup',
           'data-td="' in lb_rows and 'data-cond="' in lb_rows
           and "dmg.className = 'dmg-popup'" in lb_rows
@@ -239,7 +239,7 @@ def main() -> int:
     check('home: recent-times rows link driver + club + vehicle pages (all use driver-link)',
           '<a class="driver-link" href="/profile/smokedriver">Smoke Driver</a>' in html
           and "a.className = 'driver-link';" in html
-          and '<a class="driver-link" href="/cars?car=1">Vehicle 1</a>' in html, '')
+          and '<a class="driver-link" href="/vehicles?vehicle=1">Vehicle 1</a>' in html, '')
     check('home: recent-times Time + Posted columns use num class (headers, server + JS rows)',
           '<th class="num">Time</th>' in html and '<th class="num">Posted</th>' in html
           and html.count('<td class="num">') == 4
@@ -258,7 +258,7 @@ def main() -> int:
           and "tbody.querySelectorAll('tr').forEach(applyTuning);" in html
           and '.recent-box th:nth-child(4), .recent-box td:nth-child(4)' in css, '')
     r = client.get('/cars/565', follow_redirects=True)
-    check('car page renders name + class + tabs (old /cars/<id> redirects to ?car=)',
+    check('car page renders name + class + tabs (old /cars/<id> redirects to the vehicle page)',
           r.status_code == 200 and 'Porsche 911 RGT Rally Spec' in r.get_data(as_text=True)
           and 'Rally GT' in r.get_data(as_text=True)
           and 'id="car-select"' in r.get_data(as_text=True)

@@ -142,8 +142,8 @@
   var fastestClassBody = document.getElementById('car-fastest-class-body');
   var fastestOverallBody = document.getElementById('car-fastest-overall-body');
   var distanceBody = document.getElementById('car-distance-body');
-  var DATA_URL = '{{ url_for("pages.cars_data") }}';
-  var PAGE_BASE = '{{ url_for("pages.cars_index") }}';
+  var DATA_URL = '{{ url_for("pages.vehicles_data") }}';
+  var PAGE_BASE = '{{ url_for("pages.vehicles_index") }}';
 
   function emptyRow(tbody, text) {
     tbody.innerHTML = '';
@@ -250,7 +250,7 @@
   }
 
   select.addEventListener('change', function () {
-    fetch(DATA_URL + '?car=' + encodeURIComponent(select.value),
+    fetch(DATA_URL + '?vehicle=' + encodeURIComponent(select.value),
           { headers: { 'Accept': 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
       .then(function (d) {
@@ -273,7 +273,7 @@
         renderFastest(fastestOverallBody, d.fastest_overall || []);
         renderDistance(d.distance || []);
         document.title = d.title + ' — DR3';
-        history.replaceState(null, '', PAGE_BASE + '?car=' + select.value);
+        history.replaceState(null, '', PAGE_BASE + '?vehicle=' + select.value);
       })
       .catch(function () {});
   });

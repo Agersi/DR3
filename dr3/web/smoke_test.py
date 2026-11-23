@@ -1223,7 +1223,7 @@ def main() -> int:
           str(rows)[:300])
     check('recent-times row carries driver/car links (no club on this event)',
           rows[0].get('driver_url') == '/profile/smokedriver'
-          and rows[0].get('car_url') == '/cars?car=1'
+          and rows[0].get('car_url') == '/vehicles?vehicle=1'
           and rows[0].get('club_url') == '', str(rows)[:300])
     r = client.get('/api/home/recent-times?offset=1&limit=25')
     j = r.get_json() or {}
@@ -1280,7 +1280,7 @@ def main() -> int:
           link is not None
           and link['driver_url'] == '/profile/smokedriver'
           and link['club_url'] == '/clubs/smoke-link-club'
-          and link['car_url'] == '/cars?car=565'
+          and link['car_url'] == '/vehicles?vehicle=565'
           and link['car'] == 'Porsche 911 RGT Rally Spec', str(link or rows)[:300])
     check('recent-times row carries tuning fields (run detail + stage entry)',
           link is not None
@@ -1293,8 +1293,8 @@ def main() -> int:
           and link['tyre_damage'] == [{'s': 0, 'd': _link_dmg}],
           str(link or rows)[:300])
 
-    # 7c-3. Car page: /cars?car=<id> preselects the car, the old /cars/<id>
-    # URL redirects there. Leaderboards come from stage_runs: fastest stages
+    # 7c-3. Vehicle page: /vehicles?vehicle=<id> preselects the vehicle, the old
+    # /cars URLs redirect there. Leaderboards come from stage_runs: fastest stages
     # per location — overall (any car) and in-class (same class only; car 565
     # is Rally GT while the faster car 385 on track 702 is H1 FWD) — plus
     # distance driven per driver.
@@ -1322,9 +1322,9 @@ def main() -> int:
         ])
         db.session.commit()
 
-    r = client.get('/cars?car=565')
+    r = client.get('/vehicles?vehicle=565')
     html = r.get_data(as_text=True)
-    check('car page preselects the ?car= vehicle and shows name + class + tabs',
+    check('car page preselects the ?vehicle= vehicle and shows name + class + tabs',
           r.status_code == 200 and 'Porsche 911 RGT Rally Spec' in html
           and 'Rally GT' in html and '<option value="565" selected' in html
           and 'id="car-select"' in html
@@ -1342,7 +1342,7 @@ def main() -> int:
           'Smoke Driver' in html and 'Car Driver' in html
           and '5.2 km' in html
           and html.find('Smoke Driver') < html.find('Car Driver'), '')
-    r = client.get('/api/cars/data?car=565')
+    r = client.get('/api/vehicles/data?vehicle=565')
     j = r.get_json() or {}
     fs_overall = j.get('fastest_overall') or []
     fs_class = j.get('fastest_class') or []
@@ -1368,20 +1368,28 @@ def main() -> int:
           dist and dist[0].get('username') == 'smokedriver'
           and card is not None and card.get('km') == 5.2
           and card.get('driver_url') == '/profile/cardriver', str(dist)[:300])
-    r = client.get('/api/cars/data?car=999999')
+    r = client.get('/api/vehicles/data?vehicle=999999')
     check('cars data API 404 for unknown car id', r.status_code == 404,
           f'status={r.status_code}')
     r = client.get('/cars/565')
-    check('old /cars/<id> URL redirects to the ?car= page',
-          r.status_code == 302 and r.headers.get('Location', '').endswith('/cars?car=565'),
+    check('old /cars/<id> URL redirects to the ?vehicle= page',
+          r.status_code == 302 and r.headers.get('Location', '').endswith('/vehicles?vehicle=565'),
           f'status={r.status_code} loc={r.headers.get("Location")}')
     r = client.get('/cars/1')
-    check('unknown car id redirects to the ?car= page (falls back server-side)',
-          r.status_code == 302 and r.headers.get('Location', '').endswith('/cars?car=1'),
+    check('unknown car id redirects to the ?vehicle= page (falls back server-side)',
+          r.status_code == 302 and r.headers.get('Location', '').endswith('/vehicles?vehicle=1'),
           f'status={r.status_code}')
     r = client.get('/cars')
+    check('legacy /cars URL redirects to /vehicles',
+          r.status_code == 302 and r.headers.get('Location', '').endswith('/vehicles'),
+          f'status={r.status_code} loc={r.headers.get("Location")}')
+    r = client.get('/vehicles/565')
+    check('/vehicles/<id> redirects to the ?vehicle= page',
+          r.status_code == 302 and r.headers.get('Location', '').endswith('/vehicles?vehicle=565'),
+          f'status={r.status_code} loc={r.headers.get("Location")}')
+    r = client.get('/vehicles')
     html = r.get_data(as_text=True)
-    check('/cars default: first catalog car selected (DS Automobiles DS 21)',
+    check('/vehicles default: first catalog car selected (DS Automobiles DS 21)',
           r.status_code == 200 and 'DS Automobiles DS 21' in html
           and '<option value="572" selected' in html, f'status={r.status_code}')
 
@@ -1569,9 +1577,9 @@ def main() -> int:
               (r.get_json() or {}).get('ok') is True, str(r.get_json()))
     prof3 = client2.get('/profile/secondpilot').get_data(as_text=True)
     check('profile: most driven cars list by distance, class parens only for shared names',
-          '<span class="top-name"><a class="driver-link" href="/cars?car=566">Audi S1 EKS RX Quattro (RX Supercars)</a></span>' in prof3
-          and '<span class="top-name"><a class="driver-link" href="/cars?car=580">Peugeot 208 WRX (RX Supercars 2019)</a></span>' in prof3
-          and '<span class="top-name"><a class="driver-link" href="/cars?car=565">Porsche 911 RGT Rally Spec</a></span>' in prof3
+          '<span class="top-name"><a class="driver-link" href="/vehicles?vehicle=566">Audi S1 EKS RX Quattro (RX Supercars)</a></span>' in prof3
+          and '<span class="top-name"><a class="driver-link" href="/vehicles?vehicle=580">Peugeot 208 WRX (RX Supercars 2019)</a></span>' in prof3
+          and '<span class="top-name"><a class="driver-link" href="/vehicles?vehicle=565">Porsche 911 RGT Rally Spec</a></span>' in prof3
           and prof3.index('Audi S1 EKS RX Quattro') < prof3.index('Peugeot 208 WRX')
           < prof3.index('Porsche 911 RGT Rally Spec'),
           f'status={r.status_code}')
@@ -1580,12 +1588,12 @@ def main() -> int:
           and '<span class="top-name">Spain</span>' in prof3
           and '<span class="top-name">Finland</span>' in prof3, '')
     check('profile: top-list rows — name left / distance right (flex li), no parens, cars left col / locations right col',
-          '<li><span class="top-name"><a class="driver-link" href="/cars?car=566">Audi S1 EKS RX Quattro (RX Supercars)</a></span>'
+          '<li><span class="top-name"><a class="driver-link" href="/vehicles?vehicle=566">Audi S1 EKS RX Quattro (RX Supercars)</a></span>'
           '<span class="top-km num">30.0 km</span></li>' in prof3
           and '<li><span class="top-name">Monte Carlo</span>'
           '<span class="top-km num">30.0 km</span></li>' in prof3
           and '(30.0 km)' not in prof3
-          and prof3.index('Most driven cars</div>') < prof3.index('<li><span class="top-name"><a class="driver-link" href="/cars?car=566">Audi S1')
+          and prof3.index('Most driven cars</div>') < prof3.index('<li><span class="top-name"><a class="driver-link" href="/vehicles?vehicle=566">Audi S1')
           and prof3.index('Most driven locations</div>') < prof3.index('<li><span class="top-name">Monte Carlo'),
           '')
 
@@ -2276,8 +2284,8 @@ def main() -> int:
               and all(r.get('vehicle') != 'Ford Fiesta R2' for r in list(by_name0.values()) + list(by_name1.values())),
                f"cars={[(n, r.get('vehicle')) for n, r in {**by_name0, **by_name1}.items()]}")
         check('event-board API: rows carry a car-page url when the driven vehicle is known',
-              by_name0.get('smokedriver', {}).get('car_url') == '/cars?car=565'
-              and by_name0.get('secondpilot', {}).get('car_url') == '/cars?car=565',
+              by_name0.get('smokedriver', {}).get('car_url') == '/vehicles?vehicle=565'
+              and by_name0.get('secondpilot', {}).get('car_url') == '/vehicles?vehicle=565',
               f"urls={[(n, r.get('car_url')) for n, r in {**by_name0, **by_name1}.items()]}")
         check('event-board API: rows carry spare tyre counts, decoded from the stored tuning blob when the client did not report them',
               by_name0.get('smokedriver', {}).get('spares') == 2

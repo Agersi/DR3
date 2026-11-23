@@ -271,7 +271,7 @@ def home_recent_times():
             'club': row['club'],
             'club_url': url_for('clubs.club_detail', club_id=row['club_id']) if row['club_id'] else '',
             'car': row['car'],
-            'car_url': url_for('pages.cars_index', car=row['vehicle_id']) if row['vehicle_id'] else '',
+            'car_url': url_for('pages.vehicles_index', vehicle=row['vehicle_id']) if row['vehicle_id'] else '',
             'time_text': row['time_text'],
             'at_text': _timeago(dt) if dt else '',
             'tyres': row['tyres'],
@@ -859,15 +859,15 @@ def profile(username: str):
         'profile.html', target=user, stats=_profile_stats(user))
 
 
-@pages_bp.route('/cars')
-def cars_index():
-    """Car page: pick a car (?car=<vehicle id>) for its stats + leaderboards.
-    Unknown/missing ids fall back to the first catalog car."""
+@pages_bp.route('/vehicles')
+def vehicles_index():
+    """Vehicle page: pick a vehicle (?vehicle=<vehicle id>) for its stats + leaderboards.
+    Unknown/missing ids fall back to the first catalog vehicle."""
     from ..scoring import VEHICLES
 
     groups = _vehicle_class_groups()
     selected = None
-    raw = (request.args.get('car') or '').strip()
+    raw = (request.args.get('vehicle') or request.args.get('car') or '').strip()
     if raw.isdigit():
         cand = int(raw)
         if cand in VEHICLES:
@@ -878,20 +878,35 @@ def cars_index():
     return render_template('car.html', car_groups=groups, **data)
 
 
+@pages_bp.route('/vehicles/<int:vehicle_id>')
+def vehicle_redirect(vehicle_id: int):
+    """Convenience: /vehicles/<id> redirects to the ?vehicle= page."""
+    return redirect(url_for('pages.vehicles_index', vehicle=vehicle_id), code=302)
+
+
+@pages_bp.route('/cars')
+def cars_legacy():
+    """Back-compat: old /cars links redirect to /vehicles (query preserved)."""
+    vid = (request.args.get('car') or request.args.get('vehicle') or '').strip()
+    if vid.isdigit():
+        return redirect(url_for('pages.vehicles_index', vehicle=int(vid)), code=302)
+    return redirect(url_for('pages.vehicles_index'), code=302)
+
+
 @pages_bp.route('/cars/<int:vehicle_id>')
-def car_stats(vehicle_id: int):
-    """Back-compat: old /cars/<id> links redirect to the ?car= page."""
-    return redirect(url_for('pages.cars_index', car=vehicle_id), code=302)
+def cars_legacy_id(vehicle_id: int):
+    """Back-compat: old /cars/<id> links redirect to the ?vehicle= page."""
+    return redirect(url_for('pages.vehicles_index', vehicle=vehicle_id), code=302)
 
 
-@pages_bp.route('/api/cars/data')
-def cars_data():
-    """JSON for the car page's live switcher (?car=<vehicle id>)."""
+@pages_bp.route('/api/vehicles/data')
+def vehicles_data():
+    """JSON for the vehicle page's live switcher (?vehicle=<vehicle id>)."""
     from ..scoring import VEHICLES
 
-    raw = (request.args.get('car') or '').strip()
+    raw = (request.args.get('vehicle') or request.args.get('car') or '').strip()
     if not raw.isdigit() or int(raw) not in VEHICLES:
-        return jsonify({'ok': False, 'error': 'Unknown car.'}), 404
+        return jsonify({'ok': False, 'error': 'Unknown vehicle.'}), 404
     return jsonify({'ok': True, **_car_page_data(int(raw))})
 
 
@@ -1074,7 +1089,7 @@ def leaderboard():
     # for catalog ids (legacy rows store 0/unknown and stay plain text).
     for row in board.get('rows', []):
         vid = row.get('vehicle_id')
-        row['car_url'] = url_for('pages.cars_index', car=vid) if vid in VEHICLES else ''
+        row['car_url'] = url_for('pages.vehicles_index', vehicle=vid) if vid in VEHICLES else ''
 
     # Distance mode (and an empty times board) carries no split metadata.
     board.setdefault('split_count', 0)

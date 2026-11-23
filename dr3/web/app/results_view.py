@@ -802,7 +802,7 @@ def event_board(event: dict, round_index: int, mode: str,
             'driver_url': f'/profile/{r["username"]}',
             'flag_url': flag_by_user.get(r['username']) or flag_url(''),
             'vehicle': name,
-            'car_url': f'/cars?car={vid}' if vid is not None else '',
+            'car_url': f'/vehicles?vehicle={vid}' if vid is not None else '',
             'tyres': tyres,
             # Parallel to `tyres`: per-image {s: stage-bar local index,
             # d: comp_damage dict or null}.
