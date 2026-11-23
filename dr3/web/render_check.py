@@ -53,8 +53,21 @@ def main() -> int:
     check('leaderboard: filter form + times board headers + hydration script',
           '<form class="panel lb-filters" method="get"' in lb_html
           and 'id="lb-board-table"' in lb_html
-          and '<th>Car</th><th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th>Source</th>' in lb_html
+          and '<th>Car</th><th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th class="src-cell">Source</th>' in lb_html
           and "tbody.querySelectorAll('tr').forEach(applyTuning);" in lb_html, '')
+    # stage=11 has smokedriver bests: car 2 with splits [101.0, 100.5], car 9
+    # without — exercises both the value cells and the club-board fallback.
+    lb_rows = client.get('/leaderboard?stage=11').get_data(as_text=True)
+    check('leaderboard: splits columns always after Diff 1st (club-board fallback)',
+          '<th class="num diff-col">Diff 1st</th><th class="num split-col">Split #1</th>' in lb_rows
+          and '<td class="num split-col">101.00</td>' in lb_rows
+          and '<span class="dash-tip" data-tip="Configure Telemetry">-</span>' in lb_rows, '')
+    check('leaderboard: tyre cell carries damage payload + weather for the popup',
+          'data-td="' in lb_rows and 'data-cond="' in lb_rows
+          and "dmg.className = 'dmg-popup'" in lb_rows
+          and 'No damage data for this stage.' in lb_rows, '')
+    check('leaderboard: tyre images carry data-tdx (popup indexes the set arrays)',
+          '" data-tdx="' in lb_rows, '')
     check('leaderboard: mode toggle + filters button + car column only when no car picked',
           'class="lb-mode-toggle"' in lb_html
           and '<option value="">All cars</option>' in lb_html
@@ -88,6 +101,10 @@ def main() -> int:
           '.lb-filter-row .cselect:has(select[name=stage]), .lb-filter-row .cselect:has(select[name=car]) { width: 24rem; }' in lb_css
           and '.lb-extra-row { display: grid; grid-template-rows: 0fr; margin-top: 0; transition: grid-template-rows 0.15s ease; }' in lb_css
           and '.lb-extra-row.open { grid-template-rows: 1fr; }' in lb_css, '')
+    check('leaderboard: diff-col width + centered source + popup weather line (CSS)',
+          '#lb-board-table .diff-col { width: 5.5rem; }' in lb_css
+          and '#lb-board-table .src-cell { text-align: center; }' in lb_css
+          and '.dmg-cond { margin-top: 0.6rem;' in lb_css, '')
 
     # clubs list: filter form + partial reload (only the results section swaps)
     html = client.get('/clubs').get_data(as_text=True)

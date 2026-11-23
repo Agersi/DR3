@@ -879,7 +879,10 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .dmg-bar-fill { display: block; height: 100%; }
 .dmg-bar-val { width: 2rem; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
 .dmg-nodata { color: var(--muted); padding: 1.5rem 0; text-align: center; }
+.dmg-cond { margin-top: 0.6rem; padding-top: 0.45rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.85rem; text-align: center; }
 .splits-row td { background: var(--bg); color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+#lb-board-table .diff-col { width: 5.5rem; }
+#lb-board-table .src-cell { text-align: center; }
 .board-empty td { text-align: center; color: var(--muted); padding: 1rem; }
 
 .standings-title { margin-top: 1.6rem; font-size: 1.15rem; }

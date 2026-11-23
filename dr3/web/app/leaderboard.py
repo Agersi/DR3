@@ -14,6 +14,8 @@ apply there.
 """
 from __future__ import annotations
 
+import json
+
 from .countries import flag_url
 from .results_view import (
     _penalty_ms,
@@ -22,7 +24,9 @@ from .results_view import (
     gap_text,
 )
 from .scoring import vehicle_meta
-from dr2server.game_data import Location, Track
+from .tables import RX_LOCATIONS
+from dr2server.game_data import STAGE_CONDITIONS_LABELS, Location, Track
+from dr2server.stage_limits import split_count_for_limit, stage_limit_ms
 
 # Tyre compound id -> static image slug (mirrors the club board's TYRE_FILE).
 TYRE_FILES: dict[int, str] = {
@@ -220,15 +224,44 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
             event_ids.add(run.event_id)
     stage_entries = _stage_entries_by_slot(event_ids)
 
+    # Tyre-click popup payload: the comp_damage snapshot of the producing
+    # run's club slot (null for non-club runs or when never captured — the
+    # popup shows its no-data fallback, same as the club board).
+    damage_of: dict[tuple, dict] = {}
+    if event_ids:
+        from .models import ClubStageState
+
+        for st in db.session.query(ClubStageState).filter(
+                ClubStageState.event_id.in_(sorted(event_ids)),
+                ClubStageState.comp_damage_json.isnot(None)).all():
+            damage_of[(st.event_id, st.username, st.flat_stage_index)] = \
+                json.loads(st.comp_damage_json)
+
     raw = []
     for key, e in by_group.items():
         name, vid = key
         run = runs.get(e.run_id) if e.run_id else None
         se = None
         slot = slots.get(key)
+        d = None
         if slot:
             se = stage_entries.get((slot[0], name, slot[1]))
+            d = damage_of.get((slot[0], name, slot[1]))
         u = users.get(name)
+        splits = None
+        if e.splits_json:
+            try:
+                loaded = json.loads(e.splits_json)
+                splits = loaded if isinstance(loaded, list) and loaded else None
+            except (ValueError, TypeError):
+                splits = None
+        # Only known ids get a label — legacy rows store 0/unknown and the
+        # popup would otherwise show the "Conditions #N" fallback.
+        try:
+            cond_id = int(str(e.conditions))
+        except (ValueError, TypeError):
+            cond_id = 0
+        cond_label = STAGE_CONDITIONS_LABELS.get(cond_id, '') if cond_id else ''
         raw.append({
             'username': name,
             'car_name': vehicle_meta(vid)[0],
@@ -243,7 +276,29 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
                         else (bool(e.using_assists) if e.using_assists is not None else None)),
             'source': SOURCE_LABELS.get(run.source_type) if run else None,
             'flag_url': flag_url(u.country or '') if u else '',
+            'splits': splits,
+            'tyre_damage': ([{'s': 0, 'd': d}]
+                            if e.tyre_compound else []),
+            'conditions_label': cond_label,
         })
+    # Split columns: rally stages follow the game's max-time limit (15 min ->
+    # 4 sectors, 30 min -> 8); RX limits are per-lap and need event context the
+    # site-wide board doesn't have, so unknown counts mirror the longest splits
+    # actually recorded on this stage, defaulting to the common 4-sector shape
+    # (the club board's fallback).
+    is_rx = False
+    try:
+        is_rx = Track(int(track)).location.display_name in RX_LOCATIONS
+    except (ValueError, TypeError):
+        pass
+    split_count: int | None = None
+    if not is_rx:
+        limit = stage_limit_ms(int(track))
+        split_count = split_count_for_limit(limit) if limit else None
+    if not split_count:
+        split_count = max((len(r['splits']) for r in raw if r.get('splits')),
+                          default=4)
+
     raw.sort(key=lambda r: (r['time_ms'], r['username']))
     leader = raw[0]['time_ms'] if raw else None
 
@@ -266,8 +321,14 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
             'penalty_text': _penalty_text(r['penalty_ms']),
             'time_text': format_ms(r['time_ms']),
             'diff_str': gap_text(r['time_ms'] - leader) if leader is not None else '',
+            # Padded to split_count (None = no splits recorded for the run).
+            'splits': ((r['splits'] or [])[:split_count]
+                       + [None] * split_count)[:split_count],
+            'tyre_damage': r['tyre_damage'],
+            'conditions_label': r['conditions_label'],
         })
-    return {'rows': rows, 'count': len(rows)}
+    return {'rows': rows, 'count': len(rows), 'split_count': split_count,
+            'split_word': 'Lap' if is_rx else 'Split'}
 
 
 def distance_board(vehicle_id, *, vehicle_ids=None, degrad_level=None,

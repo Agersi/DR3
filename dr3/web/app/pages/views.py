@@ -1027,6 +1027,10 @@ def leaderboard():
             input_method=input_method, camera=camera, vr=vr, assists=assists,
             hardcore=hardcore, country=country)
 
+    # Distance mode (and an empty times board) carries no split metadata.
+    board.setdefault('split_count', 0)
+    board.setdefault('split_word', 'Split')
+
     car_name, car_class = ('', '')
     if vehicle_id is not None and vehicle_id in VEHICLES:
         car_name, car_class = vehicle_meta(vehicle_id)
