@@ -73,12 +73,12 @@ def main() -> int:
           and 'No damage data for this stage.' in lb_rows, '')
     check('leaderboard: tyre images carry data-tdx (popup indexes the set arrays)',
           '" data-tdx="' in lb_rows, '')
-    check('leaderboard: mode toggle + filters button + vehicle column only when no car picked',
+    check('leaderboard: mode toggle + filters button + vehicle column always visible',
           'class="lb-mode-toggle"' in lb_html
           and '<option value="">All cars</option>' in lb_html
           and 'id="lb-more-btn"' in lb_html
           and 'class="lb-extra-inner"' in lb_html
-          and '<th class="car-col">Vehicle</th>' not in client.get('/leaderboard?car=999999').get_data(as_text=True), '')
+          and '<th class="car-col">Vehicle</th>' in client.get('/leaderboard?car=999999').get_data(as_text=True), '')
     from dr2server.game_data import VEHICLE_CLASSES as _VCS
     _cls_cid = next(iter(_VCS))
     check('leaderboard: class options select every car of the class',

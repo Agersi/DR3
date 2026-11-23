@@ -132,14 +132,14 @@
   <table class="board" id="lb-board-table">
     {% if mode == 'times' %}
     <thead>
-      <tr><th>#</th><th>Driver</th>{% if not vehicle_id %}<th class="car-col">Vehicle</th>{% endif %}<th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th class="src-cell">Source</th><th class="num">Time</th><th class="num diff-col">Diff 1st</th>{% for i in range(split_count) %}<th class="num split-col">{{ split_word }} #{{ i + 1 }}</th>{% endfor %}{% if not is_rx %}<th class="num pen-col">Penalty</th>{% endif %}</tr>
+      <tr><th>#</th><th>Driver</th><th class="car-col">Vehicle</th><th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th class="src-cell">Source</th><th class="num">Time</th><th class="num diff-col">Diff 1st</th>{% for i in range(split_count) %}<th class="num split-col">{{ split_word }} #{{ i + 1 }}</th>{% endfor %}{% if not is_rx %}<th class="num pen-col">Penalty</th>{% endif %}</tr>
     </thead>
     <tbody id="lb-board-body">
       {% for r in rows %}
       <tr class="board-row">
         <td class="num">{{ r.pos }}</td>
         <td>{{ flag_img(r.flag_url) }}<a class="driver-link" href="{{ url_for('pages.profile', username=r.username) }}">{{ r.display_name }}</a></td>
-        {% if not vehicle_id %}<td class="car-cell car-col">{% set cthumb = class_thumb_url(r.car_class) %}{% if cthumb %}<img class="class-thumb" src="{{ cthumb }}" alt="" loading="lazy"> {% endif %}{% if r.car_url %}<a class="driver-link" href="{{ r.car_url }}">{{ r.car_name }}</a>{% else %}{{ r.car_name }}{% endif %}</td>{% endif %}
+        <td class="car-cell car-col">{% set cthumb = class_thumb_url(r.car_class) %}{% if cthumb %}<img class="class-thumb" src="{{ cthumb }}" alt="" loading="lazy"> {% endif %}{% if r.car_url %}<a class="driver-link" href="{{ r.car_url }}">{{ r.car_name }}</a>{% else %}{{ r.car_name }}{% endif %}</td>
         <td class="tyre-cell" data-tyres="{{ r.tyres|tojson }}" data-td="{{ r.tyre_damage|tojson|forceescape }}" data-cond="{{ r.conditions_label or '' }}"></td>
         <td class="spare-cell num" data-spares="{{ '' if r.spares is none else r.spares }}"></td>
         <td class="input-cell" data-input="{{ r.input or '' }}" data-vr="{{ '1' if r.vr else '' }}" data-assists="{{ '1' if r.assists else '' }}"></td>
@@ -151,7 +151,7 @@
         {% if not is_rx %}<td class="num pen-col">{% if r.penalty_text %}{{ r.penalty_text }}{% else %}<span class="ink">—</span>{% endif %}</td>{% endif %}
       </tr>
       {% else %}
-      <tr class="board-empty"><td colspan="{{ (10 if not vehicle_id else 9) + split_count + (0 if is_rx else 1) }}">No times yet.</td></tr>
+      <tr class="board-empty"><td colspan="{{ 10 + split_count + (0 if is_rx else 1) }}">No times yet.</td></tr>
       {% endfor %}
     </tbody>
     {% else %}
