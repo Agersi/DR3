@@ -1294,31 +1294,40 @@ def main() -> int:
           str(link or rows)[:300])
 
     # 7c-3. Vehicle page: /vehicles?vehicle=<id> preselects the vehicle, the old
-    # /cars URLs redirect there. Leaderboards come from stage_runs: fastest stages
+    # /cars URLs redirect there. Fastest stages come from best_times (the site
+    # leaderboard's source — clean finishes only, RX rows single-lap): fastest
     # per location — overall (any car) and in-class (same class only; car 565
-    # is Rally GT while the faster car 385 on track 702 is H1 FWD) — plus
-    # distance driven per driver.
+    # is Rally GT while the faster car 385 on track 517 is H1 FWD) — plus
+    # distance driven per driver (stage_runs).
     with app.app_context():
         from datetime import timedelta  # noqa: F401
-        from app.models import StageRun
+        from app.models import StageRun, TimeTrialEntry
         create_user('cardriver', 'car-driver@example.com', 'car-pass-12345',
                     display_name='Car Driver', country='Denmark')
         db.session.add_all([
-            # Wales: car 565 fastest on two distinct tracks (700, 701).
+            # Wales: car 565 fastest on two distinct tracks (437, 438).
             StageRun(username='smokedriver', source_type='timetrial',
-                     location_id=3, track_model_id=700, vehicle_id=565,
+                     location_id=3, track_model_id=437, vehicle_id=565,
                      time_ms=120000, player_finished=True, distance_m=4800),
             StageRun(username='cardriver', source_type='timetrial',
-                     location_id=3, track_model_id=701, vehicle_id=565,
+                     location_id=3, track_model_id=438, vehicle_id=565,
                      time_ms=90000, player_finished=True, distance_m=5200),
-            # Sweden: car 385 beats car 565 on the one shared track (702) —
-            # must not count toward 565's fastest stages.
+            # Sweden: car 385 beats car 565 on the one shared track (517) —
+            # must not count toward 565's overall fastest stages.
             StageRun(username='smokedriver', source_type='timetrial',
-                     location_id=14, track_model_id=702, vehicle_id=385,
+                     location_id=14, track_model_id=517, vehicle_id=385,
                      time_ms=60000, player_finished=True, distance_m=3000),
             StageRun(username='smokedriver', source_type='timetrial',
-                     location_id=14, track_model_id=702, vehicle_id=565,
+                     location_id=14, track_model_id=517, vehicle_id=565,
                      time_ms=61000, player_finished=True, distance_m=3100),
+            TimeTrialEntry(vclass='107', track='437', conditions='5', category=1,
+                           username='smokedriver', stage_time_ms=120000, vehicle_id=565),
+            TimeTrialEntry(vclass='107', track='438', conditions='5', category=1,
+                           username='cardriver', stage_time_ms=90000, vehicle_id=565),
+            TimeTrialEntry(vclass='101', track='517', conditions='5', category=1,
+                           username='smokedriver', stage_time_ms=60000, vehicle_id=385),
+            TimeTrialEntry(vclass='107', track='517', conditions='5', category=1,
+                           username='smokedriver', stage_time_ms=61000, vehicle_id=565),
         ])
         db.session.commit()
 
@@ -1335,8 +1344,8 @@ def main() -> int:
           and 'id="car-fastest-overall-body"' in html
           and 'Fastest in class' in html and 'Fastest overall' in html
           and 'class="fastest-row"' in html
-          and '<div class="fd-inner"><a class="driver-link" href="/leaderboard?stage=700&amp;car=class-107">Stage 700</a></div>' in html
-          and '<div class="fd-inner"><a class="driver-link" href="/leaderboard?stage=700">Stage 700</a></div>' in html, '')
+          and '<div class="fd-inner"><a class="driver-link" href="/leaderboard?stage=437&amp;car=class-107">Sweet Lamb</a></div>' in html
+          and '<div class="fd-inner"><a class="driver-link" href="/leaderboard?stage=437">Sweet Lamb</a></div>' in html, '')
     # (exact totals are not asserted: earlier fixtures also drive car 565 —
     # cardriver's 5.2 km is exact because only our row uses that username)
     check('car page distance table: Smoke Driver first, Car Driver exactly 5.2 km',
@@ -1359,15 +1368,15 @@ def main() -> int:
           and j.get('class_label') == 'Rally GT'
           and j.get('class_id') == 107
           and wales_o is not None and wales_o.get('count') == 2
-          and wales_o.get('stages') == [{'name': 'Stage 700', 'track_id': 700},
-                                        {'name': 'Stage 701', 'track_id': 701}]
+          and wales_o.get('stages') == [{'name': 'Geufron Forest', 'track_id': 438},
+                                        {'name': 'Sweet Lamb', 'track_id': 437}]
           and sweden_o is None, str(j)[:300])
     check('cars data API: in-class fastest stages — Wales 2 + Sweden 1 (H1 FWD car excluded), name + track id',
           wales_c is not None and wales_c.get('count') == 2
-          and wales_c.get('stages') == [{'name': 'Stage 700', 'track_id': 700},
-                                        {'name': 'Stage 701', 'track_id': 701}]
+          and wales_c.get('stages') == [{'name': 'Geufron Forest', 'track_id': 438},
+                                        {'name': 'Sweet Lamb', 'track_id': 437}]
           and sweden_c is not None and sweden_c.get('count') == 1
-          and sweden_c.get('stages') == [{'name': 'Stage 702', 'track_id': 702}], str(fs_class)[:300])
+          and sweden_c.get('stages') == [{'name': 'Ransbysäter', 'track_id': 517}], str(fs_class)[:300])
     check('cars data API: distance table — Smoke Driver first, Car Driver exactly 5.2 km',
           dist and dist[0].get('username') == 'smokedriver'
           and card is not None and card.get('km') == 5.2
@@ -1398,11 +1407,14 @@ def main() -> int:
           and '<option value="572" selected' in html, f'status={r.status_code}')
 
     with app.app_context():
-        from app.models import Club, ClubMember, Event, Result, StageRun
+        from app.models import Club, ClubMember, Event, Result, StageRun, TimeTrialEntry
         db.session.query(Result).filter_by(event_id='smoke-link-event').delete()
         db.session.query(StageRun).filter_by(event_id='smoke-link-event').delete()
         db.session.query(StageRun).filter(
-            StageRun.track_model_id.in_([700, 701, 702])
+            StageRun.track_model_id.in_([437, 438, 517])
+        ).delete(synchronize_session=False)
+        db.session.query(TimeTrialEntry).filter(
+            TimeTrialEntry.track.in_(['437', '438', '517'])
         ).delete(synchronize_session=False)
         cd = db.session.query(User).filter_by(username='cardriver').first()
         if cd is not None:

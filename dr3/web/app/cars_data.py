@@ -4,7 +4,8 @@ CAR_INFO holds the user-supplied content for each car's page header, keyed by
 catalog vehicle id (dr2server.game_data.Vehicle):
   image — file name inside static/cars/
   stats — (label, value) rows shown under the car name
-Leaderboard figures are computed from stage_runs at request time.
+Fastest-stage leaderboards come from best_times (the site leaderboard's
+source); distance figures from stage_runs — both computed at request time.
 """
 from __future__ import annotations
 
@@ -67,30 +68,35 @@ def stage_name(track_model_id: int | None) -> str:
 
 
 def fastest_stages_by_location(vid: int) -> dict[str, list[dict]]:
-    """Per location, how many distinct stages this car holds the best clean
-    time on — overall (fastest of any car) and in-class (fastest among cars
-    sharing this car's class). A stage is one route (location + track model);
-    the best is the fastest clean finish posted by any driver in any run type.
-    Each row carries the stages it wins ('stages' — {name, track_id} entries)."""
-    from dr2server.game_data import VEHICLES
+    """Per location, how many distinct stages this car holds the best time on —
+    overall (fastest of any car) and in-class (fastest among cars sharing this
+    car's class). A stage is one route (location + track model); the best comes
+    from best_times — the same source as the site leaderboard, where every row
+    is a clean finish and rallycross rows are single-lap records (ranking by a
+    run's total time would mix 2-lap and 12-lap races). Each row carries the
+    stages it wins ('stages' — {name, track_id} entries)."""
+    from dr2server.game_data import TRACKS, VEHICLES
 
     from .db import db
-    from .models import StageRun
+    from .models import TimeTrialEntry
 
     vid = int(vid)
     target_class = VEHICLES.get(vid, {}).get('class')
 
-    rows = (db.session.query(StageRun.location_id, StageRun.track_model_id,
-                             StageRun.vehicle_id, StageRun.time_ms)
-            .filter(StageRun.player_finished.is_(True),
-                    StageRun.time_ms > 0,
-                    StageRun.location_id.isnot(None),
-                    StageRun.track_model_id.isnot(None))
+    rows = (db.session.query(TimeTrialEntry.track, TimeTrialEntry.vehicle_id,
+                             TimeTrialEntry.stage_time_ms)
+            .filter(TimeTrialEntry.stage_time_ms > 0)
             .all())
     overall: dict[tuple, tuple] = {}
     in_class: dict[tuple, tuple] = {}
-    for loc, track, vehicle, ms in rows:
-        key = (loc, track)
+    for track_s, vehicle, ms in rows:
+        try:
+            tinfo = TRACKS.get(int(track_s))
+        except (TypeError, ValueError):
+            continue
+        if not tinfo:
+            continue
+        key = (tinfo['location_id'], int(track_s))
         cur = overall.get(key)
         if cur is None or ms < cur[0]:
             overall[key] = (ms, vehicle)
