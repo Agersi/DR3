@@ -527,11 +527,11 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 }
 .car-header { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }
 .car-img { width: 50%; height: auto; }
-.car-head-body { flex: 1; min-width: 10rem; }
-.car-stats { display: flex; gap: 0.65rem 0; margin: 0; flex-direction: column; flex-wrap: wrap; max-height: 14rem; max-width: 18rem; align-content: space-between; }
+.car-head-body { flex: 1; min-width: 10rem; align-self: stretch; }
+.car-stats { display: flex; gap: 0.3rem 0; margin: 0; flex-direction: column; flex-wrap: wrap; max-height: 13rem; max-width: 18rem; align-content: space-between; }
 .car-stat { width: 9rem; }
 .car-stat dt { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.74rem; font-weight: 600; color: var(--muted); }
-.car-stat dd { margin: 0; font-weight: 600; }
+.car-stat dd { margin: 0; font-weight: 600; font-size: .93rem; }
 .car-diagram { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; zoom: 1.7; margin: 0 .2rem; }
 .cd-front { color: var(--muted); font-size: 0.55rem; line-height: 1; }
 .cd-body { position: relative; width: 80px; height: 150px; border: 2px solid var(--line); border-radius: 24px 24px 14px 14px; background: rgba(60, 61, 55, 0.5); }

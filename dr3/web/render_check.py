@@ -298,7 +298,7 @@ def main() -> int:
           '.car-pick { display: flex; gap: 0.8rem; align-items: center; }' in css
           and '.car-header { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }' in css
           and '.car-img { width: 50%; height: auto; }' in css
-          and '.car-stats { display: flex; gap: 0.65rem 0; margin: 0; flex-direction: column; flex-wrap: wrap; max-height: 14rem; max-width: 18rem; align-content: space-between; }' in css
+          and '.car-stats { display: flex; gap: 0.3rem 0; margin: 0; flex-direction: column; flex-wrap: wrap; max-height: 13rem; max-width: 18rem; align-content: space-between; }' in css
           and '.car-stat { width: 9rem; }' in css, '')
     check('car page header: spec stats + engine/drivetrain diagram',
           '<div class="car-stat"><dt>Car Class</dt><dd>Rally GT</dd></div>' in r.get_data(as_text=True)
