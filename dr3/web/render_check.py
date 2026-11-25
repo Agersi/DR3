@@ -299,6 +299,13 @@ def main() -> int:
           and '.car-header { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }' in css
           and '.car-img { max-width: 300px; width: 60%; height: auto; }' in css
           and '.car-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.35rem 1rem; margin: 0.7rem 0 0; }' in css, '')
+    check('car page header: spec stats + engine/drivetrain diagram',
+          '<div class="car-stat"><dt>Power</dt><dd>425 hp</dd></div>' in r.get_data(as_text=True)
+          and 'id="car-diagram" data-engine="rear" data-drive="rear"' in r.get_data(as_text=True)
+          and 'class="cd-wheel cd-fl"' in r.get_data(as_text=True)
+          and '.car-diagram[data-engine="mid"] .cd-engine { top: 50%; margin-top: -15px; }' in css
+          and '.car-diagram[data-drive="4wd"] .cd-wheel { background: var(--muted); }' in css
+          and '.car-info { flex: 1 1 100%; margin: 0.9rem 0 0; max-width: 68ch; line-height: 1.45; }' in css, '')
     check('recent-times header stays pinned while rows scroll (sticky thead + box scrollbar)',
           '.recent-box { max-height: 360px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }' in css
           and '.recent-box::-webkit-scrollbar { width: 10px; }' in css

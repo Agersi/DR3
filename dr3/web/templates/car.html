@@ -24,6 +24,23 @@
       {% endfor %}
     </dl>
   </div>
+  {% if specs %}
+  <div class="car-diagram" id="car-diagram" data-engine="{{ specs.engine_placement }}" data-drive="{{ specs.drivetrain }}">
+    <span class="cd-front">&#9650;</span>
+    <div class="cd-body">
+      <span class="cd-wheel cd-fl"></span>
+      <span class="cd-wheel cd-fr"></span>
+      <span class="cd-wheel cd-rl"></span>
+      <span class="cd-wheel cd-rr"></span>
+      <span class="cd-engine"><b>Engine</b></span>
+    </div>
+    <p class="cd-captions">
+      <span id="cd-engine-cap">Engine: {{ specs.engine_placement }}</span>
+      <span id="cd-drive-cap">Drive: {% if specs.drivetrain == 'front' %}FWD{% elif specs.drivetrain == 'rear' %}RWD{% else %}4WD{% endif %}</span>
+    </p>
+  </div>
+  {% endif %}
+  {% if specs and specs.info %}<p class="car-info" id="car-info">{{ specs.info }}</p>{% endif %}
 </div>
 
 <nav class="club-menu" id="car-tab-menu">
@@ -260,6 +277,38 @@
     });
   }
 
+  function driveLabel(dt) {
+    return dt === 'front' ? 'FWD' : dt === 'rear' ? 'RWD' : '4WD';
+  }
+
+  function renderDiagram(specs) {
+    var diagram = document.getElementById('car-diagram');
+    if (!diagram) return;
+    if (!specs || (!specs.engine_placement && !specs.drivetrain)) {
+      diagram.hidden = true;
+      return;
+    }
+    diagram.hidden = false;
+    diagram.setAttribute('data-engine', specs.engine_placement || '');
+    diagram.setAttribute('data-drive', specs.drivetrain || '');
+    var ec = document.getElementById('cd-engine-cap');
+    if (ec) ec.textContent = 'Engine: ' + (specs.engine_placement || '?');
+    var dc = document.getElementById('cd-drive-cap');
+    if (dc) dc.textContent = 'Drive: ' + driveLabel(specs.drivetrain);
+  }
+
+  function renderInfo(text) {
+    var p = document.getElementById('car-info');
+    if (!text) { if (p) p.remove(); return; }
+    if (!p) {
+      p = document.createElement('p');
+      p.id = 'car-info';
+      p.className = 'car-info';
+      header.appendChild(p);
+    }
+    p.textContent = text;
+  }
+
   select.addEventListener('change', function () {
     fetch(DATA_URL + '?vehicle=' + encodeURIComponent(select.value),
           { headers: { 'Accept': 'application/json' } })
@@ -280,6 +329,8 @@
           img.remove();
         }
         renderStats(d.stats);
+        renderDiagram(d.specs || null);
+        renderInfo((d.specs && d.specs.info) || '');
         renderFastest(fastestClassBody, d.fastest_class || [], true, d.class_id);
         renderFastest(fastestOverallBody, d.fastest_overall || [], false, null);
         renderDistance(d.distance || []);

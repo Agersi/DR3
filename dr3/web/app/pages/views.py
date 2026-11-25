@@ -914,14 +914,37 @@ def _car_page_data(vid: int) -> dict:
     """Everything the car page renders for one catalog vehicle id."""
     from ..cars_data import (
         car_image_url,
-        car_info,
+        car_specs,
         distance_driven_by_user,
         fastest_stages_by_location,
+        terminal_stats,
     )
     from ..scoring import VEHICLES, vehicle_meta
 
     title, class_label = vehicle_meta(vid)
-    info = car_info(vid)
+    specs = car_specs(vid)
+    terminal = terminal_stats(vid)
+
+    stats: list[list] = []
+    if specs:
+        if specs.get('year'):
+            stats.append(['Year', specs['year']])
+        if specs.get('power') is not None:
+            stats.append(['Power', f"{specs['power']} hp"])
+        if specs.get('weight') is not None:
+            stats.append(['Weight', f"{specs['weight']:,} kg"])
+        if specs.get('engine_cc') is not None:
+            cyl = f" · {specs['cyl']} cyl" if specs.get('cyl') else ''
+            stats.append(['Engine', f"{specs['engine_cc']:,} cc{cyl}"])
+        if specs.get('aspiration'):
+            stats.append(['Aspiration', specs['aspiration']])
+        if specs.get('transmission'):
+            stats.append(['Gearbox', specs['transmission']])
+    if terminal['total']:
+        pct = terminal['dnf'] / terminal['total'] * 100
+        stats.append(['Terminal damage',
+                      f"{pct:.1f}% ({terminal['dnf']} of {terminal['total']})"])
+
     distance = distance_driven_by_user(vid)
     for row in distance:
         row['km_text'] = f"{row['km']:,.1f}"
@@ -932,7 +955,9 @@ def _car_page_data(vid: int) -> dict:
         'class_label': class_label,
         'class_id': VEHICLES.get(vid, {}).get('class'),
         'image_url': car_image_url(vid),
-        'stats': [list(s) for s in info.get('stats', [])],
+        'specs': specs,
+        'terminal': terminal,
+        'stats': stats,
         'fastest_class': fastest['in_class'],
         'fastest_overall': fastest['overall'],
         'distance': distance,

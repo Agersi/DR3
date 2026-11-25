@@ -531,6 +531,25 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .car-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.35rem 1rem; margin: 0.7rem 0 0; }
 .car-stat dt { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.74rem; font-weight: 600; color: var(--muted); }
 .car-stat dd { margin: 0; font-weight: 600; }
+.car-diagram { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
+.cd-front { color: var(--muted); font-size: 0.55rem; line-height: 1; }
+.cd-body { position: relative; width: 84px; height: 148px; border: 2px solid var(--line); border-radius: 34px 34px 20px 20px; background: rgba(60, 61, 55, 0.5); }
+.cd-wheel { position: absolute; width: 12px; height: 24px; background: var(--line); border-radius: 4px; }
+.cd-fl { left: -7px; top: 16px; }
+.cd-fr { right: -7px; top: 16px; }
+.cd-rl { left: -7px; bottom: 16px; }
+.cd-rr { right: -7px; bottom: 16px; }
+.cd-engine { position: absolute; left: 50%; transform: translateX(-50%); width: 48px; height: 30px; background: var(--accent); color: var(--bg); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.55rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.car-diagram[data-engine="front"] .cd-engine { top: 12px; }
+.car-diagram[data-engine="mid"] .cd-engine { top: 50%; margin-top: -15px; }
+.car-diagram[data-engine="rear"] .cd-engine { bottom: 12px; }
+.car-diagram[data-drive="front"] .cd-fl,
+.car-diagram[data-drive="front"] .cd-fr,
+.car-diagram[data-drive="rear"] .cd-rl,
+.car-diagram[data-drive="rear"] .cd-rr,
+.car-diagram[data-drive="4wd"] .cd-wheel { background: var(--muted); }
+.cd-captions { margin: 0; display: flex; flex-direction: column; gap: 0.1rem; font-size: 0.72rem; color: var(--muted); text-align: center; }
+.car-info { flex: 1 1 100%; margin: 0.9rem 0 0; max-width: 68ch; line-height: 1.45; }
 .car-fastest-duo { display: flex; gap: 1rem; flex-wrap: wrap; }
 .car-fastest-col { flex: 1 1 240px; min-width: 0; }
 .car-fastest th:first-child, .car-fastest td:first-child { padding-left: .5rem; }

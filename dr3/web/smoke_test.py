@@ -1312,6 +1312,12 @@ def main() -> int:
             StageRun(username='cardriver', source_type='timetrial',
                      location_id=3, track_model_id=438, vehicle_id=565,
                      time_ms=90000, player_finished=True, distance_m=5200),
+            # Terminal-damage close-out: driven but not finished. With the 5
+            # stage-detail rows above (2 finished, 3 DNF) this makes car 565's
+            # terminal % = 4 of 9 runs.
+            StageRun(username='cardriver', source_type='club', location_id=3,
+                     track_model_id=437, vehicle_id=565, time_ms=0,
+                     player_finished=False),
             # Sweden: car 385 beats car 565 on the one shared track (517) —
             # must not count toward 565's overall fastest stages.
             StageRun(username='smokedriver', source_type='timetrial',
@@ -1339,6 +1345,18 @@ def main() -> int:
           and 'id="car-select"' in html
           and 'Leaderboards' in html and 'Tunes' in html and 'Liveries' in html,
           f'status={r.status_code}')
+    check('car page header: cars.json specs + image + terminal % (4 DNF of 9 runs)',
+          '<img class="car-img" src="/static/cars/RGT/911_rgt_rally_spec.png" alt="Porsche 911 RGT Rally Spec">' in html
+          and '<div class="car-stat"><dt>Power</dt><dd>425 hp</dd></div>' in html
+          and '<div class="car-stat"><dt>Weight</dt><dd>1,250 kg</dd></div>' in html
+          and '<div class="car-stat"><dt>Engine</dt><dd>3,797 cc · 6 cyl</dd></div>' in html
+          and '<div class="car-stat"><dt>Gearbox</dt><dd>6 Speed - Manual Sequential</dd></div>' in html
+          and '<div class="car-stat"><dt>Terminal damage</dt><dd>44.4% (4 of 9)</dd></div>' in html
+          and 'id="car-diagram" data-engine="rear" data-drive="rear"' in html
+          and 'Drive: RWD' in html
+          and '<dt>Year</dt>' not in html        # cars.json year 0 = unknown -> row omitted
+          and 'id="car-info"' not in html,       # empty info text -> paragraph omitted
+          '')
     check('car page shows both fastest-stage tables (in class + overall, expandable rows with leaderboard links)',
           'id="car-fastest-class-body"' in html
           and 'id="car-fastest-overall-body"' in html
@@ -1381,6 +1399,17 @@ def main() -> int:
           dist and dist[0].get('username') == 'smokedriver'
           and card is not None and card.get('km') == 5.2
           and card.get('driver_url') == '/profile/cardriver', str(dist)[:300])
+    check('cars data API: specs + terminal stats (DNF share of the car\'s runs)',
+          j.get('specs', {}).get('engine_placement') == 'rear'
+          and j.get('specs', {}).get('drivetrain') == 'rear'
+          and j.get('specs', {}).get('power') == 425
+          and j.get('specs', {}).get('year') is None
+          and j.get('terminal') == {'total': 9, 'dnf': 4}
+          and j.get('stats') == [['Power', '425 hp'], ['Weight', '1,250 kg'],
+                                 ['Engine', '3,797 cc · 6 cyl'],
+                                 ['Aspiration', 'Natural'],
+                                 ['Gearbox', '6 Speed - Manual Sequential'],
+                                 ['Terminal damage', '44.4% (4 of 9)']], str(j)[:300])
     r = client.get('/api/vehicles/data?vehicle=999999')
     check('cars data API 404 for unknown car id', r.status_code == 404,
           f'status={r.status_code}')

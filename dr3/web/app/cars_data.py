@@ -1,50 +1,119 @@
 """Per-car page data (website).
 
-CAR_INFO holds the user-supplied content for each car's page header, keyed by
-catalog vehicle id (dr2server.game_data.Vehicle):
-  image — file name inside static/cars/
-  stats — (label, value) rows shown under the car name
-Fastest-stage leaderboards come from best_times (the site leaderboard's
-source); distance figures from stage_runs — both computed at request time.
+CARS maps each catalog vehicle id (dr2server.game_data.Vehicle) to its
+cars.json entry (static/cars/cars.json — user-supplied specs + image path),
+matched by exact vehicle name. Fastest-stage leaderboards come from
+best_times (the site leaderboard's source); distance and terminal-damage
+figures from stage_runs — both computed at request time.
 """
 from __future__ import annotations
 
+import json
+import re
 import sys
+import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-# User-supplied per-car page content. Add one entry per vehicle id, e.g.:
-# CAR_INFO[565] = {
-#     'image': 'porsche_911_rgt.png',
-#     'stats': [('Power', '380 hp'), ('Weight', '1,400 kg')],
-# }
-CAR_INFO: dict[int, dict] = {}
-
 _CAR_DIR = Path(__file__).resolve().parent.parent / 'static' / 'cars'
+_CARS_JSON = _CAR_DIR / 'cars.json'
 _IMAGE_EXTS = {'.png', '.jpg', '.jpeg', '.webp', '.gif'}
+
+
+def _norm_tokens(s: str) -> list[str]:
+    s = unicodedata.normalize('NFKD', s or '')
+    s = ''.join(c for c in s if not unicodedata.combining(c))
+    s = re.sub(r'[^a-z0-9]+', ' ', s.lower())
+    return [t for t in s.split() if t]
+
+
+def _load_cars() -> dict[int, dict]:
+    """cars.json entries keyed by catalog vehicle id (exact name match)."""
+    from dr2server.game_data import VEHICLES
+
+    if not _CARS_JSON.is_file():
+        return {}
+    try:
+        entries = json.loads(_CARS_JSON.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+    by_name: dict[tuple, dict] = {}
+    for e in entries:
+        name = f"{e.get('brand', '')} {e.get('model', '')}".strip()
+        if name:
+            by_name.setdefault(tuple(sorted(_norm_tokens(name))), e)
+    return {vid: by_name[tuple(sorted(_norm_tokens(meta['name'])))]
+            for vid, meta in VEHICLES.items()
+            if tuple(sorted(_norm_tokens(meta['name']))) in by_name}
+
+
+CARS: dict[int, dict] = _load_cars()
+
 _CAR_FILES = (
-    {p.name.lower() for p in _CAR_DIR.glob('*') if p.suffix.lower() in _IMAGE_EXTS}
+    {p.relative_to(_CAR_DIR).as_posix()
+     for p in _CAR_DIR.rglob('*') if p.suffix.lower() in _IMAGE_EXTS}
     if _CAR_DIR.is_dir() else set()
 )
 
 
 def car_info(vid: int | None) -> dict:
-    """The user-supplied page content for a vehicle id ({} when none)."""
+    """The cars.json entry for a vehicle id ({} when none)."""
     try:
-        return CAR_INFO.get(int(vid), {})
+        return CARS.get(int(vid), {})
     except (TypeError, ValueError):
         return {}
+
+
+def car_specs(vid: int | None) -> dict:
+    """Normalized spec fields for the page header / API ({} when no entry)."""
+    e = car_info(vid)
+    if not e:
+        return {}
+
+    def _int(key: str):
+        try:
+            return int(e.get(key))
+        except (TypeError, ValueError):
+            return None
+
+    year = _int('year')
+    return {
+        'year': year or None,
+        'power': _int('power'),
+        'weight': _int('weight'),
+        'engine_cc': _int('engine'),
+        'cyl': _int('cyl'),
+        'aspiration': str(e.get('aspiration') or ''),
+        'transmission': str(e.get('transmission') or ''),
+        'engine_placement': str(e.get('enginePlacement') or '').lower(),
+        'drivetrain': str(e.get('drivetrainPlacement') or '').lower(),
+        'info': str(e.get('info') or ''),
+    }
 
 
 def car_image_url(vid: int | None) -> str:
     """Static URL of the shipped car image; '' when none is on disk."""
     from flask import url_for
 
-    img = Path(car_info(vid).get('image') or '').name
-    if not img or img.lower() not in _CAR_FILES:
+    rel = (car_info(vid).get('image') or '').replace('\\', '/')
+    if not rel or rel not in _CAR_FILES:
         return ''
-    return url_for('static', filename=f'cars/{img}')
+    return url_for('static', filename=f'cars/{rel}')
+
+
+def terminal_stats(vid: int) -> dict:
+    """Stage runs for this car: total driven + DNFs. A DNF is a run the game
+    closed out unfinished (player_finished=False — same definition as the
+    home page's survival rate)."""
+    from .models import StageRun
+
+    vid = int(vid)
+    total = StageRun.query.filter(StageRun.vehicle_id == vid).count()
+    dnf = (StageRun.query
+           .filter(StageRun.vehicle_id == vid,
+                   StageRun.player_finished.is_(False)).count())
+    return {'total': total, 'dnf': dnf}
 
 
 def location_name(location_id: int | None) -> str:
