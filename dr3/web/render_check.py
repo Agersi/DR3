@@ -294,11 +294,12 @@ def main() -> int:
           and '.fd-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.15s ease; }' in css
           and '.car-fastest tr.fastest-detail.open .fd-wrap { grid-template-rows: 1fr; }' in css
           and '.stage-name' not in css, '')
-    check('car page CSS (selector row + header flex + stats grid)',
+    check('car page CSS (selector row + header flex + stats layout)',
           '.car-pick { display: flex; gap: 0.8rem; align-items: center; }' in css
           and '.car-header { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }' in css
           and '.car-img { width: 50%; height: auto; }' in css
-          and '.car-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.35rem 1rem; margin: 0.7rem 0 0; }' in css, '')
+          and '.car-stats { display: flex; gap: 0.65rem 0; margin: 0; flex-direction: column; flex-wrap: wrap; max-height: 14rem; max-width: 18rem; align-content: space-between; }' in css
+          and '.car-stat { width: 9rem; }' in css, '')
     check('car page header: spec stats + engine/drivetrain diagram',
           '<div class="car-stat"><dt>Car Class</dt><dd>Rally GT</dd></div>' in r.get_data(as_text=True)
           and '<div class="car-stat"><dt>Power</dt><dd>425 hp</dd></div>' in r.get_data(as_text=True)
@@ -306,10 +307,11 @@ def main() -> int:
           and 'class="cd-wheel cd-fl"' in r.get_data(as_text=True)
           and 'cd-captions' not in r.get_data(as_text=True)
           and '.car-diagram[data-engine="mid"] .cd-engine { top: 50%; margin-top: 6px; }' in css
-          and '.cd-body { position: relative; width: 80px; height: 150px; border: 2px solid var(--line); border-radius: 28px 28px 14px 14px; background: rgba(60, 61, 55, 0.5); }' in css
+          and '.cd-body { position: relative; width: 80px; height: 150px; border: 2px solid var(--line); border-radius: 24px 24px 14px 14px; background: rgba(60, 61, 55, 0.5); }' in css
           and '.cd-wheel { position: absolute; width: 15px; height: 28px; background: var(--line); border-radius: 4px; }' in css
           and '.car-diagram[data-drive="4wd"] .cd-wheel { background: var(--muted); }' in css
-          and '.car-info { flex: 1 1 100%; margin: 0.9rem 0 0; max-width: 68ch; line-height: 1.45; }' in css, '')
+          and '.car-diagram { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; zoom: 1.7; margin: 0 .2rem; }' in css
+          and '.car-info { flex: 1 1 100%; text-align: justify; margin: 0; line-height: 1.35; font-size: .9rem; font-family: var(--mono); letter-spacing: -0.035em; }' in css, '')
     check('recent-times header stays pinned while rows scroll (sticky thead + box scrollbar)',
           '.recent-box { max-height: 360px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) rgba(24, 28, 20, 0.5); }' in css
           and '.recent-box::-webkit-scrollbar { width: 10px; }' in css
