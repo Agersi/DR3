@@ -124,6 +124,20 @@ def championship_view(event: dict) -> list[dict]:
     return out
 
 
+def fresh_damage_indices(event: dict | None) -> set[int]:
+    """Flat stage ordinals where a driver's damage starts from zero.
+
+    Always the event's first stage. Rally Seasons additionally reset at the
+    first stage of every round — each season round is its own in-game club
+    event, so damage does not carry over between rounds (Multi-Location
+    rallies accumulate damage continuously across legs)."""
+    out = {0}
+    if ((event or {}).get('settings') or {}).get('mode') == CHAMP_MODE_SEASON:
+        for rally in championship_view(event):
+            out.add(rally['offset'])
+    return out
+
+
 def long_stage_cutoff_km(location: str) -> float | None:
     """Distance at or above which a stage of this location scores the long
     bogey: the 4th-longest route of the location's full roster. ``None``

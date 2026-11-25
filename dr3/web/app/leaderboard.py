@@ -23,7 +23,7 @@ from .results_view import (
     format_ms,
     gap_text,
 )
-from .scoring import vehicle_meta
+from .scoring import fresh_damage_indices, vehicle_meta
 from .tables import RX_LOCATIONS
 from dr2server.game_data import STAGE_CONDITIONS_LABELS, Location, Track
 from dr2server.stage_limits import split_count_for_limit, stage_limit_ms
@@ -228,14 +228,20 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
     # run's club slot (null for non-club runs or when never captured — the
     # popup shows its no-data fallback, same as the club board).
     damage_of: dict[tuple, dict] = {}
+    # Flat ordinals where damage starts from zero per event (first stage +
+    # each rally-season round — rounds are separate in-game events).
+    reset_of: dict[str, set[int]] = {}
     if event_ids:
-        from .models import ClubStageState
+        from .models import ClubStageState, Event
 
         for st in db.session.query(ClubStageState).filter(
                 ClubStageState.event_id.in_(sorted(event_ids)),
                 ClubStageState.comp_damage_json.isnot(None)).all():
             damage_of[(st.event_id, st.username, st.flat_stage_index)] = \
                 json.loads(st.comp_damage_json)
+        for ev in db.session.query(Event).filter(
+                Event.id.in_(sorted(event_ids))).all():
+            reset_of[ev.id] = fresh_damage_indices(ev.to_dict())
 
     raw = []
     for key, e in by_group.items():
@@ -248,9 +254,10 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
         if slot:
             se = stage_entries.get((slot[0], name, slot[1]))
             d = damage_of.get((slot[0], name, slot[1]))
-            # Start state: the previous flat stage's snapshot (null on the
-            # first stage or when never captured — rendered as zero).
-            if slot[1] > 0:
+            # Start state: the previous flat stage's snapshot (null at a
+            # fresh-damage ordinal — event start / season round start — or
+            # when never captured; rendered as zero).
+            if slot[1] > 0 and slot[1] not in reset_of.get(slot[0], {0}):
                 d0 = damage_of.get((slot[0], name, slot[1] - 1))
         u = users.get(name)
         splits = None

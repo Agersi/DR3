@@ -110,7 +110,7 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
     stage), so the front page's recent-times box can page through all of them."""
     from ..countries import flag_url
     from ..results_view import _run_attrs, _spare_tyres, format_ms
-    from ..scoring import car_label
+    from ..scoring import car_label, fresh_damage_indices
 
     club_name = {c.id: c.name for c in Club.query.all()}
     users = User.query.all()
@@ -140,6 +140,18 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
             damage_of[(st.event_id, st.username, st.flat_stage_index)] = \
                 json.loads(st.comp_damage_json)
 
+    # Flat ordinals where damage starts from zero per event (first stage +
+    # each rally-season round — rounds are separate in-game events).
+    fresh_of: dict[str, set[int]] = {}
+
+    def _fresh(eid: str) -> set[int]:
+        rs = fresh_of.get(eid)
+        if rs is None:
+            ev = event_of.get(eid)
+            rs = fresh_damage_indices(ev.to_dict() if ev else {})
+            fresh_of[eid] = rs
+        return rs
+
     rows = []
     for r in Result.query.all():
         ev = event_of.get(r.event_id)
@@ -165,13 +177,14 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
                 # Parallel to tyres: the stage-state damage snapshot for this
                 # slot (null when never captured — the popup shows its
                 # no-data fallback, same as the club board) plus the start
-                # state from the previous stage of the same run.
+                # state from the previous stage of the same run — except at
+                # a fresh-damage ordinal (event start / season round start).
                 'tyre_damage': ([{'s': i,
                                   'd': damage_of.get(
                                       (r.event_id, r.username, i)),
                                   'd0': damage_of.get(
                                       (r.event_id, r.username, i - 1))
-                                  if i > 0 else None}]
+                                  if i not in _fresh(r.event_id) else None}]
                                 if a['tyre'] is not None else []),
                 'spares': _spare_tyres({
                     'spare_tyres': s.get('spare_tyres'),

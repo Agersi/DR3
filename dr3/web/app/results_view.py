@@ -651,8 +651,10 @@ def event_board(event: dict, round_index: int, mode: str,
                 dmg = None
             # Starting state: the snapshot stored at the end of the previous
             # stage (null on the first stage or when never captured — the
-            # popup renders missing starts as zero).
-            prev = seg[flat - 1] if flat > 0 and flat - 1 < len(seg) else None
+            # popup renders missing starts as zero). Season boards are
+            # per-round, so a round's first stage starts from zero even
+            # though flat > 0.
+            prev = seg[flat - 1] if j > 0 and flat - 1 < len(seg) else None
             d0 = prev.get('comp_damage') if isinstance(prev, dict) else None
             if not isinstance(d0, dict):
                 d0 = None
@@ -766,7 +768,10 @@ def event_board(event: dict, round_index: int, mode: str,
                 d = se_k.get('comp_damage') if isinstance(se_k, dict) else None
                 if not isinstance(d, dict):
                     d = None
-                prev = seg[fk - 1] if fk > 0 and fk - 1 < len(seg) else None
+                # Look back only within the board's scope: in season mode the
+                # first stage of a round must start from zero, not from the
+                # previous round's last stage (combined multi has offset=0).
+                prev = seg[fk - 1] if fk - offset > 0 and fk - 1 < len(seg) else None
                 d0 = prev.get('comp_damage') if isinstance(prev, dict) else None
                 if not isinstance(d0, dict):
                     d0 = None

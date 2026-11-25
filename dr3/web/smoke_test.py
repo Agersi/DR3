@@ -2445,6 +2445,63 @@ def main() -> int:
                                      flat_stage_index=3, comp_damage_json=json.dumps(D_M3)))
             db.session.commit()
 
+        # Season fixture: two rounds x one stage each — a round's first stage
+        # must start from zero even though the previous round's last-stage
+        # snapshot exists (season rounds are separate in-game events).
+        s_legs = []
+        for li in range(2):
+            st = {'surface_deg': 'Medium', 'service_area': 'Medium'}
+            if m_routes:
+                st['track_id'] = str(m_routes[li % len(m_routes)][0])
+            if m_conds:
+                st['conditions_id'] = str(m_conds[0])
+            s_legs.append({
+                'location': qloc or '', 'car_class': qclass or '',
+                'surface': 'Gravel',
+                'duration': {'days': 1, 'hours': 0, 'mins': 0},
+                'stages': [st],
+            })
+        with app.app_context():
+            db.session.add(Event(
+                id='evt-smoke-board-season', name='Smoke Season', club_id=club_id,
+                start_time=utcnow() - timedelta(hours=1),
+                end_time=utcnow() + timedelta(days=4),
+                settings_json=json.dumps({'mode': 'season'}),
+                legs_json=json.dumps(s_legs),
+                active=True))
+            db.session.add(_Result(
+                event_id='evt-smoke-board-season', username='smokedriver', car='Test Car',
+                total_time_ms=200000,
+                stages_json=json.dumps([
+                    {'time_ms': 100000, 'penalties_ms': 0, 'tyre_compound': 6},
+                    {'time_ms': 100000, 'penalties_ms': 0, 'tyre_compound': 6}])))
+            D_S0 = {'wheels_wear': 0x11223344, 'engine': 0.5}
+            D_S1 = {'wheels_wear': 0x55667788, 'engine': 1.0, 'lights': 0.25}
+            db.session.add(_BoardCSS(event_id='evt-smoke-board-season', username='smokedriver',
+                                     flat_stage_index=0, comp_damage_json=json.dumps(D_S0)))
+            db.session.add(_BoardCSS(event_id='evt-smoke-board-season', username='smokedriver',
+                                     flat_stage_index=1, comp_damage_json=json.dumps(D_S1)))
+            db.session.commit()
+
+        api_s0 = client.get(
+            f'/clubs/{club_id}/event-board?event=evt-smoke-board-season&round=0&mode=overall&stage=0')
+        bs0s = {row['username']: row for row in (api_s0.get_json() or {}).get('rows') or []}
+        api_s1 = client.get(
+            f'/clubs/{club_id}/event-board?event=evt-smoke-board-season&round=1&mode=overall&stage=0')
+        bs1s = {row['username']: row for row in (api_s1.get_json() or {}).get('rows') or []}
+        check("event-board API: season overall round-2 first stage starts from zero (not round 1's end state)",
+              api_s1.status_code == 200
+              and bs0s.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_S0, 'd0': None}]
+              and bs1s.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_S1, 'd0': None}],
+              f"td={[(n, r.get('tyre_damage')) for n, r in {**bs0s, **bs1s}.items()]}")
+        api_ss1 = client.get(
+            f'/clubs/{club_id}/event-board?event=evt-smoke-board-season&round=1&mode=stage&stage=0')
+        bss1 = {row['username']: row for row in (api_ss1.get_json() or {}).get('rows') or []}
+        check("event-board API: season stage mode round-2 first stage starts from zero",
+              api_ss1.status_code == 200
+              and bss1.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_S1, 'd0': None}],
+              f"rows={[(n, r.get('tyre_damage')) for n, r in bss1.items()]}")
+
         api2 = client.get(
             f'/clubs/{club_id}/event-board?event={eid2}&round=0&mode=stage&stage=0')
         check('event-board API: stage mode returns info + rows',
