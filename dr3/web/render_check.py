@@ -300,9 +300,11 @@ def main() -> int:
           and '.car-img { width: 50%; height: auto; }' in css
           and '.car-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.35rem 1rem; margin: 0.7rem 0 0; }' in css, '')
     check('car page header: spec stats + engine/drivetrain diagram',
-          '<div class="car-stat"><dt>Power</dt><dd>425 hp</dd></div>' in r.get_data(as_text=True)
+          '<div class="car-stat"><dt>Car Class</dt><dd>Rally GT</dd></div>' in r.get_data(as_text=True)
+          and '<div class="car-stat"><dt>Power</dt><dd>425 hp</dd></div>' in r.get_data(as_text=True)
           and 'id="car-diagram" data-engine="rear" data-drive="rear"' in r.get_data(as_text=True)
           and 'class="cd-wheel cd-fl"' in r.get_data(as_text=True)
+          and 'cd-captions' not in r.get_data(as_text=True)
           and '.car-diagram[data-engine="mid"] .cd-engine { top: 50%; margin-top: 6px; }' in css
           and '.cd-body { position: relative; width: 80px; height: 150px; border: 2px solid var(--line); border-radius: 28px 28px 14px 14px; background: rgba(60, 61, 55, 0.5); }' in css
           and '.cd-wheel { position: absolute; width: 15px; height: 28px; background: var(--line); border-radius: 4px; }' in css

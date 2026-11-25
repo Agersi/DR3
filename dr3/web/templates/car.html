@@ -14,10 +14,9 @@
 </div>
 
 <div class="panel car-header">
+  <h1 id="car-title">{{ title }}</h1>
   {% if image_url %}<img class="car-img" src="{{ image_url }}" alt="{{ title }}">{% endif %}
   <div class="car-head-body">
-    <h1 id="car-title">{{ title }}</h1>
-    <p class="meta" id="car-class">{{ class_label }}</p>
     <dl class="car-stats" id="car-stats">
       {% for label, value in stats %}
       <div class="car-stat"><dt>{{ label }}</dt><dd>{{ value }}</dd></div>
@@ -34,10 +33,6 @@
       <span class="cd-wheel cd-rr"></span>
       <span class="cd-engine"><b>Engine</b></span>
     </div>
-    <p class="cd-captions">
-      <span id="cd-engine-cap">Engine: {{ specs.engine_placement }}</span>
-      <span id="cd-drive-cap">Drive: {% if specs.drivetrain == 'front' %}FWD{% elif specs.drivetrain == 'rear' %}RWD{% else %}4WD{% endif %}</span>
-    </p>
   </div>
   {% endif %}
   {% if specs and specs.info %}<p class="car-info" id="car-info">{{ specs.info }}</p>{% endif %}
@@ -154,7 +149,6 @@
   if (!select) return;
   var header = document.querySelector('.car-header');
   var titleEl = document.getElementById('car-title');
-  var classEl = document.getElementById('car-class');
   var statsEl = document.getElementById('car-stats');
   var fastestClassBody = document.getElementById('car-fastest-class-body');
   var fastestOverallBody = document.getElementById('car-fastest-overall-body');
@@ -277,10 +271,6 @@
     });
   }
 
-  function driveLabel(dt) {
-    return dt === 'front' ? 'FWD' : dt === 'rear' ? 'RWD' : '4WD';
-  }
-
   function renderDiagram(specs) {
     var diagram = document.getElementById('car-diagram');
     if (!diagram) return;
@@ -291,10 +281,6 @@
     diagram.hidden = false;
     diagram.setAttribute('data-engine', specs.engine_placement || '');
     diagram.setAttribute('data-drive', specs.drivetrain || '');
-    var ec = document.getElementById('cd-engine-cap');
-    if (ec) ec.textContent = 'Engine: ' + (specs.engine_placement || '?');
-    var dc = document.getElementById('cd-drive-cap');
-    if (dc) dc.textContent = 'Drive: ' + driveLabel(specs.drivetrain);
   }
 
   function renderInfo(text) {
@@ -315,7 +301,6 @@
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
       .then(function (d) {
         titleEl.textContent = d.title;
-        classEl.textContent = d.class_label || '';
         var img = header.querySelector('.car-img');
         if (d.image_url) {
           if (!img) {

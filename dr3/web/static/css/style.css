@@ -548,7 +548,6 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .car-diagram[data-drive="rear"] .cd-rl,
 .car-diagram[data-drive="rear"] .cd-rr,
 .car-diagram[data-drive="4wd"] .cd-wheel { background: var(--muted); }
-.cd-captions { margin: 0; display: flex; flex-direction: column; gap: 0.1rem; font-size: 0.72rem; color: var(--muted); text-align: center; }
 .car-info { flex: 1 1 100%; margin: 0.9rem 0 0; max-width: 68ch; line-height: 1.45; }
 .car-fastest-duo { display: flex; gap: 1rem; flex-wrap: wrap; }
 .car-fastest-col { flex: 1 1 240px; min-width: 0; }

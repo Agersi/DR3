@@ -1352,9 +1352,10 @@ def main() -> int:
           and '<div class="car-stat"><dt>Engine</dt><dd>3,797 cc · 6 cyl</dd></div>' in html
           and '<div class="car-stat"><dt>Gearbox</dt><dd>6 Speed - Manual Sequential</dd></div>' in html
           and '<div class="car-stat"><dt>Terminal damage</dt><dd>44.4% (4 of 9)</dd></div>' in html
-          and 'id="car-diagram" data-engine="rear" data-drive="rear"' in html
-          and 'Drive: RWD' in html
-          and '<dt>Year</dt>' not in html        # cars.json year 0 = unknown -> row omitted
+           and '<div class="car-stat"><dt>Car Class</dt><dd>Rally GT</dd></div>' in html
+           and 'id="car-diagram" data-engine="rear" data-drive="rear"' in html
+           and 'cd-captions' not in html          # diagram captions removed from the layout
+           and '<dt>Year</dt>' not in html        # cars.json year 0 = unknown -> row omitted
           and 'id="car-info"' not in html,       # empty info text -> paragraph omitted
           '')
     check('car page shows both fastest-stage tables (in class + overall, expandable rows with leaderboard links)',
@@ -1405,11 +1406,12 @@ def main() -> int:
           and j.get('specs', {}).get('power') == 425
           and j.get('specs', {}).get('year') is None
           and j.get('terminal') == {'total': 9, 'dnf': 4}
-          and j.get('stats') == [['Power', '425 hp'], ['Weight', '1,250 kg'],
-                                 ['Engine', '3,797 cc · 6 cyl'],
-                                 ['Aspiration', 'Natural'],
-                                 ['Gearbox', '6 Speed - Manual Sequential'],
-                                 ['Terminal damage', '44.4% (4 of 9)']], str(j)[:300])
+          and j.get('stats') == [['Car Class', 'Rally GT'], ['Power', '425 hp'],
+                                  ['Weight', '1,250 kg'],
+                                  ['Engine', '3,797 cc · 6 cyl'],
+                                  ['Aspiration', 'Natural'],
+                                  ['Gearbox', '6 Speed - Manual Sequential'],
+                                  ['Terminal damage', '44.4% (4 of 9)']], str(j)[:300])
     _img = {}
     for _vid in (469, 514, 567, 587, 566, 581, 502, 580):
         _img[_vid] = ((client.get(f'/api/vehicles/data?vehicle={_vid}')

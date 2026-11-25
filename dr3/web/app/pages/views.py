@@ -925,7 +925,7 @@ def _car_page_data(vid: int) -> dict:
     specs = car_specs(vid)
     terminal = terminal_stats(vid)
 
-    stats: list[list] = []
+    stats: list[list] = [['Car Class', class_label]]
     if specs:
         if specs.get('year'):
             stats.append(['Year', specs['year']])
