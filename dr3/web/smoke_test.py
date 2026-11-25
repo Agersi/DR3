@@ -1410,6 +1410,19 @@ def main() -> int:
                                  ['Aspiration', 'Natural'],
                                  ['Gearbox', '6 Speed - Manual Sequential'],
                                  ['Terminal damage', '44.4% (4 of 9)']], str(j)[:300])
+    _img = {}
+    for _vid in (469, 514, 567, 587, 566, 581, 502, 580):
+        _img[_vid] = ((client.get(f'/api/vehicles/data?vehicle={_vid}')
+                       .get_json() or {}).get('image_url') or '')
+    check('car matching: per-class optimal (near-names + duplicate names across classes)',
+          _img[469] == '/static/cars/H2_RWD/renault_a110_1600_s.png'      # "Alpine Renault A110..." superset name
+          and _img[514] == '/static/cars/Super1600/clio_r.s._s1600.png'   # catalog adds "Sport"
+          and _img[587] == '/static/cars/Supercars_2019/ford_fiesta_rallycross_mk8.png'  # "Fiesta RX (Mk8)" fuzzy
+          and _img[567] == '/static/cars/Supercars/fiesta_rallycross_mk8.png'
+          and _img[581] == '/static/cars/Supercars_2019/s1_eks_rx_quattro.png'  # duplicate name -> own class
+          and _img[566] == '/static/cars/Supercars/s1_eks_rx_quattro.png'
+          and _img[580] == '/static/cars/Supercars_2019/208_wrx.png'
+          and _img[502] == '/static/cars/Supercars/208_wrx.png', str(_img))
     r = client.get('/api/vehicles/data?vehicle=999999')
     check('cars data API 404 for unknown car id', r.status_code == 404,
           f'status={r.status_code}')

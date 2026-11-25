@@ -2,12 +2,16 @@
 
 CARS maps each catalog vehicle id (dr2server.game_data.Vehicle) to its
 cars.json entry (static/cars/cars.json — user-supplied specs + image path),
-matched by exact vehicle name. Fastest-stage leaderboards come from
-best_times (the site leaderboard's source); distance and terminal-damage
-figures from stage_runs — both computed at request time.
+matched per class with the same optimal name matching as
+tools/verify_cars_json.py (exact > subset > fuzzy). Fastest-stage
+leaderboards come from best_times (the site leaderboard's source);
+distance and terminal-damage figures from stage_runs — both computed at
+request time.
 """
 from __future__ import annotations
 
+import difflib
+import itertools
 import json
 import re
 import sys
@@ -15,6 +19,8 @@ import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from dr2server.game_data import _VEHICLE_META  # noqa: E402
 
 _CAR_DIR = Path(__file__).resolve().parent.parent / 'static' / 'cars'
 _CARS_JSON = _CAR_DIR / 'cars.json'
@@ -28,9 +34,29 @@ def _norm_tokens(s: str) -> list[str]:
     return [t for t in s.split() if t]
 
 
+def _entry_score(entry: dict, vid) -> float:
+    """Name similarity of a cars.json entry to a catalog vehicle (0..1)."""
+    name = f"{entry.get('brand', '')} {entry.get('model', '')}"
+    etoks = set(_norm_tokens(name))
+    dtoks = set(_norm_tokens(_VEHICLE_META[vid]['display_name']))
+    if etoks == dtoks:
+        return 1.0
+    if (dtoks < etoks and len(dtoks) >= 2) or (etoks < dtoks and len(etoks) >= 2):
+        return 0.9
+    ename = ' '.join(sorted(etoks))
+    dname = ' '.join(sorted(dtoks))
+    return difflib.SequenceMatcher(None, ename, dname).ratio() * 0.85
+
+
 def _load_cars() -> dict[int, dict]:
-    """cars.json entries keyed by catalog vehicle id (exact name match)."""
-    from dr2server.game_data import VEHICLES
+    """cars.json entries keyed by catalog vehicle id (int).
+
+    Per-class optimal name matching (exact > subset > fuzzy) — the same
+    algorithm as tools/verify_cars_json.py, so duplicate names across
+    classes (e.g. the 2019 RX Supercars) resolve to their own class and
+    near-names (Alpine A110, Clio S1600, Fiesta RX Mk8) still match.
+    """
+    from dr2server.game_data import Vehicle
 
     if not _CARS_JSON.is_file():
         return {}
@@ -38,14 +64,43 @@ def _load_cars() -> dict[int, dict]:
         entries = json.loads(_CARS_JSON.read_text(encoding='utf-8'))
     except (OSError, ValueError):
         return {}
-    by_name: dict[tuple, dict] = {}
-    for e in entries:
-        name = f"{e.get('brand', '')} {e.get('model', '')}".strip()
-        if name:
-            by_name.setdefault(tuple(sorted(_norm_tokens(name))), e)
-    return {vid: by_name[tuple(sorted(_norm_tokens(meta['name'])))]
-            for vid, meta in VEHICLES.items()
-            if tuple(sorted(_norm_tokens(meta['name']))) in by_name}
+
+    by_class: dict[str, list] = {}
+    for vid in Vehicle:
+        by_class.setdefault(_VEHICLE_META[vid]['vehicle_class'].label, []).append(vid)
+
+    class_entries: dict[str, list[int]] = {}
+    for i, e in enumerate(entries):
+        class_entries.setdefault(str(e.get('class', '')), []).append(i)
+
+    assignment: dict[int, int] = {}  # entry index -> vehicle id
+    for cls, idxs in class_entries.items():
+        cands = by_class.get(cls, [])
+        n = min(len(idxs), len(cands))
+        if n == 0:
+            continue
+        if max(len(idxs), len(cands)) > 8:
+            order = sorted(
+                ((_entry_score(entries[i], v), i, v) for i in idxs for v in cands),
+                reverse=True)
+            used_i, used_v = set(), set()
+            for _score, i, v in order:
+                if i in used_i or v in used_v:
+                    continue
+                assignment[i] = int(v)
+                used_i.add(i)
+                used_v.add(v)
+        else:
+            scores = [[_entry_score(entries[i], v) for v in cands] for i in idxs]
+            best_perm, best_total = None, -1.0
+            for perm in itertools.permutations(range(len(cands)), n):
+                total = sum(scores[k][perm[k]] for k in range(n))
+                if total > best_total:
+                    best_total, best_perm = total, perm
+            for k in range(n):
+                assignment[idxs[k]] = int(cands[best_perm[k]])
+
+    return {vid: entries[i] for i, vid in assignment.items()}
 
 
 CARS: dict[int, dict] = _load_cars()
