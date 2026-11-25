@@ -244,9 +244,14 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
         se = None
         slot = slots.get(key)
         d = None
+        d0 = None
         if slot:
             se = stage_entries.get((slot[0], name, slot[1]))
             d = damage_of.get((slot[0], name, slot[1]))
+            # Start state: the previous flat stage's snapshot (null on the
+            # first stage or when never captured — rendered as zero).
+            if slot[1] > 0:
+                d0 = damage_of.get((slot[0], name, slot[1] - 1))
         u = users.get(name)
         splits = None
         if e.splits_json:
@@ -280,7 +285,7 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
             'source': SOURCE_LABELS.get(run.source_type) if run else None,
             'flag_url': flag_url(u.country or '') if u else '',
             'splits': splits,
-            'tyre_damage': ([{'s': 0, 'd': d}]
+            'tyre_damage': ([{'s': 0, 'd': d, 'd0': d0}]
                             if e.tyre_compound else []),
             'conditions_label': cond_label,
         })

@@ -807,65 +807,88 @@
   // all share one byte order: b0=RL, b1=RR, b2=FL, b3=FR.
   var CORNER = { FL: 2, FR: 3, RL: 0, RR: 1 };
 
+  // Light blue marks every "starting" value (the state carried in from the
+  // previous stage) so it reads distinct from the ending value.
+  var START_C = '#8ec9ff';
+
   function dmgColor(t) {
     t = Math.max(0, Math.min(1, t));
     return 'hsl(' + (130 * (1 - t)) + ', 75%, ' + (40 + 10 * t) + '%)';
   }
 
-  function carSvg(d) {
-    var wear = unpack4(d.wheels_wear);
-    var impact = unpack4(d.wheels_impact);
-    var springs = unpack4(d.springs);
-    var dampers = unpack4(d.dampers);
-    var brakes = unpack4(d.brakes);
+  function carSvg(d, d0) {
+    var wear = unpack4(d.wheels_wear), wear0 = d0 ? unpack4(d0.wheels_wear) : null;
+    var impact = unpack4(d.wheels_impact), impact0 = d0 ? unpack4(d0.wheels_impact) : null;
+    var springs = unpack4(d.springs), springs0 = d0 ? unpack4(d0.springs) : null;
+    var dampers = unpack4(d.dampers), dampers0 = d0 ? unpack4(d0.dampers) : null;
+    var brakes = unpack4(d.brakes), brakes0 = d0 ? unpack4(d0.brakes) : null;
     var wheels = [
-      ['FL', 78, 64], ['FR', 160, 64], ['RL', 78, 236], ['RR', 160, 236]
+      ['FL', 115, 68], ['FR', 215, 68], ['RL', 115, 244], ['RR', 215, 244]
     ].map(function (w) {
       var c = CORNER[w[0]];
-      var x = w[1], y = w[2];
-      var bx = x < 119 ? 2 : 176;
+      var cx = w[1], cy = w[2];
+      var left = cx < 165;
+      var bx = left ? 2 : 234;
       var s = '<g>';
-      s += '<rect x="' + bx + '" y="' + (y - 22) + '" width="60" height="44" rx="6" fill="rgba(236,223,204,0.06)" stroke="#697565"/>';
-      [['Spr', springs[c]], ['Dmp', dampers[c]], ['Brk', brakes[c]]].forEach(function (r, i) {
-        var ry = y - 13 + i * 13;
-        s += '<text x="' + (bx + 5) + '" y="' + ry + '" font-size="12" fill="#afff95" dominant-baseline="central">' + r[0] + '</text>';
-        s += '<text x="' + (bx + 55) + '" y="' + ry + '" font-size="12" font-weight="700" text-anchor="end" fill="' + dmgColor(r[1] / 255) + '" dominant-baseline="central">' + Math.round(r[1] / 255 * 100) + '%</text>';
+      s += '<rect x="' + bx + '" y="' + (cy - 25) + '" width="94" height="50" rx="6" fill="rgba(236,223,204,0.06)" stroke="#697565"/>';
+      [['Spr', springs[c], springs0 ? springs0[c] : 0], ['Dmp', dampers[c], dampers0 ? dampers0[c] : 0], ['Brk', brakes[c], brakes0 ? brakes0[c] : 0]].forEach(function (r, i) {
+        var ry = cy - 16 + i * 16;
+        s += '<text x="' + (bx + 8) + '" y="' + ry + '" font-size="11" fill="#afff95" dominant-baseline="central">' + r[0] + '</text>';
+        s += '<text x="' + (bx + 56) + '" y="' + ry + '" font-size="10" text-anchor="end" fill="' + START_C + '" dominant-baseline="central">' + Math.round(r[2] / 255 * 100) + '%</text>';
+        s += '<text x="' + (bx + 64) + '" y="' + ry + '" font-size="10" text-anchor="middle" fill="#697565" dominant-baseline="central">\u2192</text>';
+        s += '<text x="' + (bx + 88) + '" y="' + ry + '" font-size="10" font-weight="700" text-anchor="end" fill="' + dmgColor(r[1] / 255) + '" dominant-baseline="central">' + Math.round(r[1] / 255 * 100) + '%</text>';
       });
       var wr = wear[c] / 255;
-      s += '<rect x="' + (x - 15) + '" y="' + (y - 25) + '" width="30" height="50" rx="11" fill="' + dmgColor(wr) + '" stroke="#697565"/>';
-      var ibx = x < 119 ? x + 17 : x - 23;
-      s += '<rect x="' + ibx + '" y="' + (y - 16) + '" width="6" height="32" rx="2" style="fill:var(--card)" stroke="#697565"/>';
+      s += '<rect x="' + (cx - 16) + '" y="' + (cy - 29) + '" width="32" height="58" rx="12" fill="' + dmgColor(wr) + '" stroke="#697565"/>';
+      s += '<text x="' + cx + '" y="' + (cy - 9) + '" font-size="10" font-weight="700" text-anchor="middle" dominant-baseline="central" style="fill:var(--bg)">' + Math.round(wr * 100) + '%</text>';
+      s += '<text x="' + cx + '" y="' + (cy + 11) + '" font-size="10" text-anchor="middle" dominant-baseline="central" fill="' + START_C + '">' + Math.round((wear0 ? wear0[c] : 0) / 255 * 100) + '%</text>';
+      var s1 = left ? cx + 19 : cx - 24;
+      var s2 = left ? cx + 25 : cx - 30;
+      s += '<rect x="' + s1 + '" y="' + (cy - 17) + '" width="5" height="34" rx="2" style="fill:var(--card)" stroke="#697565"/>';
+      s += '<rect x="' + s2 + '" y="' + (cy - 17) + '" width="5" height="34" rx="2" style="fill:var(--card)" stroke="#697565"/>';
+      var imp0 = impact0 ? impact0[c] / 255 : 0;
+      if (imp0 > 0.02) {
+        var fh0 = Math.max(2, imp0 * 34);
+        s += '<rect x="' + s1 + '" y="' + (cy + 17 - fh0) + '" width="5" height="' + fh0.toFixed(1) + '" rx="2" fill="' + START_C + '"/>';
+      }
       var imp = impact[c] / 255;
       if (imp > 0.02) {
-        var fh = Math.max(2, imp * 32);
-        s += '<rect x="' + ibx + '" y="' + (y + 16 - fh) + '" width="6" height="' + fh.toFixed(1) + '" rx="2" fill="' + dmgColor(imp) + '"/>';
+        var fh = Math.max(2, imp * 34);
+        s += '<rect x="' + s2 + '" y="' + (cy + 17 - fh) + '" width="5" height="' + fh.toFixed(1) + '" rx="2" fill="' + dmgColor(imp) + '"/>';
       }
-      s += '<text x="' + x + '" y="' + y + '" font-size="14" font-weight="700" text-anchor="middle" dominant-baseline="central" style="fill:var(--bg)">' + Math.round(wr * 100) + '%</text>';
       s += '</g>';
       return s;
     }).join('');
-    return '<svg class="dmg-car" viewBox="0 0 238 300" aria-hidden="true">' +
-      '<rect x="73" y="28" width="92" height="244" rx="15" fill="#262b21" stroke="#697565" stroke-width="1.5"/>' +
+    return '<svg class="dmg-car" viewBox="0 0 330 312" aria-hidden="true">' +
+      '<rect x="105" y="24" width="120" height="264" rx="16" fill="#262b21" stroke="#697565" stroke-width="1.5"/>' +
       wheels +
       '</svg>';
   }
 
-  function dmgBars(d) {
+  function dmgBars(d, d0) {
     var body = unpackBody(d.bodywork);
+    var b0 = d0 ? unpackBody(d0.bodywork) : null;
     var dw = unpack4(d.diff_wear);
+    var dw0 = d0 ? unpack4(d0.diff_wear) : null;
+    function sv(v) { return Math.max(0, Math.min(1, Number(v) || 0)); }
+    // [label, ending value, starting value] — the start is the state carried
+    // in from the previous stage (zero on the first stage / when missing).
     var items = [
-      ['Bodywork', (body.deform + body.a + body.b) / 3],
-      ['Gearbox', hiLo(d.gearbox)], ['Turbo', hiLo(d.turbo)],
-      ['Diff wear', Math.max(dw[0], dw[1], dw[2]) / 255],
-      ['Diff impact', hiLo(d.diff_impact)],
-      ['Engine', d.engine], ['Clutch', d.clutch], ['Radiator', d.radiator],
-      ['Exhaust', d.exhaust], ['Lights', d.lights]
+      ['Bodywork', (body.deform + body.a + body.b) / 3, d0 ? (b0.deform + b0.a + b0.b) / 3 : 0],
+      ['Gearbox', hiLo(d.gearbox), d0 ? hiLo(d0.gearbox) : 0],
+      ['Turbo', hiLo(d.turbo), d0 ? hiLo(d0.turbo) : 0],
+      ['Diff wear', Math.max(dw[0], dw[1], dw[2]) / 255, d0 ? Math.max(dw0[0], dw0[1], dw0[2]) / 255 : 0],
+      ['Diff impact', hiLo(d.diff_impact), d0 ? hiLo(d0.diff_impact) : 0],
+      ['Engine', d.engine, d0 ? d0.engine : 0], ['Clutch', d.clutch, d0 ? d0.clutch : 0],
+      ['Radiator', d.radiator, d0 ? d0.radiator : 0],
+      ['Exhaust', d.exhaust, d0 ? d0.exhaust : 0], ['Lights', d.lights, d0 ? d0.lights : 0]
     ];
     return '<div class="dmg-bars">' + items.map(function (it) {
-      var v = Math.max(0, Math.min(1, Number(it[1]) || 0));
+      var v = sv(it[1]);
       var pct = Math.round(v * 100);
-      return '<div class="dmg-bar"><span class="dmg-bar-label">' + it[0] + '</span>' +
-        '<span class="dmg-bar-track"><span class="dmg-bar-fill" style="width:' + pct + '%;background:' + dmgColor(v) + '"></span></span>' +
+      var p0 = Math.round(sv(it[2]) * 100);
+      return '<div class="dmg-bar"><span class="dmg-bar-start">' + p0 + '%</span>' +
+        '<span class="dmg-bar-track"><span class="dmg-bar-fill" style="width:' + pct + '%;background:' + dmgColor(v) + '"></span><span class="dmg-bar-label">' + it[0] + '</span></span>' +
         '<span class="dmg-bar-val">' + pct + '%</span></div>';
     }).join('') + '</div>';
   }
@@ -880,11 +903,12 @@
       if (s.location) cap += ' — ' + esc(s.location);
     }
     var d = entry && entry.d;
+    var d0 = entry && entry.d0;
     var body;
     if (!d) {
       body = '<div class="dmg-nodata">No damage data for this stage.</div>';
     } else {
-      body = '<div class="dmg-body">' + carSvg(d) + dmgBars(d) + '</div>';
+      body = '<div class="dmg-body">' + carSvg(d, d0) + dmgBars(d, d0) + '</div>';
     }
     dmg.innerHTML =
       '<div class="dmg-head"><span class="dmg-title">Tyres: ' + esc(title) + '</span><span class="dmg-stage">' + cap + '</span></div>' +

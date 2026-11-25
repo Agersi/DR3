@@ -164,9 +164,14 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
                 'tyres': [a['tyre']] if a['tyre'] is not None else [],
                 # Parallel to tyres: the stage-state damage snapshot for this
                 # slot (null when never captured — the popup shows its
-                # no-data fallback, same as the club board).
-                'tyre_damage': ([{'s': i, 'd': damage_of.get(
-                    (r.event_id, r.username, i))}]
+                # no-data fallback, same as the club board) plus the start
+                # state from the previous stage of the same run.
+                'tyre_damage': ([{'s': i,
+                                  'd': damage_of.get(
+                                      (r.event_id, r.username, i)),
+                                  'd0': damage_of.get(
+                                      (r.event_id, r.username, i - 1))
+                                  if i > 0 else None}]
                                 if a['tyre'] is not None else []),
                 'spares': _spare_tyres({
                     'spare_tyres': s.get('spare_tyres'),

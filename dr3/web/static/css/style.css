@@ -879,7 +879,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
   background: var(--bg);
   border: 1px solid var(--line);
   color: var(--text);
-  width: 21rem;
+  width: 23rem;
   padding: 0.6rem 0.7rem;
   font-size: 0.78rem;
   opacity: 0;
@@ -892,11 +892,12 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .dmg-title { font-family: var(--display); font-size: 0.95rem; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink); }
 .dmg-stage { color: var(--muted); white-space: nowrap; }
 .dmg-body { display: flex; gap: 0.7rem; align-items: center; }
-.dmg-car { width: 9.6rem; flex: none; }
+.dmg-car { width: 12.8rem; flex: none; }
 .dmg-bars { flex: 1; min-width: 0; }
 .dmg-bar { display: flex; align-items: center; }
-.dmg-bar-label { width: 4.3rem; flex: none; color: var(--muted); }
-.dmg-bar-track { flex: 1; height: 0.75rem; background: rgba(105, 117, 101, 0.35); overflow: hidden; margin-right: .1rem; }
+.dmg-bar-start { width: 2rem; flex: none; text-align: right; color: #8ec9ff; font-variant-numeric: tabular-nums; margin-right: .15rem; }
+.dmg-bar-label { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font-size: 0.62rem; letter-spacing: .02em; color: #fff; white-space: nowrap; }
+.dmg-bar-track { position: relative; flex: 1; height: 0.75rem; background: rgba(105, 117, 101, 0.35); overflow: hidden; margin-right: .1rem; }
 .dmg-bar-fill { display: block; height: 100%; }
 .dmg-bar-val { width: 2rem; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
 .dmg-nodata { color: var(--muted); padding: 1.5rem 0; text-align: center; }

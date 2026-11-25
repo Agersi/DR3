@@ -351,7 +351,7 @@ def main() -> int:
     _td_m = re.search(r'data-tyres="\[2\]" data-td="([^"]*)"', html)
     try:
         _td_ok = _td_m is not None and json.loads(_attr_unescape(_td_m.group(1))) \
-            == [{'s': 0, 'd': {'engine': 0.25, 'wheels_wear': 7}}]
+            == [{'s': 0, 'd': {'engine': 0.25, 'wheels_wear': 7}, 'd0': None}]
     except (TypeError, ValueError):
         _td_ok = False
     check('home: recent-times data-td attr survives HTML escaping (popup JSON.parse round-trip)',
@@ -721,24 +721,25 @@ def main() -> int:
               and 'function unpackBody(v) {' in det
               and 'function hiLo(v) {' in det
               and 'var CORNER = { FL: 2, FR: 3, RL: 0, RR: 1 };' in det
-              and "['Bodywork', (body.deform + body.a + body.b) / 3]" in det
-              and "['Gearbox', hiLo(d.gearbox)], ['Turbo', hiLo(d.turbo)]," in det
-              and "['Diff wear', Math.max(dw[0], dw[1], dw[2]) / 255]," in det
-              and "['Diff impact', hiLo(d.diff_impact)]" in det
-              and "['Engine', d.engine], ['Clutch', d.clutch], ['Radiator', d.radiator]," in det
-              and 'viewBox="0 0 238 300"' in det
-              and 'dmgColor(body.deform)' not in det
-              and 'rx="15" fill="#262b21"' in det
-              and 'width="30" height="50" rx="11"' in det
-              and 'var fh = Math.max(2, imp * 32);' in det
-              and 'var ibx = x < 119 ? x + 17 : x - 23;' in det
-              and 'height="32" rx="2" style="fill:var(--card)"' in det
-              and 'width="60" height="44" rx="6"' in det
-              and 'font-size="12"' in det
-              and 'font-size="14"' in det
-              and 'style="fill:var(--bg)"' in det
-              and '<span class="dmg-title">Tyres: ' in det
-              and '.dmg-bar-label { width: 4.3rem; flex: none; color: var(--muted); }' in board_css
+               and "['Bodywork', (body.deform + body.a + body.b) / 3, d0 ? (b0.deform + b0.a + b0.b) / 3 : 0]," in det
+               and "['Gearbox', hiLo(d.gearbox), d0 ? hiLo(d0.gearbox) : 0]," in det
+               and "['Diff impact', hiLo(d.diff_impact), d0 ? hiLo(d0.diff_impact) : 0]," in det
+               and "['Engine', d.engine, d0 ? d0.engine : 0], ['Clutch', d.clutch, d0 ? d0.clutch : 0]," in det
+               and 'viewBox="0 0 330 312"' in det
+               and "var START_C = '#8ec9ff';" in det
+               and '<span class="dmg-bar-start">' in det
+               and 'dmgColor(body.deform)' not in det
+               and 'rx="16" fill="#262b21"' in det
+               and 'width="32" height="58" rx="12"' in det
+               and 'var fh = Math.max(2, imp * 34);' in det
+               and 'var s1 = left ? cx + 19 : cx - 24;' in det
+               and 'height="34" rx="2" style="fill:var(--card)"' in det
+               and 'width="94" height="50" rx="6"' in det
+               and 'font-size="10"' in det
+               and 'style="fill:var(--bg)"' in det
+               and '<span class="dmg-title">Tyres: ' in det
+               and '.dmg-bar-start { width: 2rem; flex: none; text-align: right; color: #8ec9ff; font-variant-numeric: tabular-nums; margin-right: .15rem; }' in board_css
+               and '.dmg-bar-label { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font-size: 0.62rem; letter-spacing: .02em; color: #fff; white-space: nowrap; }' in board_css
               and 'No damage data for this stage.' in det
               and "var tyre = e.target.closest('.tyre-img');" in det
               and 'if (dmgTarget === tyre) closeDmg(); else openDmg(tyre);' in det
@@ -746,7 +747,7 @@ def main() -> int:
               and "function renderRows(board) {\n    closeDmg();" in det
               and ".dmg-popup {\n  position: fixed;" in board_css
               and '.dmg-popup.show { opacity: 1; pointer-events: auto; }' in board_css
-              and '.dmg-car { width: 9.6rem; flex: none; }' in board_css, '')
+               and '.dmg-car { width: 12.8rem; flex: none; }' in board_css, '')
         check('club detail: spares column after Tyres shows the count with a tooltip (ink dash when unknown)',
               "function spareCell(v) {" in det
               and "<th>Tyres</th><th>Spares</th>" in det

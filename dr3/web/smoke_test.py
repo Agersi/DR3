@@ -1290,7 +1290,7 @@ def main() -> int:
           str(link or rows)[:300])
     check('recent-times row carries tyre damage snapshot from stage states',
           link is not None
-          and link['tyre_damage'] == [{'s': 0, 'd': _link_dmg}],
+          and link['tyre_damage'] == [{'s': 0, 'd': _link_dmg, 'd0': None}],
           str(link or rows)[:300])
 
     # 7c-3. Vehicle page: /vehicles?vehicle=<id> preselects the vehicle, the old
@@ -2359,18 +2359,18 @@ def main() -> int:
               and by_name0.get('secondpilot', {}).get('tyres') == [6]
               and by_name1.get('secondpilot', {}).get('tyres') == [6, 8],
               f"tyres={[(n, r.get('tyres')) for n, r in {**by_name0, **by_name1}.items()]}")
-        check("event-board API: overall rows carry per-set tyre_damage (state at each set's last-used stage)",
-              by_name0.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM0}]
-              and by_name1.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM0}, {'s': 1, 'd': D_CUM1}]
-              and by_name1.get('secondpilot', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM2}, {'s': 1, 'd': None}],
+        check("event-board API: overall rows carry per-set tyre_damage (end state at each set's last-used stage + start state from the previous stage)",
+              by_name0.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM0, 'd0': None}]
+              and by_name1.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM0, 'd0': None}, {'s': 1, 'd': D_CUM1, 'd0': D_CUM0}]
+              and by_name1.get('secondpilot', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM2, 'd0': None}, {'s': 1, 'd': None, 'd0': D_CUM2}],
               f"td={[(n, r.get('tyre_damage')) for n, r in {**by_name0, **by_name1}.items()]}")
         api_cum_s0 = client.get(
             f'/clubs/{club_id}/event-board?event=evt-smoke-board-cum&round=0&mode=stage&stage=0')
         bs0 = {row['username']: row for row in (api_cum_s0.get_json() or {}).get('rows') or []}
-        check("event-board API: stage-mode rows carry the selected stage's damage snapshot",
+        check("event-board API: stage-mode rows carry the selected stage's damage snapshot + previous-stage start state",
               api_cum_s0.status_code == 200
-              and bs0.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM0}]
-              and bs0.get('secondpilot', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM2}],
+              and bs0.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM0, 'd0': None}]
+              and bs0.get('secondpilot', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM2, 'd0': None}],
               f"rows={[(n, r.get('tyre_damage')) for n, r in bs0.items()]}")
         check("event-board API: stage-mode tyre falls back to the begin-capture compound (legacy rows)",
               bs0.get('smokedriver', {}).get('tyres') == [6]
@@ -2483,9 +2483,9 @@ def main() -> int:
               and by_name_m3.get('smokedriver', {}).get('tyres') == [6, 7]
               and by_name_m3.get('secondpilot', {}).get('tyres') == [],
               f"tyres={[(n, r.get('tyres')) for n, r in {**by_name_m0, **by_name_m3}.items()]}")
-        check("event-board API: combined per-set tyre_damage maps to each set's last-used stage (null when unsnapshotted)",
-              by_name_m0.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': None}]
-              and by_name_m3.get('smokedriver', {}).get('tyre_damage') == [{'s': 1, 'd': D_M1}, {'s': 3, 'd': D_M3}],
+        check("event-board API: combined per-set tyre_damage maps to each set's last-used stage (null when unsnapshotted) + previous-stage start state",
+              by_name_m0.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': None, 'd0': None}]
+              and by_name_m3.get('smokedriver', {}).get('tyre_damage') == [{'s': 1, 'd': D_M1, 'd0': None}, {'s': 3, 'd': D_M3, 'd0': None}],
               f"td={[(n, r.get('tyre_damage')) for n, r in {**by_name_m0, **by_name_m3}.items()]}")
         check('event-board API: combined info shows the selected stage + its leg location',
               (bm3.get('info') or {}).get('number') == 4

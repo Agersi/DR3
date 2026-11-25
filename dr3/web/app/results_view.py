@@ -649,6 +649,13 @@ def event_board(event: dict, round_index: int, mode: str,
             dmg = se.get('comp_damage') if isinstance(se, dict) else None
             if not isinstance(dmg, dict):
                 dmg = None
+            # Starting state: the snapshot stored at the end of the previous
+            # stage (null on the first stage or when never captured — the
+            # popup renders missing starts as zero).
+            prev = seg[flat - 1] if flat > 0 and flat - 1 < len(seg) else None
+            d0 = prev.get('comp_damage') if isinstance(prev, dict) else None
+            if not isinstance(d0, dict):
+                d0 = None
             raw.append({
                 'username': e.get('username'),
                 'time_ms': t,
@@ -658,8 +665,10 @@ def event_board(event: dict, round_index: int, mode: str,
                 'vid': vid,
                 'spares': _spare_tyres(se),
                 # One entry per tyre image: the state at the end of this
-                # stage (stage mode shows exactly one stage).
-                'tyre_damage': [{'s': j, 'd': dmg}] if a['tyre'] is not None else [],
+                # stage (stage mode shows exactly one stage) plus the start
+                # state carried in from the previous stage.
+                'tyre_damage': [{'s': j, 'd': dmg, 'd0': d0}]
+                if a['tyre'] is not None else [],
                 **a,
             })
     elif count > 0:
@@ -750,14 +759,18 @@ def event_board(event: dict, round_index: int, mode: str,
                 continue
             # One entry per set image: the comp_damage state at the end of
             # the last stage that physical set was used (null when no snapshot
-            # was stored for it).
+            # was stored for it) plus the start state from the stage before.
             tyre_damage = []
             for fk in tyres_last_flat:
                 se_k = seg[fk] if fk < len(seg) else None
                 d = se_k.get('comp_damage') if isinstance(se_k, dict) else None
                 if not isinstance(d, dict):
                     d = None
-                tyre_damage.append({'s': max(0, fk - offset), 'd': d})
+                prev = seg[fk - 1] if fk > 0 and fk - 1 < len(seg) else None
+                d0 = prev.get('comp_damage') if isinstance(prev, dict) else None
+                if not isinstance(d0, dict):
+                    d0 = None
+                tyre_damage.append({'s': max(0, fk - offset), 'd': d, 'd0': d0})
             total = adjusted_total_ms(e, bogeys, offset=offset)
             raw.append({
                 'username': e.get('username'),
