@@ -333,14 +333,19 @@
     return [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >>> 24) & 0xFF];
   }
 
-  // Packed-field byte -> corner map (accepted working decode; wheels_wear
-  // confirmed, the rest accepted preliminary).
-  var CORNER = {
-    FL: { wear: 2, impact: 2, springs: 0, brakes: 0, dampers: 0, body: 0 },
-    FR: { wear: 3, impact: 0, springs: 1, brakes: 1, dampers: 1, body: 3 },
-    RL: { wear: 0, impact: 3, springs: 2, brakes: 2, dampers: 2, body: 1 },
-    RR: { wear: 1, impact: 1, springs: 3, brakes: 3, dampers: 3, body: 2 }
-  };
+  function unpackBody(v) {
+    v = Number(v) || 0;
+    return { deform: (v & 0xFFFF) / 65535, a: ((v >>> 24) & 0xFF) / 255, b: ((v >> 16) & 0xFF) / 255 };
+  }
+
+  function hiLo(v) {
+    v = Number(v) || 0;
+    return Math.max((v >>> 16) & 0xFFFF, v & 0xFFFF) / 65535;
+  }
+
+  // Per-wheel packed fields (brakes/dampers/springs/wheels_wear/wheels_impact)
+  // all share one byte order: b0=RL, b1=RR, b2=FL, b3=FR.
+  var CORNER = { FL: 2, FR: 3, RL: 0, RR: 1 };
 
   function dmgColor(t) {
     t = Math.max(0, Math.min(1, t));
@@ -353,15 +358,11 @@
     var springs = unpack4(d.springs);
     var dampers = unpack4(d.dampers);
     var brakes = unpack4(d.brakes);
-    var bodywork = unpack4(d.bodywork);
-    var overlays = [
-      ['FL', 74, 29, 45, 120], ['FR', 119, 29, 45, 120],
-      ['RL', 74, 150, 45, 121], ['RR', 119, 150, 45, 121]
-    ].map(function (q) {
-      var v = bodywork[CORNER[q[0]].body] / 255;
-      if (v <= 0.02) return '';
-      return '<rect x="' + q[1] + '" y="' + q[2] + '" width="' + q[3] + '" height="' + q[4] + '" fill="' + dmgColor(v) + '" opacity="0.8"/>';
-    }).join('');
+    var body = unpackBody(d.bodywork);
+    var shell = '';
+    if (body.deform > 0.02) {
+      shell = '<rect x="73" y="28" width="92" height="244" rx="15" fill="' + dmgColor(body.deform) + '" opacity="0.8"/>';
+    }
     var wheels = [
       ['FL', 78, 64], ['FR', 160, 64], ['RL', 78, 236], ['RR', 160, 236]
     ].map(function (w) {
@@ -370,16 +371,16 @@
       var bx = x < 119 ? 2 : 176;
       var s = '<g>';
       s += '<rect x="' + bx + '" y="' + (y - 22) + '" width="60" height="44" rx="6" fill="rgba(236,223,204,0.06)" stroke="#697565"/>';
-      [['Spr', springs[c.springs]], ['Dmp', dampers[c.dampers]], ['Brk', brakes[c.brakes]]].forEach(function (r, i) {
+      [['Spr', springs[c]], ['Dmp', dampers[c]], ['Brk', brakes[c]]].forEach(function (r, i) {
         var ry = y - 13 + i * 13;
         s += '<text x="' + (bx + 5) + '" y="' + ry + '" font-size="12" fill="#afff95" dominant-baseline="central">' + r[0] + '</text>';
         s += '<text x="' + (bx + 55) + '" y="' + ry + '" font-size="12" font-weight="700" text-anchor="end" fill="' + dmgColor(r[1] / 255) + '" dominant-baseline="central">' + Math.round(r[1] / 255 * 100) + '%</text>';
       });
-      var wr = wear[c.wear] / 255;
+      var wr = wear[c] / 255;
       s += '<rect x="' + (x - 15) + '" y="' + (y - 25) + '" width="30" height="50" rx="11" fill="' + dmgColor(wr) + '" stroke="#697565"/>';
       var ibx = x < 119 ? x + 17 : x - 23;
       s += '<rect x="' + ibx + '" y="' + (y - 16) + '" width="6" height="32" rx="2" style="fill:var(--card)" stroke="#697565"/>';
-      var imp = impact[c.impact] / 255;
+      var imp = impact[c] / 255;
       if (imp > 0.02) {
         var fh = Math.max(2, imp * 32);
         s += '<rect x="' + ibx + '" y="' + (y + 16 - fh) + '" width="6" height="' + fh.toFixed(1) + '" rx="2" fill="' + dmgColor(imp) + '"/>';
@@ -389,15 +390,20 @@
       return s;
     }).join('');
     return '<svg class="dmg-car" viewBox="0 0 238 300" aria-hidden="true">' +
-      '<defs><clipPath id="dmg-body-clip"><rect x="73" y="28" width="92" height="244" rx="15"/></clipPath></defs>' +
       '<rect x="73" y="28" width="92" height="244" rx="15" fill="#262b21" stroke="#697565" stroke-width="1.5"/>' +
-      '<g clip-path="url(#dmg-body-clip)">' + overlays + '</g>' +
+      shell +
       wheels +
       '</svg>';
   }
 
   function dmgBars(d) {
+    var body = unpackBody(d.bodywork);
+    var dw = unpack4(d.diff_wear);
     var items = [
+      ['Bodywork', Math.max(body.a, body.b)],
+      ['Gearbox', hiLo(d.gearbox)], ['Turbo', hiLo(d.turbo)],
+      ['Diff wear', Math.max(dw[0], dw[1], dw[2]) / 255],
+      ['Diff impact', hiLo(d.diff_impact)],
       ['Engine', d.engine], ['Clutch', d.clutch], ['Radiator', d.radiator],
       ['Exhaust', d.exhaust], ['Lights', d.lights]
     ];

@@ -718,11 +718,16 @@ def main() -> int:
               and "dmg.className = 'dmg-popup';" in det
               and "document.body.appendChild(dmg);" in det
               and 'function unpack4(v) {' in det
-              and 'FL: { wear: 2, impact: 2, springs: 0, brakes: 0, dampers: 0, body: 0 }' in det
-              and 'FR: { wear: 3, impact: 0, springs: 1, brakes: 1, dampers: 1, body: 3 }' in det
+              and 'function unpackBody(v) {' in det
+              and 'function hiLo(v) {' in det
+              and 'var CORNER = { FL: 2, FR: 3, RL: 0, RR: 1 };' in det
+              and "['Bodywork', Math.max(body.a, body.b)]" in det
+              and "['Gearbox', hiLo(d.gearbox)], ['Turbo', hiLo(d.turbo)]," in det
+              and "['Diff wear', Math.max(dw[0], dw[1], dw[2]) / 255]," in det
+              and "['Diff impact', hiLo(d.diff_impact)]" in det
               and "['Engine', d.engine], ['Clutch', d.clutch], ['Radiator', d.radiator]," in det
               and 'viewBox="0 0 238 300"' in det
-              and '<rect x="73" y="28" width="92" height="244" rx="15"/>' in det
+              and 'if (body.deform > 0.02) {' in det
               and 'rx="15" fill="#262b21"' in det
               and 'width="30" height="50" rx="11"' in det
               and 'var fh = Math.max(2, imp * 32);' in det
@@ -733,7 +738,7 @@ def main() -> int:
               and 'font-size="14"' in det
               and 'style="fill:var(--bg)"' in det
               and '<span class="dmg-title">Tyres: ' in det
-              and '.dmg-bar-label { width: 3rem; flex: none; color: var(--muted); }' in board_css
+              and '.dmg-bar-label { width: 4.3rem; flex: none; color: var(--muted); }' in board_css
               and 'No damage data for this stage.' in det
               and "var tyre = e.target.closest('.tyre-img');" in det
               and 'if (dmgTarget === tyre) closeDmg(); else openDmg(tyre);' in det

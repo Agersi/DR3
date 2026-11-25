@@ -895,7 +895,7 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 .dmg-car { width: 9.6rem; flex: none; }
 .dmg-bars { flex: 1; min-width: 0; }
 .dmg-bar { display: flex; align-items: center; gap: 0.4rem; margin: 0.28rem 0; }
-.dmg-bar-label { width: 3rem; flex: none; color: var(--muted); }
+.dmg-bar-label { width: 4.3rem; flex: none; color: var(--muted); }
 .dmg-bar-track { flex: 1; height: 0.45rem; background: rgba(105, 117, 101, 0.35); overflow: hidden; }
 .dmg-bar-fill { display: block; height: 100%; }
 .dmg-bar-val { width: 2rem; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
