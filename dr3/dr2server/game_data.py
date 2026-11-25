@@ -818,7 +818,7 @@ class Vehicle(IntEnum):
     FORD_FIESTA_RX_MK8_2019     = 587
     MINI_COOPER_SX1_2019        = 588
     FORD_FIESTA_RX_STARD_2019   = 589
-    SEAT_IBIOZA_RX_2019         = 590
+    SEAT_IBIZA_RX_2019          = 590
 
     @property
     def display_name(self) -> str:
@@ -955,7 +955,7 @@ _VEHICLE_META: Dict[Vehicle, dict] = {
     Vehicle.FORD_FIESTA_RX_MK8_2019:     {"display_name": "Ford Fiesta RX (Mk8)",           "vehicle_class": VehicleClass.RX_SUPERCARS_2019, "abbrev": "rx19_fiesta8"},
     Vehicle.MINI_COOPER_SX1_2019:        {"display_name": "Mini Cooper SX1",                "vehicle_class": VehicleClass.RX_SUPERCARS_2019, "abbrev": "rx19_mini"},
     Vehicle.FORD_FIESTA_RX_STARD_2019:   {"display_name": "Ford Fiesta Rallycross (Stard)", "vehicle_class": VehicleClass.RX_SUPERCARS_2019, "abbrev": "rx19_fiesta"},
-    Vehicle.SEAT_IBIOZA_RX_2019:         {"display_name": "Seat Ibioza RX",                 "vehicle_class": VehicleClass.RX_SUPERCARS_2019, "abbrev": "rx19_ibiza"},
+    Vehicle.SEAT_IBIZA_RX_2019:          {"display_name": "Seat Ibiza RX",                  "vehicle_class": VehicleClass.RX_SUPERCARS_2019, "abbrev": "rx19_ibiza"},
 }
 
 

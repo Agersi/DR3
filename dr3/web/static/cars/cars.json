@@ -11,9 +11,9 @@
     "aspiration": "Natural",
     "transmission": "4 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "front",
+    "drivetrainPlacement": "front",
     "year": 1961,
-    "info": "Synonymous with classic rally, the compact Mini Cooper S excelled in rallying, making use of its size and low weight, with a small but punchy engine added into the mix. This iconic car dominated multiple racing series thruoughout the 1960s."
+    "info": "Synonymous with classic rally, the compact Mini Cooper S excelled in rallying, making use of its size and low weight, with a small but punchy engine added into the mix. This iconic car dominated multiple racing series throughout the 1960s."
   },
   {
     "image": "H1_FWD/ds_21.png",
@@ -27,9 +27,9 @@
     "aspiration": "Natural",
     "transmission": "4 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "front",
+    "drivetrainPlacement": "front",
     "year": 1965,
-    "info": "The DS 21 is a rally icon, and is still used in amateur rallies to this day. This car features hydropneumatic suspension, a unique system which is especially noticable in the corners. Achieving success in the mid to late 1960s, this car was rugged and reliable."
+    "info": "The DS 21 is a rally icon, and is still used in amateur rallies to this day. This car features hydropneumatic suspension, a unique system which is especially noticeable in the corners. Achieving success in the mid to late 1960s, this car was rugged and reliable."
   },
   {
     "image": "H1_FWD/fulvia_hf.png",
@@ -42,9 +42,9 @@
     "aspiration": "Natural",
     "transmission": "4 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "front",
+    "drivetrainPlacement": "front",
     "year": 1967,
-    "info": "The Lancia Fulvia HF was a FWD rally car that competed in various international rally championships throughout the late 60s and early 70s. Fulvias won the Italian Rally Championship every year between 1965 and 1973. Thanks to the Fulvia, Lanvia won the International Championship for Manufacturers in 1972, thus further cementing its legendary status."
+    "info": "The Lancia Fulvia HF was a FWD rally car that competed in various international rally championships throughout the late 60s and early 70s. Fulvias won the Italian Rally Championship every year between 1965 and 1973. Thanks to the Fulvia, Lancia won the International Championship for Manufacturers in 1972, thus further cementing its legendary status."
   },
   {
     "image": "H2_FWD/golf_gti_16v.png",
@@ -58,7 +58,7 @@
     "aspiration": "Natural",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "front",
+    "drivetrainPlacement": "front",
     "year": 1986,
     "info": "The VW Golf GTI 16V was a FWD hot hatch designed and built in the mid 1980s. Modified for rally, Kenneth Eriksson achieved success in 1986 and 1987, making use of the nimble and powerful Golf platform. The high revving four cylinder engine was an iconic sound of the era."
   },
@@ -74,7 +74,7 @@
     "aspiration": "Natural",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "front",
+    "drivetrainPlacement": "front",
     "year": 1984,
     "info": "Peugeot first entered the 205 GTI in 1984. This new car was FWD and powered by a 175bhp four cylinder engine, offering more than enough punch for the compact 'supermini'. The 205 GTI saw varying levels of success in the Group A class."
   },
@@ -90,9 +90,9 @@
     "aspiration": "Natural",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 1975,
-    "info": "The Escort Mk II was successful across multiple motorsports disciplines, being a uniquely nimble and powerful RWD car. The Escort Mk II excelts on tarmac stages, and is popular at rally events the world over. This has cemented this car as not only one of the most iconic rally cars of all time, but also one of the most iconic racing cars of all time in general."
+    "info": "The Escort Mk II was successful across multiple motorsports disciplines, being a uniquely nimble and powerful RWD car. The Escort Mk II excels on tarmac stages, and is popular at rally events the world over. This has cemented this car as not only one of the most iconic rally cars of all time, but also one of the most iconic racing cars of all time in general."
   },
   {
     "image": "H2_RWD/renault_a110_1600_s.png",
@@ -106,9 +106,9 @@
     "aspiration": "Natural",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 1969,
-    "info": "The Alpine A110 is characterised by its extremely ligt weight and unique, streamlined fibreglass body. The Alpine gained fame in the early 70s as a highly successful rally car, dominating anything it competed in for the duration of 1973."
+    "info": "The Alpine A110 is characterised by its extremely ligth weight and unique, streamlined fibreglass body. The Alpine gained fame in the early 70s as a highly successful rally car, dominating anything it competed in for the duration of 1973."
   },
   {
     "image": "H2_RWD/131_abarth_rally.png",
@@ -122,9 +122,9 @@
     "aspiration": "Natural",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 1976,
-    "info": "The Fiat 131 Abart Rally won 20 World Rally Championship events between 1976 and 1981. Designed and developed to compete in Group 4, this car went on to win the drivers' World Rally Championship in 1980. This success led to the Fiat 131 Abart Rally becoming one of the most sought after and iconic classic rally cars in the world."
+    "info": "The Fiat 131 Abarth Rally won 20 World Rally Championship events between 1976 and 1981. Designed and developed to compete in Group 4, this car went on to win the drivers' World Rally Championship in 1980. This success led to the Fiat 131 Abarth Rally becoming one of the most sought after and iconic classic rally cars in the world."
   },
   {
     "image": "H2_RWD/kadett_c_gte.png",
@@ -138,7 +138,7 @@
     "aspiration": "Natural",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 1975,
     "info": "Homologation of the Opel Kadett C GT/E began in 1976, with the car competing in the World Rally Championship for 3 seasons between 1975-1977. The car enjoyed limited success, but has since become a staple of both national and classic rally events around the world."
   },
@@ -154,7 +154,7 @@
     "aspiration": "Natural",
     "transmission": "6 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 1987,
     "info": "Like the Ford Sierra Cosworth RS500, the BMW E30 Evo Rally gained legendary status in several different forms of motorsport, naturally making its way onto the rally scene in the late 80s. The car was designed and developed to compete in Group A, winning the 1987 Tour de Corse with Bernard Béguin at the controls."
   },
@@ -170,7 +170,7 @@
     "aspiration": "Natural",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 1979,
     "info": "Built to replace the Opel Kadett GT/E, the Opel Ascona 400 raced in both Group 4 and in Group B. The Opel Ascona went on to win the World Rally Championship in 1982 at the hands of Walter Röhrl, proving a more than worthy adversary to the Audi Quattro. The Opel Ascona won its final event in top level rally, with Ari Vatanen winning the 1983 Safari Rally."
   },
@@ -186,7 +186,7 @@
     "aspiration": "Natural",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "mid",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 1974,
     "info": "The Lancia Stratos produced a new era in rallying, as it was the first car designed and developed from scratch for rally competition. Production of the 500 cars required for homologation in Group 4 commenced in 1973 and the Stratos was homologated for the 1973 WRC season. The car won the 1974, 1975 and 1976 championship titles in the hands of Sandro Munari and Björn Waldegård."
   },
@@ -202,9 +202,9 @@
     "aspiration": "Natural",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 1970,
-    "info": "The Datsun 240Z is characterised by its long bonnet, long wheelbase, and a 6-cylinder engine which produces favourable low end torque. The Datsun 240Z is known for its iconinc body shape and its successful participation in rally in the early 70s. This model took several rally wins during this period."
+    "info": "The Datsun 240Z is characterised by its long bonnet, long wheelbase, and a 6-cylinder engine which produces favourable low end torque. The Datsun 240Z is known for its iconic body shape and its successful participation in rally in the early 70s. This model took several rally wins during this period."
   },
   {
     "image": "H3_RWD/5_turbo.png",
@@ -218,9 +218,9 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "mid",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 1981,
-    "info": "The Renault 5 Turbo, based on the Renault 5 Turbo 1 road-going car, won the Monte Car Rally in 1981 on its first outing in the World Rally Championship, being driven by Jean Ragnotti and co-driver Jean-Marc Andrié. Its short wheelbase makes for a superbly nimble car, with great traction on tarmac due to its RWD configuration."
+    "info": "The Renault 5 Turbo, based on the Renault 5 Turbo 1 road-going car, won the Monte Carlo Rally in 1981 on its first outing in the World Rally Championship, being driven by Jean Ragnotti and co-driver Jean-Marc Andrié. Its short wheelbase makes for a superbly nimble car, with great traction on tarmac due to its RWD configuration."
   },
   {
     "image": "H3_RWD/sierra_cosworth_rs500.png",
@@ -234,9 +234,9 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 1987,
-    "info": "Based on its road-going equivalent, the Ford Sierra Cosworth RS500 was a motorsports icon of its era. The car tricky to drive on the loose gravel stages due to its RWD configuration, and was unable to compete against its 4WD rivals. On tarmac stages the car fared far better, winning the 1988 Corsica Rally outright."
+    "info": "Based on its road-going equivalent, the Ford Sierra Cosworth RS500 was a motorsports icon of its era. The car was tricky to drive on the loose gravel stages due to its RWD configuration, and was unable to compete against its 4WD rivals. On tarmac stages the car fared far better, winning the 1988 Corsica Rally outright."
   },
   {
     "image": "Kit_Cars/306_maxi.png",
@@ -250,7 +250,7 @@
     "aspiration": "Natural",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "front",
+    "drivetrainPlacement": "front",
     "year": 1995,
     "info": "Introduced in 1995, the Peugeot 306 Maxi is a front wheel drive monster. It's important to be wary of torque steer in this car, with the 1998cc engine sending all 280hp to the front wheels. This car was and still is a common sight in the French rally scene."
   },
@@ -266,9 +266,9 @@
     "aspiration": "Natural",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "front",
+    "drivetrainPlacement": "front",
     "year": 1996,
-    "info": "Homologated in 1996, the Seat Ibiza Kit Car was highly successful in the F2 class, and was the most successful car of its type internationally, winning the Rally Cup F2 in 96, 97 and 98. Being a kitcar it relied on its light weight and punchy 2.0L engine, with drivers having to control its agressive torque-steer."
+    "info": "Homologated in 1996, the Seat Ibiza Kit Car was highly successful in the F2 class, and was the most successful car of its type internationally, winning the Rally Cup F2 in 96, 97 and 98. Being a kitcar it relied on its light weight and punchy 2.0L engine, with drivers having to control its aggressive torque-steer."
   },
   {
     "image": "Kit_Cars/golf_kitcar.png",
@@ -282,7 +282,7 @@
     "aspiration": "Natural",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "front",
+    "drivetrainPlacement": "front",
     "year": 1998,
     "info": "Homologated in 1998, the Volkswagen Golf Kitcar evolved over the course of several years, and won its class convincingly at the hands of several high level competitors. The 4-cylinder 270bhp engine produced upwards of 250 Nm of torque, making this car a handful for less experienced drivers."
   },
@@ -298,7 +298,7 @@
     "aspiration": "Supercharger",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "mid",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 1984,
     "info": "The last RWD car to win a World Championship in 1983, the 037 was a legend of Group B rallying. The mid engined RWD monster made use of its supercharged powerplant, producing around 325hp. The Lancia 037 was succeeded by the 4WD Lancia Delta S4."
   },
@@ -314,7 +314,7 @@
     "aspiration": "Natural",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 1983,
     "info": "A Group B icon, the Opel Manta was entered in mid 1983. It struggled to match its 4WD competitors, with an AWD Opel Manta prototype being developed briefly before the project was brought to a close. The Opel Manta Group B produced 275hp, offering excellent traction in the dry."
   },
@@ -330,7 +330,7 @@
     "aspiration": "Natural",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 1982,
     "info": "Based on its road going equivalent, the BMW M1 Procar Rally was used in a multitude of racing series. A Group 5 icon, this car attacked tarmac events, using its track racing pedigree to its advantage."
   },
@@ -346,12 +346,12 @@
     "aspiration": "Natural",
     "transmission": "6 Speed - Manual",
     "enginePlacement": "rear",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 1984,
     "info": "Producing 290hp, the Porsche 911 SC RS was and still is one of the most recognisable racing cars in the world. Modified for rally, this car featured tougher suspension, a wider body and event specific add-ons. This car was capable of taking the fight to its AWD rivals on a regular basis."
   },
   {
-    "image": "GroupB_4WD/sport_quattro_s1_e2.png",
+    "image": "GroupB/sport_quattro_s1_e2.png",
     "class": "Group B 4WD",
     "brand": "Audi",
     "model": "Sport Quattro S1 E2",
@@ -362,12 +362,12 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 1985,
-    "info": "The Audi Sport Quattro S1 E2 was introduced at the end of the 1985 season, and was based heavily on the earlier Audi Sport Quattro. The new car featured the iconic wing and reduced turbo lag via a recirculating air system. This was the final Group b car to be developed by Audi, with the final factory machines rated at 591hp. This car went on to win many hillclimbs in the late 80s"
+    "info": "The Audi Sport Quattro S1 E2 was introduced at the end of the 1985 season, and was based heavily on the earlier Audi Sport Quattro. The new car featured the iconic wing and reduced turbo lag via a recirculating air system. This was the final Group B car to be developed by Audi, with the final factory machines rated at 591hp. This car went on to win many hillclimbs in the late 80s."
   },
   {
-    "image": "GroupB_4WD/205_t16_evo_2.png",
+    "image": "GroupB/205_t16_evo_2.png",
     "class": "Group B 4WD",
     "brand": "Peugeot",
     "model": "205 T16 Evo 2",
@@ -378,12 +378,12 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "mid",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 1985,
     "info": "The mid-engine Peugeot 205 T16 was regarded by many as the pinnacle of Group B rallying, handling like a 'Go Kart' in the corners. This car shared virtually nothing with its road going counterpart, aside from its name and body shell. After Group B was disbanded, the 205 T16 was converted to run in the Dakar rally, which it won."
   },
   {
-    "image": "GroupB_4WD/delta_s4.png",
+    "image": "GroupB/delta_s4.png",
     "class": "Group B 4WD",
     "brand": "Lancia",
     "model": "Delta S4",
@@ -394,12 +394,12 @@
     "aspiration": "Turbo & Supercharger",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "mid",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 1985,
-    "info": "Homologated in 1985, the Lancia Delta S4 featured a twin-charged power unit, making use of both a turbocharger and a supercharger to aid in acceleration. A Delta in name and body styling only, this car shared virtually nothing in terms of construction with its road going equivalent, not unlike the earlier Peugeot 205 T16. The Delta S4 was a bespoke Group B monster"
+    "info": "Homologated in 1985, the Lancia Delta S4 featured a twin-charged power unit, making use of both a turbocharger and a supercharger to aid in acceleration. A Delta in name and body styling only, this car shared virtually nothing in terms of construction with its road going equivalent, not unlike the earlier Peugeot 205 T16. The Delta S4 was a bespoke Group B monster."
   },
   {
-    "image": "GroupB_4WD/rs200.png",
+    "image": "GroupB/rs200.png",
     "class": "Group B 4WD",
     "brand": "Ford",
     "model": "RS200",
@@ -410,12 +410,12 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "mid",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 1985,
-    "info": "The Ford RS200 arrived during the latter part of the Group B era, and as a result, never realised its full potential. After Group b was disbanded in 1086, most of the existing RS200 cars were sold to private buyers, many of whom choose to race the RS200 in rallycross events. The car featured a unique double wishbone suspension with twin dampers on all 4 wheels."
+    "info": "The Ford RS200 arrived during the latter part of the Group B era, and as a result, never realised its full potential. After Group B was disbanded in 1986, most of the existing RS200 cars were sold to private buyers, many of whom choose to race the RS200 in rallycross events. The car featured a unique double wishbone suspension with twin dampers on all 4 wheels."
   },
   {
-    "image": "GroupB_4WD/metro_6r4.png",
+    "image": "GroupB/metro_6r4.png",
     "class": "Group B 4WD",
     "brand": "MG",
     "model": "Metro 6R4",
@@ -426,9 +426,9 @@
     "aspiration": "Natural",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "mid",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 1985,
-    "info": "Based on the MG Metro road car, the MG Metro 6R4 made its international debut at the 1985 Lombard RAC rally. The new car was developed by Williams Grand Prix Engineering, with its naturally aspirate, mid mounted engine making this car unique among its competitors. Plagued by reliability issues, the car showed flashes of potential."
+    "info": "Based on the MG Metro road car, the MG Metro 6R4 made its international debut at the 1985 Lombard RAC rally. The new car was developed by Williams Grand Prix Engineering, with its naturally aspirated, mid mounted engine making this car unique among its competitors. Plagued by reliability issues, the car showed flashes of potential."
   },
   {
     "image": "R2/fiesta_r2.png",
@@ -442,7 +442,7 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "front",
+    "drivetrainPlacement": "front",
     "year": 2015,
     "info": "The Ford Fiesta R2, manufactured by M-Sport, was originally released in 2009 with a 1.6 litre naturally aspirated engine, becoming one of the most popular cars in the class thanks to its forgiving chassis and simple maintenance. In 2015 M-Sport designed a brand new version which featured a 1.0 litre turbocharged eco-boost engine."
   },
@@ -458,7 +458,7 @@
     "aspiration": "Natural",
     "transmission": "5 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "front",
+    "drivetrainPlacement": "front",
     "year": 2013,
     "info": "The Opel Adam R2 was designed and manufactured by the German outfit Holzer Gruppe. The car was designed to be as fast and as light as possible, making use of both carbon fibre and kevlar components. The Opel Adam R2 feature Reiger suspension, which gifts the car exceptional stability. The Adam R2 also has the most powerful engine in its class."
   },
@@ -474,7 +474,7 @@
     "aspiration": "Natural",
     "transmission": "5 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "front",
+    "drivetrainPlacement": "front",
     "year": 2012,
     "info": "Peugeot Sport homologated their R2 car based on the road-going 208. Released in 2012, the 208 R2 quickly outperformed the older and less powerful R2 cars, becoming a class favourite. The 208 R2 has a more rigid chassis than that of its competitors, and excels on tarmac stages as a result."
   },
@@ -490,7 +490,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -506,7 +506,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -522,7 +522,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -538,7 +538,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -554,7 +554,7 @@
     "aspiration": "Turbo",
     "transmission": "7 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -570,7 +570,7 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -586,7 +586,7 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -602,7 +602,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -618,7 +618,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -634,7 +634,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -650,7 +650,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -666,7 +666,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -682,7 +682,7 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -698,7 +698,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -714,7 +714,7 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -730,7 +730,7 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -746,7 +746,7 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -762,7 +762,7 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -778,7 +778,7 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -794,7 +794,7 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -810,7 +810,7 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -826,7 +826,7 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4wd",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -842,7 +842,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 0,
     "info": ""
   },
@@ -858,7 +858,7 @@
     "aspiration": "Natural",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 0,
     "info": ""
   },
@@ -874,7 +874,7 @@
     "aspiration": "Natural",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "rear",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 0,
     "info": ""
   },
@@ -890,7 +890,7 @@
     "aspiration": "Natural",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 0,
     "info": ""
   },
@@ -906,7 +906,7 @@
     "aspiration": "Natural",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 0,
     "info": ""
   },
@@ -922,7 +922,7 @@
     "aspiration": "Natural",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "front",
+    "drivetrainPlacement": "front",
     "year": 2003,
     "info": "Like many of the S1600 cars competing in rallycross, the Opel Corsa Super 1600 was a popular choice for drivers competing in the Junior World Rally Championship, a series created for junior rally drivers. Having been prepared for rallycross competition, this car features the same 1.6L format engine as its competition."
   },
@@ -938,7 +938,7 @@
     "aspiration": "Natural",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "front",
+    "drivetrainPlacement": "front",
     "year": 2006,
     "info": "Based on its road-going equivalent, the Renault Clio R.S. S1600 was built to compete in JWRC. The car was successful in this category, and as a result, was developed into a rallycross car when its tenure on the global rally stage was complete."
   },
@@ -954,7 +954,7 @@
     "aspiration": "Natural",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "front",
+    "drivetrainPlacement": "front",
     "year": 2014,
     "info": "The Volkswagen Polo S1600 is a FWD rallycross car based heavily on the Volkswagen Polo road car. Powered by a 1.6L Oreca engine delivering 240bhp to the front wheels, this car like the other cars in its class, exhibits a high amount of torque steer. This car contested the 2016 FIA European Rallycross Championship."
   },
@@ -970,9 +970,9 @@
     "aspiration": "Natural",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "rear",
-    "year": 0,
-    "info": ""
+    "drivetrainPlacement": "rear",
+    "year": 2016,
+    "info": "The Speedcar Xtrem is a purpose built racing buggy, which competes on rallycross tracks head to head with other competitors. Weighing only 420kg, including the driver, with 150bhp produced by a 750cc engine, this vehicle is a handful to drive. Featuring a 6-speed sequential gearbox and 3-way adjustable dampers, the Speedcar is extremely adaptable."
   },
   {
     "image": "RX2/fiesta_omse_supercar_lites.png",
@@ -986,7 +986,7 @@
     "aspiration": "Natural",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "rear",
+    "drivetrainPlacement": "rear",
     "year": 2012,
     "info": ""
   },
@@ -1002,7 +1002,7 @@
     "aspiration": "Turbo & Supercharger",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "mid",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1018,7 +1018,7 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "mid",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1034,7 +1034,7 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "mid",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1050,7 +1050,7 @@
     "aspiration": "Natural",
     "transmission": "5 Speed - Manual",
     "enginePlacement": "mid",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1066,7 +1066,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1082,7 +1082,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1098,7 +1098,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1114,7 +1114,7 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1130,7 +1130,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1146,7 +1146,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1162,7 +1162,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1178,7 +1178,7 @@
     "aspiration": "Turbo",
     "transmission": "5 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1194,7 +1194,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1210,7 +1210,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1226,7 +1226,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1242,7 +1242,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1258,7 +1258,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1274,7 +1274,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1290,7 +1290,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   },
@@ -1306,7 +1306,7 @@
     "aspiration": "Turbo",
     "transmission": "6 Speed - Manual Sequential",
     "enginePlacement": "front",
-    "divetrainPlacement": "4WD",
+    "drivetrainPlacement": "4wd",
     "year": 0,
     "info": ""
   }

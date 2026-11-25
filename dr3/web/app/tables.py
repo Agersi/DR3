@@ -113,7 +113,7 @@ RX_CAR_CLASSES: dict[str, list[str]] = {
     'RX Supercars 2019': [
         'Renault Megane R.S. RX', 'Peugeot 208 WRX', 'Audi S1 EKS RX Quattro',
         'Renault Clio R.S. RX', 'Ford Fiesta RXS Evo 5', 'Ford Fiesta RX (Mk8)',
-        'Mini Cooper SX1', 'Ford Fiesta Rallycross (Stard)', 'Seat Ibioza RX',
+        'Mini Cooper SX1', 'Ford Fiesta Rallycross (Stard)', 'Seat Ibiza RX',
     ],
 }
 
