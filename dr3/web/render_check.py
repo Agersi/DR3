@@ -165,7 +165,7 @@ def main() -> int:
     css = client.get('/static/css/style.css').get_data(as_text=True)
     reg_html = client.get('/register').get_data(as_text=True)
     check('register page styling (register-only centered h1 without stripe, 550px auth-card, soft panel shadow, centered register button)',
-          'h1 {\n  font-family: var(--display); text-transform: uppercase; letter-spacing: 0.04em;\n  font-size: clamp(1.8rem, 4vw, 2.3rem); line-height: 1.05; font-weight: 700;\n  margin: 1.4rem 0 0.8rem; display: flex; align-items: center; gap: 0.6rem;\n}' in css
+          'h1 {\n  font-family: var(--display); text-transform: uppercase; letter-spacing: 0.04em;\n  font-size: clamp(1.8rem, 4vw, 2.3rem); line-height: 1.05; font-weight: 700;\n  margin: 1.4rem 0 0.8rem; display: flex; align-items: center; gap: 0.6rem; width: 100%;\n}' in css
           and "h1::before { content: ''; width: 2em;" in css
           and '.register-title {\n  display: block;\n  font-family: var(--display);\n  text-transform: uppercase;\n  letter-spacing: 0.04em;\n  font-size: clamp(1.8rem, 4vw, 2.3rem);\n  line-height: 1.05;\n  font-weight: 700;\n  margin: 0 1rem 1rem;\n  text-align: center;\n}' in css
           and '.register-title::before { content: none; }' in css
