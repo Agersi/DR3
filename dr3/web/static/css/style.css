@@ -526,23 +526,23 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
   width: 22rem;
 }
 .car-header { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }
-.car-img { max-width: 300px; width: 60%; height: auto; }
+.car-img { width: 50%; height: auto; }
 .car-head-body { flex: 1; min-width: 16rem; }
 .car-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.35rem 1rem; margin: 0.7rem 0 0; }
 .car-stat dt { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.74rem; font-weight: 600; color: var(--muted); }
 .car-stat dd { margin: 0; font-weight: 600; }
 .car-diagram { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
 .cd-front { color: var(--muted); font-size: 0.55rem; line-height: 1; }
-.cd-body { position: relative; width: 84px; height: 148px; border: 2px solid var(--line); border-radius: 34px 34px 20px 20px; background: rgba(60, 61, 55, 0.5); }
-.cd-wheel { position: absolute; width: 12px; height: 24px; background: var(--line); border-radius: 4px; }
-.cd-fl { left: -7px; top: 16px; }
-.cd-fr { right: -7px; top: 16px; }
+.cd-body { position: relative; width: 80px; height: 150px; border: 2px solid var(--line); border-radius: 28px 28px 14px 14px; background: rgba(60, 61, 55, 0.5); }
+.cd-wheel { position: absolute; width: 15px; height: 28px; background: var(--line); border-radius: 4px; }
+.cd-fl { left: -7px; top: 20px; }
+.cd-fr { right: -7px; top: 20px; }
 .cd-rl { left: -7px; bottom: 16px; }
 .cd-rr { right: -7px; bottom: 16px; }
 .cd-engine { position: absolute; left: 50%; transform: translateX(-50%); width: 48px; height: 30px; background: var(--accent); color: var(--bg); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.55rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
-.car-diagram[data-engine="front"] .cd-engine { top: 12px; }
-.car-diagram[data-engine="mid"] .cd-engine { top: 50%; margin-top: -15px; }
-.car-diagram[data-engine="rear"] .cd-engine { bottom: 12px; }
+.car-diagram[data-engine="front"] .cd-engine { top: 8px; }
+.car-diagram[data-engine="mid"] .cd-engine { top: 50%; margin-top: 6px; }
+.car-diagram[data-engine="rear"] .cd-engine { bottom: 2px; }
 .car-diagram[data-drive="front"] .cd-fl,
 .car-diagram[data-drive="front"] .cd-fr,
 .car-diagram[data-drive="rear"] .cd-rl,
