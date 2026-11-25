@@ -245,7 +245,7 @@ def main() -> int:
           and '<a class="driver-link" href="/vehicles?vehicle=1">Vehicle 1</a>' in html, '')
     check('home: recent-times Time + Posted columns use num class (headers, server + JS rows)',
           '<th class="num">Time</th>' in html and '<th class="num">Posted</th>' in html
-          and html.count('<td class="num">') == 4
+          and html.count('<td class="num">') == 8  # 4 server-rendered rows x Time + Posted
           and "tr.appendChild(cell(row.time_text, 'num'));" in html
           and "tr.appendChild(cell(row.at_text, 'num'));" in html, '')
     check('home: recent-times Tyres/Spares/Input/Camera columns (data attrs + board-style cell JS)',
@@ -408,10 +408,11 @@ def main() -> int:
     # shows up, not the old double-counted user columns.
     check('drivers page: distance comes from stage_runs (#56)',
           '309.9 km' in drv_html, '')
-    # Stages completed is a % (4 of the smoke driver's 7 runs finished — the
-    # board-cum fixture adds two clean rows for the car-resolution check).
+    # Stages completed is a % (6 of the smoke driver's 9 runs finished — the
+    # board-cum fixture adds two clean rows for the car-resolution check and
+    # the recent-times set-change fixture adds two more).
     check('drivers page: stages completed shown as a percentage',
-           '<td class="num">57%</td>' in drv_html, '')
+           '<td class="num">67%</td>' in drv_html, '')
     prof = client.get('/profile/smokedriver').get_data(as_text=True)
     check('profile: per-device distance list (#57)',
           'Input devices' in prof and 'Simucube 2 Pro (100%)' in prof, '')
@@ -419,7 +420,7 @@ def main() -> int:
           '<table class="driving">' in prof
           and '<span class="stat-key">Favorite Car:</span>' in prof
           and '<span class="stat-key">Stages driven:</span>' in prof
-          and '(57% completed)' in prof, '')
+          and '(67% completed)' in prof, '')
     drv_css = client.get('/static/css/style.css').get_data(as_text=True)
     check('profile: driving table CSS (two columns, divider, top lists)',
           '.driving td + td { border-left: 1px solid var(--line); }' in drv_css

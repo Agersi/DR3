@@ -23,7 +23,12 @@ from .results_view import (
     format_ms,
     gap_text,
 )
-from .scoring import fresh_damage_indices, vehicle_meta
+from .scoring import (
+    fresh_damage_indices,
+    fresh_tyre_start,
+    tyre_set_changed,
+    vehicle_meta,
+)
 from .tables import RX_LOCATIONS
 from dr2server.game_data import STAGE_CONDITIONS_LABELS, Location, Track
 from dr2server.stage_limits import split_count_for_limit, stage_limit_ms
@@ -259,6 +264,14 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
             # when never captured; rendered as zero).
             if slot[1] > 0 and slot[1] not in reset_of.get(slot[0], {0}):
                 d0 = damage_of.get((slot[0], name, slot[1] - 1))
+                # A set fitted at the service before this stage starts with
+                # fresh per-tyre state (wear + impact zeroed; the rest of the
+                # car keeps its carried-over damage).
+                if d0 is not None:
+                    prev_se = stage_entries.get(
+                        (slot[0], name, slot[1] - 1))
+                    if tyre_set_changed(prev_se, se):
+                        d0 = fresh_tyre_start(d0)
         u = users.get(name)
         splits = None
         if e.splits_json:

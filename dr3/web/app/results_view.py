@@ -23,10 +23,12 @@ from .scoring import (
     championship_points_rounds,
     championship_view,
     flat_stage_bogeys_ms,
+    fresh_tyre_start,
     overall_standings,
     power_stage_enabled,
     rally_standings,
     scoring_system_for,
+    tyre_set_changed,
     vehicle_meta,
 )
 from .tables import (
@@ -658,6 +660,11 @@ def event_board(event: dict, round_index: int, mode: str,
             d0 = prev.get('comp_damage') if isinstance(prev, dict) else None
             if not isinstance(d0, dict):
                 d0 = None
+            # A set fitted at the service before this stage starts with fresh
+            # per-tyre state (wear + impact zeroed; the rest of the car keeps
+            # its carried-over damage).
+            if d0 is not None and tyre_set_changed(prev, se):
+                d0 = fresh_tyre_start(d0)
             raw.append({
                 'username': e.get('username'),
                 'time_ms': t,
@@ -775,6 +782,11 @@ def event_board(event: dict, round_index: int, mode: str,
                 d0 = prev.get('comp_damage') if isinstance(prev, dict) else None
                 if not isinstance(d0, dict):
                     d0 = None
+                # A set fitted at the service before this stage starts with
+                # fresh per-tyre state (wear + impact zeroed; the rest of the
+                # car keeps its carried-over damage).
+                if d0 is not None and tyre_set_changed(prev, se_k):
+                    d0 = fresh_tyre_start(d0)
                 tyre_damage.append({'s': max(0, fk - offset), 'd': d, 'd0': d0})
             total = adjusted_total_ms(e, bogeys, offset=offset)
             raw.append({

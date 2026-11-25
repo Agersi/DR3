@@ -138,6 +138,40 @@ def fresh_damage_indices(event: dict | None) -> set[int]:
     return out
 
 
+def tyre_set_changed(prev_entry: dict | None, cur_entry: dict | None) -> bool:
+    """True when a new physical tyre set was fitted before ``cur_entry``.
+
+    A different compound is always a different set; the same compound with
+    one fewer set left (``tyres_remaining`` decremented) means a spare of it
+    was fitted at service. Missing fields on either side simply disable the
+    corresponding check."""
+    def _val(entry: dict | None, key: str) -> int | None:
+        if not isinstance(entry, dict):
+            return None
+        try:
+            v = entry.get(key)
+            return int(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+    pc, cc = _val(prev_entry, 'tyre_compound'), _val(cur_entry, 'tyre_compound')
+    if pc is not None and cc is not None and pc != cc:
+        return True
+    pr, cr = _val(prev_entry, 'tyres_remaining'), _val(cur_entry, 'tyres_remaining')
+    return pr is not None and cr is not None and cr < pr
+
+
+def fresh_tyre_start(d0: dict | None) -> dict | None:
+    """A copy of a comp_damage snapshot with the per-tyre state zeroed — the
+    start of a freshly fitted set (wear + impact). The rest of the car keeps
+    its carried-over damage. Non-dicts pass through unchanged."""
+    if not isinstance(d0, dict):
+        return d0
+    d = dict(d0)
+    d['wheels_wear'] = 0
+    d['wheels_impact'] = 0
+    return d
+
+
 def long_stage_cutoff_km(location: str) -> float | None:
     """Distance at or above which a stage of this location scores the long
     bogey: the 4th-longest route of the location's full roster. ``None``

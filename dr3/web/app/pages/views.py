@@ -110,7 +110,12 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
     stage), so the front page's recent-times box can page through all of them."""
     from ..countries import flag_url
     from ..results_view import _run_attrs, _spare_tyres, format_ms
-    from ..scoring import car_label, fresh_damage_indices
+    from ..scoring import (
+        car_label,
+        fresh_damage_indices,
+        fresh_tyre_start,
+        tyre_set_changed,
+    )
 
     club_name = {c.id: c.name for c in Club.query.all()}
     users = User.query.all()
@@ -157,12 +162,23 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
         ev = event_of.get(r.event_id)
         club = club_name.get(ev.club_id, '') if ev and ev.club_id else ''
         car = car_label({'vehicle_id': r.vehicle_id, 'car': r.car})
-        for i, s in enumerate(json.loads(r.stages_json or '[]')):
+        stages = json.loads(r.stages_json or '[]')
+        for i, s in enumerate(stages):
             t = int(s.get('time_ms', 0) or 0)
             sa = s.get('submitted_at')
             if t <= 0 or not sa:
                 continue
             a = _run_attrs(runs_of.get((r.event_id, r.username, i)))
+            d = damage_of.get((r.event_id, r.username, i))
+            d0 = None
+            if i not in _fresh(r.event_id):
+                d0 = damage_of.get((r.event_id, r.username, i - 1))
+                # A set fitted at the service before this stage starts with
+                # fresh per-tyre state (wear + impact zeroed; the rest of the
+                # car keeps its carried-over damage).
+                if d0 is not None and i > 0 \
+                        and tyre_set_changed(stages[i - 1], s):
+                    d0 = fresh_tyre_start(d0)
             rows.append({
                 'driver': display_name.get(r.username, r.username),
                 'driver_username': r.username,
@@ -179,12 +195,7 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
                 # no-data fallback, same as the club board) plus the start
                 # state from the previous stage of the same run — except at
                 # a fresh-damage ordinal (event start / season round start).
-                'tyre_damage': ([{'s': i,
-                                  'd': damage_of.get(
-                                      (r.event_id, r.username, i)),
-                                  'd0': damage_of.get(
-                                      (r.event_id, r.username, i - 1))
-                                  if i not in _fresh(r.event_id) else None}]
+                'tyre_damage': ([{'s': i, 'd': d, 'd0': d0}]
                                 if a['tyre'] is not None else []),
                 'spares': _spare_tyres({
                     'spare_tyres': s.get('spare_tyres'),

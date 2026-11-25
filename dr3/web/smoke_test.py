@@ -1271,6 +1271,52 @@ def main() -> int:
         db.session.add(ClubStageState(
             event_id='smoke-link-event', username='smokedriver',
             flat_stage_index=0, comp_damage_json=json.dumps(_link_dmg)))
+        # Second event with two stages: the same compound with one fewer set
+        # left (tyres_remaining 3 -> 2) — a spare of it fitted at service.
+        # The stage-2 row must carry the stage-1 snapshot as its start state
+        # with fresh per-tyre fields (wear + impact zeroed).
+        st2 = {'name': 'Link Stage 2', 'track_id': 21, 'distance_km': 5.0,
+               'conditions_id': 5, 'conditions': 'Dry', 'surface_deg': 'Medium',
+               'service_area': 'Medium'}
+        db.session.add(Event(
+            id='smoke-link-event-2', schema_version=2, name='Smoke Link Event 2',
+            type='daily', location='Lydden Hill', car_class='Rally GT',
+            surface='Gravel', conditions='Dry',
+            stages_json=json.dumps([st, st2]), settings_json=json.dumps({}),
+            legs_json=json.dumps([{
+                'location': 'Lydden Hill', 'car_class': 'Rally GT',
+                'surface': 'Gravel', 'duration': {'days': 0, 'hours': 1, 'mins': 0},
+                'stages': [st, st2],
+            }]),
+            start_time=utcnow() - timedelta(minutes=3),
+            end_time=utcnow() + timedelta(hours=1),
+            active=True, featured=False, club_id='smoke-link-club', system=False,
+        ))
+        db.session.add(Result(
+            event_id='smoke-link-event-2', username='smokedriver', vehicle_id=565,
+            total_time_ms=630000, stages_json=json.dumps([
+                {'time_ms': 310000, 'spare_tyres': 2, 'tyre_compound': 6,
+                 'tyres_remaining': 3,
+                 'submitted_at': (utcnow() - timedelta(minutes=5)).isoformat()},
+                {'time_ms': 320000, 'spare_tyres': 2, 'tyre_compound': 6,
+                 'tyres_remaining': 2,
+                 'submitted_at': (utcnow() - timedelta(minutes=4)).isoformat()}])))
+        # No vehicle_id on the run rows: they exist only to feed the row's
+        # tyre column — per-vehicle stats (terminal %, distance) must not see
+        # them.
+        for k, t in ((0, 310000), (1, 320000)):
+            db.session.add(StageRun(
+                username='smokedriver', event_id='smoke-link-event-2',
+                flat_stage_index=k, time_ms=t,
+                player_finished=True, tyre_compound=6))
+        _link_dmg0 = {'engine': 0.3, 'wheels_wear': 0x44444444}
+        _link_dmg1 = {'engine': 0.6, 'wheels_wear': 0x88888888}
+        db.session.add(ClubStageState(
+            event_id='smoke-link-event-2', username='smokedriver',
+            flat_stage_index=0, comp_damage_json=json.dumps(_link_dmg0)))
+        db.session.add(ClubStageState(
+            event_id='smoke-link-event-2', username='smokedriver',
+            flat_stage_index=1, comp_damage_json=json.dumps(_link_dmg1)))
         db.session.commit()
 
     r = client.get('/api/home/recent-times?offset=0&limit=25')
@@ -1292,6 +1338,19 @@ def main() -> int:
           link is not None
           and link['tyre_damage'] == [{'s': 0, 'd': _link_dmg, 'd0': None}],
           str(link or rows)[:300])
+    from app.results_view import format_ms as _fmt_ms
+    row2_0 = next((x for x in rows if x.get('time_text') == _fmt_ms(310000)), None)
+    row2_1 = next((x for x in rows if x.get('time_text') == _fmt_ms(320000)), None)
+    check('recent-times: first-stage row carries its snapshot + null start state',
+          row2_0 is not None
+          and row2_0['tyre_damage'] == [{'s': 0, 'd': _link_dmg0, 'd0': None}],
+          str(row2_0)[:300])
+    check('recent-times: start state after a same-compound set change keeps the previous snapshot with fresh per-tyre fields',
+          row2_1 is not None
+          and row2_1['tyre_damage'] == [{'s': 1, 'd': _link_dmg1,
+                                         'd0': {**_link_dmg0, 'wheels_wear': 0,
+                                                'wheels_impact': 0}}],
+          str(row2_1)[:300])
 
     # 7c-3. Vehicle page: /vehicles?vehicle=<id> preselects the vehicle, the old
     # /cars URLs redirect there. Fastest stages come from best_times (the site
@@ -2359,10 +2418,15 @@ def main() -> int:
               and by_name0.get('secondpilot', {}).get('tyres') == [6]
               and by_name1.get('secondpilot', {}).get('tyres') == [6, 8],
               f"tyres={[(n, r.get('tyres')) for n, r in {**by_name0, **by_name1}.items()]}")
-        check("event-board API: overall rows carry per-set tyre_damage (end state at each set's last-used stage + start state from the previous stage)",
+        # A set fitted at the service before a stage starts with fresh
+        # per-tyre state: the start value zeroes wear + impact while the rest
+        # of the car keeps its carried-over damage.
+        D_CUM0_FRESH = {**D_CUM0, 'wheels_wear': 0, 'wheels_impact': 0}
+        D_CUM2_FRESH = {**D_CUM2, 'wheels_wear': 0, 'wheels_impact': 0}
+        check("event-board API: overall rows carry per-set tyre_damage (end state at each set's last-used stage + start state from the previous stage, fresh per-tyre state after a set change)",
               by_name0.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM0, 'd0': None}]
-              and by_name1.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM0, 'd0': None}, {'s': 1, 'd': D_CUM1, 'd0': D_CUM0}]
-              and by_name1.get('secondpilot', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM2, 'd0': None}, {'s': 1, 'd': None, 'd0': D_CUM2}],
+              and by_name1.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM0, 'd0': None}, {'s': 1, 'd': D_CUM1, 'd0': D_CUM0_FRESH}]
+              and by_name1.get('secondpilot', {}).get('tyre_damage') == [{'s': 0, 'd': D_CUM2, 'd0': None}, {'s': 1, 'd': None, 'd0': D_CUM2_FRESH}],
               f"td={[(n, r.get('tyre_damage')) for n, r in {**by_name0, **by_name1}.items()]}")
         api_cum_s0 = client.get(
             f'/clubs/{club_id}/event-board?event=evt-smoke-board-cum&round=0&mode=stage&stage=0')
@@ -2376,6 +2440,14 @@ def main() -> int:
               bs0.get('smokedriver', {}).get('tyres') == [6]
               and bs0.get('secondpilot', {}).get('tyres') == [6],
               f"rows={[(n, r.get('tyres')) for n, r in bs0.items()]}")
+        api_cum_s1 = client.get(
+            f'/clubs/{club_id}/event-board?event=evt-smoke-board-cum&round=0&mode=stage&stage=1')
+        bs1 = {row['username']: row for row in (api_cum_s1.get_json() or {}).get('rows') or []}
+        check("event-board API: stage mode zeroes the start state's per-tyre fields after a set change",
+              api_cum_s1.status_code == 200
+              and bs1.get('smokedriver', {}).get('tyre_damage') == [{'s': 1, 'd': D_CUM1, 'd0': D_CUM0_FRESH}]
+              and bs1.get('secondpilot', {}).get('tyre_damage') == [{'s': 1, 'd': None, 'd0': D_CUM2_FRESH}],
+              f"rows={[(n, r.get('tyre_damage')) for n, r in bs1.items()]}")
 
         # Combined-multi fixture: two legs x two stages so the board must span
         # the whole event — a flat S1..S4 bar, Overall accumulating across
@@ -2434,11 +2506,14 @@ def main() -> int:
                     {'time_ms': 900000, 'penalties_ms': 0, 'race_status': 5},
                     {},
                 ])))
-            # Snapshots only at the LAST stage of each set (flat 1 = softs,
-            # flat 3 = mediums) — the combined board must map them to the
-            # right set images across the leg boundary.
+            # Snapshots at the first stage (flat 0) and the LAST stage of each
+            # set (flat 1 = softs, flat 3 = mediums) — the combined board must
+            # map them to the right set images across the leg boundary.
+            D_M0 = {'wheels_wear': 0x01020304, 'engine': 0.25}
             D_M1 = {'wheels_wear': 0x10203040, 'engine': 0.5}
             D_M3 = {'wheels_wear': 0x50607080, 'engine': 1.0, 'lights': 0.25}
+            db.session.add(_BoardCSS(event_id='evt-smoke-board-multi', username='smokedriver',
+                                     flat_stage_index=0, comp_damage_json=json.dumps(D_M0)))
             db.session.add(_BoardCSS(event_id='evt-smoke-board-multi', username='smokedriver',
                                      flat_stage_index=1, comp_damage_json=json.dumps(D_M1)))
             db.session.add(_BoardCSS(event_id='evt-smoke-board-multi', username='smokedriver',
@@ -2540,9 +2615,9 @@ def main() -> int:
               and by_name_m3.get('smokedriver', {}).get('tyres') == [6, 7]
               and by_name_m3.get('secondpilot', {}).get('tyres') == [],
               f"tyres={[(n, r.get('tyres')) for n, r in {**by_name_m0, **by_name_m3}.items()]}")
-        check("event-board API: combined per-set tyre_damage maps to each set's last-used stage (null when unsnapshotted) + previous-stage start state",
-              by_name_m0.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': None, 'd0': None}]
-              and by_name_m3.get('smokedriver', {}).get('tyre_damage') == [{'s': 1, 'd': D_M1, 'd0': None}, {'s': 3, 'd': D_M3, 'd0': None}],
+        check("event-board API: combined per-set tyre_damage maps to each set's last-used stage (null when unsnapshotted) + previous-stage start state carried over within a set",
+              by_name_m0.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_M0, 'd0': None}]
+              and by_name_m3.get('smokedriver', {}).get('tyre_damage') == [{'s': 1, 'd': D_M1, 'd0': D_M0}, {'s': 3, 'd': D_M3, 'd0': None}],
               f"td={[(n, r.get('tyre_damage')) for n, r in {**by_name_m0, **by_name_m3}.items()]}")
         check('event-board API: combined info shows the selected stage + its leg location',
               (bm3.get('info') or {}).get('number') == 4
@@ -2557,6 +2632,9 @@ def main() -> int:
               and rows_m2.get('smokedriver', {}).get('time_text') == format_ms(110000)
               and rows_m2.get('smokedriver', {}).get('dnf') is False,
               f"info={bm2.get('info')} rows={[(r.get('username'), r.get('time_text')) for r in bm2.get('rows') or []]}")
+        check("event-board API: combined stage mode zeroes the start state's per-tyre fields at the inter-leg refit (compound change)",
+              rows_m2.get('smokedriver', {}).get('tyre_damage') == [{'s': 2, 'd': None, 'd0': {**D_M1, 'wheels_wear': 0, 'wheels_impact': 0}}],
+              f"rows={[(r.get('username'), r.get('tyre_damage')) for r in bm2.get('rows') or []]}")
 
         api3 = client.get(
             f'/clubs/{club_id}/event-board?event=evt-doesnotexist&round=0&mode=overall')
