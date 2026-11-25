@@ -358,11 +358,6 @@
     var springs = unpack4(d.springs);
     var dampers = unpack4(d.dampers);
     var brakes = unpack4(d.brakes);
-    var body = unpackBody(d.bodywork);
-    var shell = '';
-    if (body.deform > 0.02) {
-      shell = '<rect x="73" y="28" width="92" height="244" rx="15" fill="' + dmgColor(body.deform) + '" opacity="0.8"/>';
-    }
     var wheels = [
       ['FL', 78, 64], ['FR', 160, 64], ['RL', 78, 236], ['RR', 160, 236]
     ].map(function (w) {
@@ -391,7 +386,6 @@
     }).join('');
     return '<svg class="dmg-car" viewBox="0 0 238 300" aria-hidden="true">' +
       '<rect x="73" y="28" width="92" height="244" rx="15" fill="#262b21" stroke="#697565" stroke-width="1.5"/>' +
-      shell +
       wheels +
       '</svg>';
   }
@@ -400,7 +394,7 @@
     var body = unpackBody(d.bodywork);
     var dw = unpack4(d.diff_wear);
     var items = [
-      ['Bodywork', Math.max(body.a, body.b)],
+      ['Bodywork', (body.deform + body.a + body.b) / 3],
       ['Gearbox', hiLo(d.gearbox)], ['Turbo', hiLo(d.turbo)],
       ['Diff wear', Math.max(dw[0], dw[1], dw[2]) / 255],
       ['Diff impact', hiLo(d.diff_impact)],

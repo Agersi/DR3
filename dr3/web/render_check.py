@@ -721,13 +721,13 @@ def main() -> int:
               and 'function unpackBody(v) {' in det
               and 'function hiLo(v) {' in det
               and 'var CORNER = { FL: 2, FR: 3, RL: 0, RR: 1 };' in det
-              and "['Bodywork', Math.max(body.a, body.b)]" in det
+              and "['Bodywork', (body.deform + body.a + body.b) / 3]" in det
               and "['Gearbox', hiLo(d.gearbox)], ['Turbo', hiLo(d.turbo)]," in det
               and "['Diff wear', Math.max(dw[0], dw[1], dw[2]) / 255]," in det
               and "['Diff impact', hiLo(d.diff_impact)]" in det
               and "['Engine', d.engine], ['Clutch', d.clutch], ['Radiator', d.radiator]," in det
               and 'viewBox="0 0 238 300"' in det
-              and 'if (body.deform > 0.02) {' in det
+              and 'dmgColor(body.deform)' not in det
               and 'rx="15" fill="#262b21"' in det
               and 'width="30" height="50" rx="11"' in det
               and 'var fh = Math.max(2, imp * 32);' in det
