@@ -117,12 +117,14 @@ def main() -> int:
           '#lb-board-table .diff-col { width: 5.5rem; }' in lb_css
           and '#lb-board-table .src-cell { text-align: center; }' in lb_css
           and '.dmg-cond { margin-top: 0.6rem;' in lb_css
-          and '#lb-board-table .car-col { width: 13.5rem; white-space: nowrap; }' in lb_css
-          and '#lb-board-table th.car-col { padding-left: 51px; }' in lb_css
-          and '#lb-board-table td:nth-child(2) { white-space: nowrap; }' in lb_css
-          and '#lb-board-table:has(.deg-col) th:nth-child(4), #lb-board-table:has(.deg-col) td:nth-child(4) { width: 2rem; }' in lb_css
-          and '#lb-board-table:has(.deg-col) th:nth-child(2), #lb-board-table:has(.deg-col) td:nth-child(2) { width: 10.5rem; }' in lb_css
-          and '#lb-board-table .pen-col { width: 4.5rem; }' in lb_css, '')
+           and '#lb-board-table .car-col { width: 14.5rem; white-space: nowrap; }' in lb_css
+           and '#lb-board-table th.car-col { padding-left: 42px; }' in lb_css
+           and '#lb-board-table td:nth-child(2) { white-space: nowrap; }' in lb_css
+           and '#lb-board-table:has(.deg-col) th:nth-child(4), #lb-board-table:has(.deg-col) td:nth-child(4) { width: 2.3rem; }' in lb_css
+           and '#lb-board-table:has(.deg-col) th:nth-child(7), #lb-board-table:has(.deg-col) td:nth-child(7) { width: 2.9rem; text-align: center; }' in lb_css
+           and '#lb-board-table:has(.deg-col) th:nth-child(2), #lb-board-table:has(.deg-col) td:nth-child(2) { width: 10.5rem; }' in lb_css
+           and '.class-thumb { height: 1.3em; width: auto; vertical-align: -0.32em; }' in lb_css
+           and '#lb-board-table .pen-col { width: 4.5rem; }' in lb_css, '')
     # Rallycross stages (track 641 = Bikernieki) carry no penalty column —
     # the board is about best laps there; smoke fixtures keep 641 empty.
     _rx_lb = client.get('/leaderboard?stage=641').get_data(as_text=True)
@@ -794,8 +796,8 @@ def main() -> int:
                 and "table.board { table-layout: fixed; }" in board_css
                and "table.board th, table.board td { padding: 0.15rem 0.15rem; text-align: left; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; }" in board_css
                and "table.board th:nth-child(1), table.board td:nth-child(1) { width: 2rem; text-align: center; }" in board_css
-                 and all(f"table.board th:nth-child({n}), table.board td:nth-child({n}) {{ width: {w}; }}" in board_css
-                         for n, w in ((2, '11.5rem'), (3, '11.5rem'), (4, '3rem'), (5, '3rem'), (6, '3rem'), (7, '3.5rem'), (8, '5.5rem'), (9, '5.5rem'), (10, '5.5rem')))
+                  and all(f"table.board th:nth-child({n}), table.board td:nth-child({n}) {{ width: {w}; }}" in board_css
+                          for n, w in ((2, '11.5rem'), (3, '11.5rem'), (4, '3rem'), (5, '2.3rem'), (6, '2.7rem'), (7, '3.5rem'), (8, '5.5rem'), (9, '5.5rem'), (10, '5.5rem')))
                 and ".split-col { white-space: nowrap; width: 4rem; }" in board_css
                  and ".expand-head, .expand-cell { width: 2rem; text-align: center; white-space: nowrap; }" in board_css
                  and "'<th>Input</th><th>Camera</th><th class=\"num\">Penalty</th>'" in det

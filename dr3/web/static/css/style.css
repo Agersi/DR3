@@ -452,7 +452,7 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .drivers-box th:nth-child(4), .drivers-box td:nth-child(4) { width: 7rem; }
 .recent-box.drivers-box .num { text-align: right; }
 .flag { height: .95em; width: auto; vertical-align: -0.18em; margin-right: 0.3em; }
-.class-thumb { height: 1.3em; width: auto; vertical-align: -0.32em; margin-right: .4em; }
+.class-thumb { height: 1.3em; width: auto; vertical-align: -0.32em; }
 
 /* ── Profile driving stats: two-column layout ───────── */
 
@@ -819,8 +819,8 @@ table.board th:nth-child(1), table.board td:nth-child(1) { width: 2rem; text-ali
 table.board th:nth-child(2), table.board td:nth-child(2) { width: 11.5rem; }
 table.board th:nth-child(3), table.board td:nth-child(3) { width: 11.5rem; }
 table.board th:nth-child(4), table.board td:nth-child(4) { width: 3rem; }
-table.board th:nth-child(5), table.board td:nth-child(5) { width: 3rem; }
-table.board th:nth-child(6), table.board td:nth-child(6) { width: 3rem; }
+table.board th:nth-child(5), table.board td:nth-child(5) { width: 2.3rem; }
+table.board th:nth-child(6), table.board td:nth-child(6) { width: 2.7rem; }
 table.board th:nth-child(7), table.board td:nth-child(7) { width: 3.5rem; }
 table.board th:nth-child(8), table.board td:nth-child(8) { width: 5.5rem; }
 table.board th:nth-child(9), table.board td:nth-child(9) { width: 5.5rem; }
@@ -911,12 +911,12 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 #lb-board-table .src-cell { text-align: center; }
 table th:last-child, table td:last-child { padding-right: .5rem; }
 .car-fastest tr.fastest-detail td:last-child { padding-right: 0; }
-#lb-board-table .car-col { width: 13.5rem; white-space: nowrap; }
-#lb-board-table th.car-col { padding-left: 51px; }
+#lb-board-table .car-col { width: 14.5rem; white-space: nowrap; }
+#lb-board-table th.car-col { padding-left: 42px; }
 #lb-board-table td:nth-child(2) { white-space: nowrap; }
 #lb-board-table:has(.deg-col) th:nth-child(2), #lb-board-table:has(.deg-col) td:nth-child(2) { width: 10.5rem; }
-#lb-board-table:has(.deg-col) th:nth-child(4), #lb-board-table:has(.deg-col) td:nth-child(4) { width: 2rem; }
-#lb-board-table:has(.deg-col) th:nth-child(7), #lb-board-table:has(.deg-col) td:nth-child(7) { width: 3rem; }
+#lb-board-table:has(.deg-col) th:nth-child(4), #lb-board-table:has(.deg-col) td:nth-child(4) { width: 2.3rem; }
+#lb-board-table:has(.deg-col) th:nth-child(7), #lb-board-table:has(.deg-col) td:nth-child(7) { width: 2.9rem; text-align: center; }
 #lb-board-table:has(.deg-col) th:nth-child(8), #lb-board-table:has(.deg-col) td:nth-child(8) { width: 3.5rem; }
 .board-empty td { text-align: center; color: var(--muted); padding: 1rem; }
 
