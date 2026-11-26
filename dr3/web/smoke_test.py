@@ -2616,6 +2616,10 @@ def main() -> int:
               bs0.get('smokedriver', {}).get('tyres') == [6]
               and bs0.get('secondpilot', {}).get('tyres') == [6],
               f"rows={[(n, r.get('tyres')) for n, r in bs0.items()]}")
+        i_cum = (api_cum_s0.get_json() or {}).get('info') or {}
+        check('event-board API: stage info carries track_id for the club-page leaderboard link',
+              api_cum_s0.status_code == 200 and i_cum.get('track_id') == str(routes[0][0]),
+              f"info={i_cum}")
         api_cum_s1 = client.get(
             f'/clubs/{club_id}/event-board?event=evt-smoke-board-cum&round=0&mode=stage&stage=1')
         bs1 = {row['username']: row for row in (api_cum_s1.get_json() or {}).get('rows') or []}

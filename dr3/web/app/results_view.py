@@ -593,6 +593,7 @@ def event_board(event: dict, round_index: int, mode: str,
         info = {
             'number': j + 1,
             'name': st_meta.get('name') or '',
+            'track_id': st_meta.get('track_id'),
             'length_km': st_meta.get('distance_km') or 0,
             'weather': st_meta.get('conditions') or '',
             'service': st_meta.get('service_area') or '',

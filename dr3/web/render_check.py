@@ -718,6 +718,8 @@ def main() -> int:
               and '.tyre-img { position: relative; display: inline-block; }' in board_css
               and 'split_count' in (board_state.get('board') or {})
               and 'is_rx' in (board_state.get('board') or {}), '')
+        check('club detail: stage chip links to the leaderboard for that stage',
+              "'<a class=\"chip chip-accent\" href=\"' + root + '/leaderboard?stage=' + i.track_id" in det, '')
         check('club detail: tyre column renders compound images with hover name tooltip',
               "var TYRE_FILE = {" in det
               and "1: '1_soft_gravel'" in det
