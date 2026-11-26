@@ -612,6 +612,12 @@ def api_game_stage_complete():
             if not entry.get('nationality_id') and sent_nat:
                 entry['nationality_id'] = sent_nat
             entry['race_status'] = rs
+            # Markers carry no submitted_at of their own, but the home page's
+            # "days without a terminal damage" card only counts entries that
+            # have one — stamp the close-out moment (a real submission's
+            # timestamp is never overwritten).
+            if not entry.get('submitted_at'):
+                entry['submitted_at'] = utcnow().isoformat()
             if t > 0 and not (entry.get('time_ms', 0) or 0):
                 entry['time_ms'] = t
             entry.setdefault('time_ms', 0)

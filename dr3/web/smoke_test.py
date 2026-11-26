@@ -901,6 +901,10 @@ def main() -> int:
     e0 = (j.get('entries') or [{}])[0]
     st1 = (e0.get('stages') or [None, {}])[1]
     check('dnf: marker flags race_status=4', st1.get('race_status') == 4, str(st1)[:200])
+    # The close-out moment must be stored — the home page's "days without a
+    # terminal damage" card only counts entries that carry a submitted_at.
+    check('dnf: marker stamps submitted_at (terminal-damage card source)',
+          bool(st1.get('submitted_at')), str(st1)[:200])
     check('dnf: marker keeps the pre-persisted limit time',
           e0.get('total_time_ms') == 900000, str(e0.get('total_time_ms')))
 
@@ -3064,7 +3068,10 @@ def main() -> int:
                                  total_time_ms=960000,
                                  stages_json=json.dumps([{'time_ms': 60000},
                                                          {'time_ms': 900000,
-                                                          'race_status': 5}])))
+                                                          'race_status': 5,
+                                                          # Game-flow close-out (not a cron DNF) — the
+                                                          # home terminal-damage card's source.
+                                                          'submitted_at': now.isoformat()}])))
         db.session.add(_Result21(event_id='evt-smoke-beta', username='smokedriver',
                                  total_time_ms=45000,
                                  stages_json=json.dumps([{'time_ms': 45000}])))
@@ -3356,26 +3363,31 @@ def main() -> int:
           and 'Kilometers Driven' in html
           and 'Miles Driven' in html
           and 'Days without a Terminal Damage' in html)
-    # terminal-damage card reflects the newest rs 4/5 stage slot
+    # terminal-damage card reflects the newest non-zero-status stage slot
+    # that carries a submitted_at (game-flow close-outs only; cron DNFs are
+    # flagged without one and must not count)
     with app.app_context():
         from datetime import datetime as _dt
         last_at, last_user = None, None
         for rr in _Result2.query.all():
             for s in json.loads(rr.stages_json or '[]'):
-                if int(s.get('race_status', 0) or 0) not in (4, 5):
+                if int(s.get('race_status', 0) or 0) == 0:
                     continue
                 sa = s.get('submitted_at')
                 if sa and (last_at is None or sa > last_at):
                     last_at, last_user = sa, rr.username
         names = {u.username: u.display_name for u in User.query.all()}
+    days_card = (html[html.find('stat-days'):html.find('stat-days') + 400]
+                 if 'stat-days' in html else '')
     if last_at:
         exp_days = max((utcnow() - _dt.fromisoformat(last_at)).days, 0)
         check('home terminal-damage card shows days + most recent driver',
-              f'>{exp_days}</span><span class="stat-label">Days without a Terminal Damage' in html
-              and f'last: {names[last_user]}' in html, str(exp_days))
+              f'>{exp_days}</span>' in days_card
+              and 'Days without a Terminal Damage' in days_card
+              and f'last: {names[last_user]}' in days_card, str(exp_days))
     else:
         check('home terminal-damage card empty state',
-              'none recorded yet' in html, '')
+              'none recorded yet' in days_card, '')
     # /drivers lists every registered driver with stats + profile links
     r = client.get('/drivers')
     dhtml = r.get_data(as_text=True)

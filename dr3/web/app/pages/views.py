@@ -166,7 +166,10 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
         for i, s in enumerate(stages):
             t = int(s.get('time_ms', 0) or 0)
             sa = s.get('submitted_at')
-            if t <= 0 or not sa:
+            # Terminal close-outs (wreck / retirement markers stored at the
+            # stage limit) are not driven stage times — never list them here.
+            if t <= 0 or not sa \
+                    or int(s.get('race_status', 0) or 0) != 0:
                 continue
             a = _run_attrs(runs_of.get((r.event_id, r.username, i)))
             d = damage_of.get((r.event_id, r.username, i))
@@ -239,11 +242,15 @@ def _home_stats(now) -> dict:
     total_distance_m = int(db.session.query(func.sum(StageRun.distance_m))
                            .scalar() or 0)
 
+    # Any non-zero race_status is a terminal close-out (wreck / retirement —
+    # the game has sent 4, 5 and 6). The submitted_at requirement keeps cron
+    # round-expiry DNFs out: those are flagged by events_generator without a
+    # timestamp because the car was never destroyed.
     last_terminal_at = None
     last_terminal_user = None
     for r in Result.query.all():
         for s in json.loads(r.stages_json or '[]'):
-            if int(s.get('race_status', 0) or 0) not in (4, 5):
+            if int(s.get('race_status', 0) or 0) == 0:
                 continue
             sa = s.get('submitted_at')
             if sa and (last_terminal_at is None or sa > last_terminal_at):
