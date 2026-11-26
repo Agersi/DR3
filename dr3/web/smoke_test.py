@@ -772,6 +772,9 @@ def main() -> int:
         'player_finished': True, 'stage_time_ms': 140120,
         'distance_driven': 33480, 'tyre_compound_id': 6,
         'comp_damage': _dmg_b,
+        # Detected by the client's telemetry (an 8s car reset) — official/TT
+        # rows get no penalty decomposition anywhere else.
+        'penalties_ms': 8000,
     })
     check('stage-detail official run 2 ok',
           (r.get_json() or {}).get('ok') is True, str(r.get_json()))
@@ -786,7 +789,8 @@ def main() -> int:
           _da is not None and _db is not None
           and _da.source_type == 'official' and _db.source_type == 'official'
           and json.loads(_da.comp_damage_json) == _dmg_a
-          and json.loads(_db.comp_damage_json) == _dmg_b,
+          and json.loads(_db.comp_damage_json) == _dmg_b
+          and _da.penalties_ms is None and _db.penalties_ms == 8000,
           f'a={_da} b={_db}')
 
     # A later snapshot-only record for the same slot (no damage field) must not
@@ -794,7 +798,7 @@ def main() -> int:
     r = client.post('/api/game/stage-detail', headers=headers3, json={
         'challenge_id': 920002, 'event_index': 0, 'stage_index': 5,
         'vehicle_id': 566, 'stage_time_ms': 150000, 'distance_driven': 40000,
-        'comp_damage': _dmg_a,
+        'comp_damage': _dmg_a, 'penalties_ms': 4000,
     })
     check('stage-detail rpc-only half with damage ok',
           (r.get_json() or {}).get('ok') is True, str(r.get_json()))
@@ -811,9 +815,10 @@ def main() -> int:
         from app.models import StageRun
         _dh = db.session.query(StageRun).filter_by(
             username='dmgpilot', challenge_id=920002, stage_index=5).first()
-    check('stage-detail: snapshot-after-half keeps the stored damage',
+    check('stage-detail: snapshot-after-half keeps the stored damage + penalty',
           _dh is not None and _dh.track_id == 622
-          and json.loads(_dh.comp_damage_json) == _dmg_a, f'row={_dh}')
+          and json.loads(_dh.comp_damage_json) == _dmg_a
+          and _dh.penalties_ms == 4000, f'row={_dh}')
 
     # Leaderboard: the producing run's snapshot rides on its row — stage 0 has
     # no start state; stage 1 carries stage 0's snapshot with fresh per-tyre
@@ -835,6 +840,14 @@ def main() -> int:
           == [{'s': 0, 'd': _dmg_b,
                'd0': {**_dmg_a, 'wheels_wear': 0, 'wheels_impact': 0}}],
           f'td={_td1.group(1) if _td1 else None}')
+
+    # Penalty column: official/TT rows show the penalty the client's telemetry
+    # detected on the producing run (stage 1 took an 8s car reset); a clean
+    # stage stays empty.
+    check('leaderboard: official row shows the detected penalty, clean row stays empty',
+          '<td class="num pen-col">+8s</td>' in lb1
+          and '<td class="num pen-col"><span class="ink">—</span></td>' in lb0,
+          '')
 
     # Account page: favorite pickers + profile stat visibility checkboxes.
     r = client.get('/account')

@@ -798,8 +798,8 @@ def _ensure_best_times_compound(db) -> None:
 
 def _ensure_stage_run_columns(db) -> None:
     """Additive migration for databases created before StageRun.splits_json /
-    flat_stage_index / input_method / camera_position / comp_damage_json + the
-    stats indexes.
+    flat_stage_index / input_method / camera_position / comp_damage_json /
+    penalties_ms + the stats indexes.
 
     create_all only creates missing tables, so pre-existing stage_runs tables
     need the columns/indexes added explicitly (works on SQLite and MySQL)."""
@@ -815,6 +815,7 @@ def _ensure_stage_run_columns(db) -> None:
         'camera_position': 'VARCHAR(16) NULL',
         'conditions_id': 'INTEGER NULL',
         'comp_damage_json': 'TEXT NULL',
+        'penalties_ms': 'BIGINT NULL',
     }
     for name, ddl in wanted.items():
         if name in cols:

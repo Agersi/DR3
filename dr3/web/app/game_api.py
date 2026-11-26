@@ -850,6 +850,9 @@ def api_game_stage_detail():
                              if isinstance(data.get('comp_damage'), dict)
                              else None),
         'flat_stage_index': _int('flat_stage_index'),
+        # Penalties the client's telemetry detected for official/TT runs (NULL
+        # when never detected — club rows keep reading club_results entries).
+        'penalties_ms': _int('penalties_ms'),
     }
 
     # Normalized once at ingest so leaderboard filters never re-derive them:
@@ -904,10 +907,10 @@ def api_game_stage_detail():
     if same_run:
         if _detail_rich_score(fields) > _detail_rich_score(existing):
             for key, value in fields.items():
-                # A half record (no damage snapshot) must not wipe damage a
-                # more complete earlier record already stored.
-                if key == 'comp_damage_json' and value is None \
-                        and getattr(existing, 'comp_damage_json', None):
+                # A half record (no damage snapshot / no penalty detection)
+                # must not wipe data a more complete earlier record stored.
+                if key in ('comp_damage_json', 'penalties_ms') \
+                        and value is None and getattr(existing, key, None):
                     continue
                 setattr(existing, key, value)
     else:

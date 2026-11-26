@@ -232,6 +232,10 @@ class RpcDispatcher:
         # claim — time trials send no StageComplete RPC, so without this their
         # stage_runs row has no distance channel at all. Same key/TTL as splits.
         self._pending_posttime_distance: Dict[int, tuple] = {}
+        # Penalties (ms) detected on the same PostTime UDP claim — official/TT
+        # runs get no penalty decomposition anywhere else, so this stash is
+        # their only route to a stage_runs row. Same key/TTL as splits.
+        self._pending_posttime_penalty: Dict[int, tuple] = {}
         # Challenge ids served as ONE challenge carrying ALL legs of the
         # championship in Events[] (#39 experiment, gated by the event setting
         # ``single_challenge``).  For these ids the game addresses stages with
@@ -2445,9 +2449,14 @@ class RpcDispatcher:
         # snapshot's cumulative camera counters.
         tt_splits: Optional[List[float]] = None
         tt_distance: Optional[int] = None
+        tt_penalty_ms = 0
         if not club_stage and self.telemetry is not None and stage_time_ms > 0:
-            run = self.telemetry.take_run_since(self._telemetry_arm_wall)
-            if run is not None:
+            # Every completed run since the arm wall — on a multi-lap circuit
+            # that is one per lap (the last of them is exactly what
+            # take_run_since used to return).
+            runs = self.telemetry.take_runs_since(self._telemetry_arm_wall)
+            if runs:
+                run = runs[-1]
                 # Wrap-aware: on a multi-lap rallycross circuit F_DIST resets at
                 # the line each lap, so max_distance() would see only one lap of
                 # an N-lap run.
@@ -2460,16 +2469,32 @@ class RpcDispatcher:
                     if segs:
                         tt_splits = scale_segments_to_total(
                             segs, stage_time_ms / 1000.0)
+                # Penalties the game baked into the reported StageTime (jump
+                # start / car reset / over-time) — official/TT runs get no
+                # decomposition anywhere else, so detect them here on the same
+                # claim. Same two sources + 4s floor as the club path; a
+                # detection failure must never break the PostTime.
+                try:
+                    if len(runs) == 1:
+                        tt_penalty_ms = self._stage_penalty_ms(
+                            run, stage_time_ms)
+                    else:
+                        tt_penalty_ms = self._stage_penalty_ms_multi(
+                            runs, stage_time_ms)
+                except Exception as exc:
+                    print(f"[TT] penalty detection raised: {exc}")
             else:
                 self._warn_no_telemetry()
 
-        # Stash the splits + distance for the StageComplete that follows
-        # (official/TT runs are proxied — their merge feed is the only on-ramp
-        # to stage_runs).
+        # Stash the splits + distance + penalties for the StageComplete that
+        # follows (official/TT runs are proxied — their merge feed is the only
+        # on-ramp to stage_runs).
         if not club_stage and vehicle_id:
             self._stash_posttime_splits(vehicle_id, tt_splits)
             if tt_distance is not None:
                 self._stash_posttime_distance(vehicle_id, tt_distance)
+            if tt_penalty_ms > 0:
+                self._stash_posttime_penalty(vehicle_id, tt_penalty_ms)
 
         if self.api_client is not None and stage_time_ms > 0:
             try:
@@ -2546,6 +2571,27 @@ class RpcDispatcher:
         if time.time() - ts > _POSTTIME_SPLITS_TTL_S:
             return None
         return distance_m
+
+    def _stash_posttime_penalty(self, vehicle_id: int, penalty_ms: int) -> None:
+        """Remember the PostTime run's detected penalties (see
+        _stash_posttime_splits) for the stage-detail merge that follows."""
+        now = time.time()
+        stale = [vid for vid, (ts, _) in self._pending_posttime_penalty.items()
+                 if now - ts > _POSTTIME_SPLITS_TTL_S]
+        for vid in stale:
+            del self._pending_posttime_penalty[vid]
+        self._pending_posttime_penalty[vehicle_id] = (now, penalty_ms)
+
+    def take_posttime_penalty(self, vehicle_id: int) -> Optional[int]:
+        """Pop the stashed PostTime run penalties for this car (None when
+        absent, expired, or no penalty was detected)."""
+        entry = self._pending_posttime_penalty.pop(vehicle_id, None)
+        if entry is None:
+            return None
+        ts, penalty_ms = entry
+        if time.time() - ts > _POSTTIME_SPLITS_TTL_S:
+            return None
+        return penalty_ms
 
     def record_proxied_time_trial(self, params: Dict[str, Any]) -> None:
         """Listen-in recording of a TimeTrial.PostTime that is ALSO proxied to

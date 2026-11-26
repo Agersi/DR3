@@ -373,7 +373,12 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
             'time_ms': e.stage_time_ms or 0,
             'compound': int(e.tyre_compound) if e.tyre_compound else None,
             'spares': _spare_tyres(se),
-            'penalty_ms': _penalty_ms(se),
+            # Club rows: the club_results stage entry (time + repair).
+            # Official/TT rows: the penalty the client's telemetry detected on
+            # the producing run (None when never detected).
+            'penalty_ms': (_penalty_ms(se) if se else
+                           (int(run.penalties_ms)
+                            if run is not None and run.penalties_ms else None)),
             'input': run.input_method if run else None,
             'degrad': run.surface_degradation_level if run else None,
             'vr': bool(run.vr_enabled) if run else None,

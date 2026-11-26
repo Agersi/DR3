@@ -273,6 +273,7 @@ class App:
         try:
             self._fix_stage_detail_distance(record)
             self._fix_stage_detail_splits(record)
+            self._fix_stage_detail_penalty(record)
             self._fix_stage_detail_cameras(record)
         except Exception as exc:  # correction must never drop the record
             print(f"[DATA] stage-detail correction failed: {exc}")
@@ -313,6 +314,24 @@ class App:
         splits = self.dispatcher.take_posttime_splits(vid)
         if splits:
             record["splits"] = splits
+
+    def _fix_stage_detail_penalty(self, record: Dict[str, Any]) -> None:
+        """Fill penalties_ms from the PostTime run's detection when the merged
+        record carries none. Time-trial rows are always like that — they send
+        no StageComplete RPC, so the proxy path never claimed the stash;
+        official rows already carry their penalty and pass through untouched."""
+        if record.get("penalties_ms"):
+            return
+        vehicle_id = record.get("vehicle_id")
+        if not vehicle_id:
+            return
+        try:
+            vid = int(vehicle_id)
+        except (TypeError, ValueError):
+            return
+        penalty_ms = self.dispatcher.take_posttime_penalty(vid)
+        if penalty_ms:
+            record["penalties_ms"] = penalty_ms
 
     def _fix_stage_detail_cameras(self, record: Dict[str, Any]) -> None:
         """Turn the snapshot's cumulative per-camera counters into per-stage
@@ -683,6 +702,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 splits = self.app.dispatcher.take_posttime_splits(vehicle_id)
                 if splits is not None:
                     rpc_fields["splits"] = splits
+                # Penalties detected on the PostTime's UDP run (official/TT
+                # runs get no decomposition anywhere else).
+                penalty_ms = self.app.dispatcher.take_posttime_penalty(
+                    vehicle_id)
+                if penalty_ms is not None:
+                    rpc_fields["penalties_ms"] = penalty_ms
                 self.app.stage_detail.merge_rpc(
                     (int(_val("ChallengeId") or 0),
                      int(_val("EventIndex") or 0),

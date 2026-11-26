@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.87**
+- The website leaderboard now shows penalties for official dailies, weeklies, monthlies and time trials too.
+
 **v0.1.86**
 - The tyre damage popup on the website now shows real data for official dailies, weeklies and monthlies too.
 

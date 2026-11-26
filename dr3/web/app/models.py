@@ -333,6 +333,10 @@ class StageRun(db.Model):
     # Flat stage ordinal within the championship (leg offset + local index) —
     # correlates club rows with results.stages_json entries.
     flat_stage_index: int | None = db.Column(db.Integer)
+    # Penalties (ms) detected by the client's telemetry for official/TT runs
+    # (jump start / car reset / over-time, 4s floor) — NULL when never
+    # detected; club rows keep reading club_results stage entries instead.
+    penalties_ms: int | None = db.Column(db.BigInteger)
     # Normalized once at ingest from input_library / camera-metres fields, so
     # leaderboard filters never re-derive them.
     input_method: str | None = db.Column(db.String(16))     # keyboard / wheel / controller

@@ -72,6 +72,10 @@ RPC_FIELDS: Tuple[str, ...] = (
     # club clean finishes only: telemetry splits (seconds) + the flat stage
     # ordinal within the championship (correlates with results.stages_json)
     "splits", "flat_stage_index",
+    # official/TT runs only: penalties (ms) detected on the PostTime's UDP run
+    # (jump start / car reset / over-time) — club rows keep reading
+    # club_results stage entries instead
+    "penalties_ms",
 )
 
 _KEY = Tuple[Optional[int], Optional[int], Optional[int]]
