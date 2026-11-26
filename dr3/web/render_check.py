@@ -53,7 +53,7 @@ def main() -> int:
     check('leaderboard: filter form + times board headers + hydration script',
           '<form class="panel lb-filters" method="get"' in lb_html
           and 'id="lb-board-table"' in lb_html
-          and           '<th class="car-col">Vehicle</th><th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th class="src-cell">Source</th>' in lb_html
+          and           '<th class="car-col">Vehicle</th><th class="deg-col">Deg.</th><th>Tyres</th><th>Spares</th><th>Input</th><th>Camera</th><th class="src-cell">Source</th>' in lb_html
           and "tbody.querySelectorAll('tr').forEach(applyTuning);" in lb_html, '')
     check('site nav: vehicles link between clubs and leaderboard',
           '<a href="/vehicles">Vehicles</a>' in lb_html
@@ -66,6 +66,10 @@ def main() -> int:
           '<th class="num diff-col">Diff 1st</th><th class="num split-col">Split #1</th>' in lb_rows
           and '<td class="num split-col">101.00</td>' in lb_rows
           and '<span class="dash-tip" data-tip="Configure Telemetry">-</span>' in lb_rows, '')
+    check('leaderboard: degradation column before tyres — percent for run-backed rows, dash for legacy',
+          '<td class="num deg-col"><span class="ink">—</span></td>' in lb_rows
+          and client.get('/leaderboard?stage=636&car=565').get_data(as_text=True)
+          .find('<td class="num deg-col">0%</td>') != -1, '')
     # stage=13 has a Rally GT car (565) — the vehicle cell carries the class thumbnail.
     _lb_cls = client.get('/leaderboard?stage=13').get_data(as_text=True)
     check('leaderboard: class image in front of the vehicle name + car page link',
@@ -113,8 +117,11 @@ def main() -> int:
           '#lb-board-table .diff-col { width: 5.5rem; }' in lb_css
           and '#lb-board-table .src-cell { text-align: center; }' in lb_css
           and '.dmg-cond { margin-top: 0.6rem;' in lb_css
-          and '#lb-board-table .car-col { width: 14.5rem; }' in lb_css
+          and '#lb-board-table .car-col { width: 13.5rem; white-space: nowrap; }' in lb_css
           and '#lb-board-table th.car-col { padding-left: 51px; }' in lb_css
+          and '#lb-board-table td:nth-child(2) { white-space: nowrap; }' in lb_css
+          and '#lb-board-table:has(.deg-col) th:nth-child(4), #lb-board-table:has(.deg-col) td:nth-child(4) { width: 2rem; }' in lb_css
+          and '#lb-board-table:has(.deg-col) th:nth-child(2), #lb-board-table:has(.deg-col) td:nth-child(2) { width: 10.5rem; }' in lb_css
           and '#lb-board-table .pen-col { width: 4.5rem; }' in lb_css, '')
     # Rallycross stages (track 641 = Bikernieki) carry no penalty column —
     # the board is about best laps there; smoke fixtures keep 641 empty.
@@ -122,7 +129,7 @@ def main() -> int:
     check('leaderboard: penalty column on rally stages, absent on RX',
           '<th class="num pen-col">Penalty</th>' in lb_html
           and 'pen-col' not in _rx_lb
-          and '<td colspan="10">No times yet.</td>' in _rx_lb, '')
+          and '<td colspan="11">No times yet.</td>' in _rx_lb, '')
     # The stage filter is split into Location + Stage selects; picking an RX
     # location auto-selects its only stage (track 639 = Mettet).
     def _stage_select(page_html):

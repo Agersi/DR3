@@ -911,8 +911,13 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
 #lb-board-table .src-cell { text-align: center; }
 table th:last-child, table td:last-child { padding-right: .5rem; }
 .car-fastest tr.fastest-detail td:last-child { padding-right: 0; }
-#lb-board-table .car-col { width: 14.5rem; }
+#lb-board-table .car-col { width: 13.5rem; white-space: nowrap; }
 #lb-board-table th.car-col { padding-left: 51px; }
+#lb-board-table td:nth-child(2) { white-space: nowrap; }
+#lb-board-table:has(.deg-col) th:nth-child(2), #lb-board-table:has(.deg-col) td:nth-child(2) { width: 10.5rem; }
+#lb-board-table:has(.deg-col) th:nth-child(4), #lb-board-table:has(.deg-col) td:nth-child(4) { width: 2rem; }
+#lb-board-table:has(.deg-col) th:nth-child(7), #lb-board-table:has(.deg-col) td:nth-child(7) { width: 3rem; }
+#lb-board-table:has(.deg-col) th:nth-child(8), #lb-board-table:has(.deg-col) td:nth-child(8) { width: 3.5rem; }
 .board-empty td { text-align: center; color: var(--muted); padding: 1rem; }
 
 .standings-title { margin-top: 1.6rem; font-size: 1.15rem; }

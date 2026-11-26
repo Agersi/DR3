@@ -144,6 +144,13 @@ def _penalty_text(ms):
     return '+' + (str(int(s)) if float(s).is_integer() else f'{s:.1f}') + 's'
 
 
+def _degrad_text(level):
+    """Surface degradation level (0.0-1.0) as a percent — '' when unknown."""
+    if level is None:
+        return ''
+    return f'{round(float(level) * 100)}%'
+
+
 class SimpleRun:
     """Attribute shim so _run_matches works on raw query tuples too."""
 
@@ -326,6 +333,7 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
             'spares': _spare_tyres(se),
             'penalty_ms': _penalty_ms(se),
             'input': run.input_method if run else None,
+            'degrad': run.surface_degradation_level if run else None,
             'vr': bool(run.vr_enabled) if run else None,
             'camera': run.camera_position if run else None,
             'assists': (bool(run.assists_enabled or run.using_assists) if run
@@ -377,6 +385,7 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
             'tyres': [r['compound']] if r['compound'] else [],
             'spares': r['spares'],
             'input': r['input'],
+            'degrad_text': _degrad_text(r['degrad']),
             'vr': r['vr'],
             'camera': r['camera'],
             'assists': r['assists'],
