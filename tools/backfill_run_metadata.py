@@ -32,6 +32,17 @@ C) stage_runs.flat_stage_index for club rows — legacy clients did not send the
    A second attempt at an already-keyed slot gets the same slot — the board
    keeps the latest row per slot either way.
 
+D) best_times.run_id for unlinked NON-RX rows left by the pre-2026-11-26
+   ingest (a snapshot whose ms sat a hair over the PostTime's fell through
+   both the faster and the equal-ms branches, so run_id stayed NULL).
+   Candidates are the driver's FINISHED stage_runs for the same car + exact
+   track + conditions whose time is within 1 s of the best row's (the two
+   channels read the same game clock as round vs truncate) and received at
+   most --max-age away from the row's submitted_at. RX tracks are excluded —
+   their best rows are single laps, which no run total can match (section B
+   covers them). With exactly one surviving candidate the run_id is stamped;
+   with several, the closest is only STAMPED when --closest is passed.
+
 Dry run by default; pass --apply to commit.
 
 Run on the VPS:
@@ -216,11 +227,68 @@ for rid, uname, eid, st_idx, tr in cur.fetchall():
         cur.execute("UPDATE stage_runs SET flat_stage_index=%s WHERE id=%s",
                     (flat, rid))
 
+# ------------------------------------------- D) best_times.run_id (non-RX)
+print("\n=== D) best_times.run_id for unlinked non-RX rows ===")
+ph = ",".join(["%s"] * len(RX_TRACKS))
+cur.execute(f"SELECT id, username, vehicle_id, track, conditions, stage_time_ms, "
+            f"submitted_at FROM best_times WHERE run_id IS NULL AND "
+            f"stage_time_ms > 0 AND track NOT IN ({ph}) ORDER BY username",
+            tuple(RX_TRACKS))
+d_stamped = d_skipped = 0
+for bt_id, uname, vid, track, cond, ms, submitted_at in cur.fetchall():
+    if submitted_at is None:
+        print(f"  bt{bt_id} {uname} car{vid} tr{track}: no submitted_at, skip")
+        d_skipped += 1
+        continue
+    cur.execute("SELECT id, conditions_id, time_ms, player_finished, received_at "
+                "FROM stage_runs WHERE username=%s AND vehicle_id=%s "
+                "AND track_model_id=%s", (uname, vid, int(track)))
+    cands = []
+    for rid, rc, rms, fin, ra in cur.fetchall():
+        if rc is not None and str(rc) != str(cond):
+            continue
+        if rms is None or abs(rms - ms) > 1000:
+            continue
+        if not fin:
+            continue
+        if ra is None or abs((ra - submitted_at).total_seconds()) > max_age_s:
+            continue
+        cands.append((rid, abs(rms - ms),
+                      abs((ra - submitted_at).total_seconds())))
+    if not cands:
+        print(f"  bt{bt_id} {uname} car{vid} tr{track}: no candidate run, skip")
+        d_skipped += 1
+        continue
+    cands.sort(key=lambda c: (c[1], c[2]))
+    best = cands[0]
+    if len(cands) == 1:
+        print(f"  bt{bt_id} {uname} car{vid} tr{track}: unique run{best[0]} "
+              f"(Δ{best[1]}ms, gap {best[2]:.0f}s) -> stamp")
+        d_stamped += 1
+        if apply:
+            cur.execute("UPDATE best_times SET run_id=%s WHERE id=%s",
+                        (best[0], bt_id))
+    elif allow_closest:
+        print(f"  bt{bt_id} {uname} car{vid} tr{track}: {len(cands)} candidates, "
+              f"closest run{best[0]} (Δ{best[1]}ms vs next Δ{cands[1][1]}ms) "
+              f"-> stamp (--closest)")
+        d_stamped += 1
+        if apply:
+            cur.execute("UPDATE best_times SET run_id=%s WHERE id=%s",
+                        (best[0], bt_id))
+    else:
+        print(f"  bt{bt_id} {uname} car{vid} tr{track}: AMBIGUOUS "
+              f"{len(cands)} candidates — closest run{best[0]} (Δ{best[1]}ms, "
+              f"gap {best[2]:.0f}s) vs run{cands[1][0]} (Δ{cands[1][1]}ms); "
+              f"re-run with --closest to stamp the closest")
+        d_skipped += 1
+
 if not apply:
     print(f"\nDRY RUN — A:{cam_fixed} camera, B:{stamped} run_id "
-          f"({skipped} skipped), C:{flat_fixed} flat index "
+          f"({skipped} skipped), C:{flat_fixed} flat index, "
+          f"D:{d_stamped} run_id ({d_skipped} skipped) "
           f"(re-run with --apply to commit)")
 else:
     conn.commit()
     print(f"\napplied — A:{cam_fixed} camera, B:{stamped} run_id, "
-          f"C:{flat_fixed} flat index")
+          f"C:{flat_fixed} flat index, D:{d_stamped} run_id")

@@ -429,6 +429,61 @@ def main() -> int:
           and _s_gh == 'c2tldw==',
           f'rows={len(srows)} ms={_s_ms} comp={_s_comp} gh={_s_gh}')
 
+    # The known-compound path must stamp run_id when the snapshot's ms sits a
+    # hair ABOVE the PostTime's (production 2026-11-26: a TT's PostTime filed
+    # comp=1 at 157707, its snapshot follow-up carried 157708 — neither the
+    # faster nor the equal-ms branch fired, so run_id stayed NULL). A slightly
+    # slower attempt filed long after the record was set must NOT re-point it.
+    from app.models import StageRun as _SR2
+    from datetime import timedelta as _td
+    with app.app_context():
+        db.session.add(_SR2(username='smokedriver', vehicle_id=16,
+                            track_model_id=25, conditions_id=9, time_ms=600001))
+        db.session.commit()
+        _sr_tt_id = (db.session.query(_SR2).filter_by(
+            username='smokedriver', vehicle_id=16).first().id)
+        _upsert_best('smokedriver', 16, '25', '9', 600000, category=1, vclass=97,
+                     ghost_b64='cG9zdA==', tyre_compound=3)
+        # same run's snapshot follow-up, 1 ms slower, moments later:
+        _upsert_best('smokedriver', 16, '25', '9', 600001, category=1, vclass=97,
+                     splits=[75.0], tyre_compound=3, run_id=_sr_tt_id)
+        krows = db.session.query(_Best).filter_by(
+            username='smokedriver', vehicle_id=16, track='25', conditions='9').all()
+        _k = krows[0] if krows else None
+        _k_ms = _k.stage_time_ms if _k else None
+        _k_run = _k.run_id if _k else None
+        # negative: a slightly slower attempt filed long after the record was
+        # set must not re-point the pointer nor touch the stored payload.
+        db.session.add(_SR2(username='smokedriver', vehicle_id=16,
+                            track_model_id=25, conditions_id=9, time_ms=600500))
+        if _k is not None:
+            _k.submitted_at = utcnow() - _td(hours=1)
+        db.session.commit()
+        _sr_late_id = (db.session.query(_SR2.id).filter_by(
+            username='smokedriver', vehicle_id=16)
+            .order_by(_SR2.id.desc()).first()[0])
+        _upsert_best('smokedriver', 16, '25', '9', 600500, category=1, vclass=97,
+                     ghost_b64='bGF0ZQ==', splits=[76.0], tyre_compound=3,
+                     run_id=_sr_late_id)
+        krows2 = db.session.query(_Best).filter_by(
+            username='smokedriver', vehicle_id=16, track='25', conditions='9').all()
+        _k2 = krows2[0] if krows2 else None
+        _k2_ms = _k2.stage_time_ms if _k2 else None
+        _k2_run = _k2.run_id if _k2 else None
+        _k2_gh = _k2.ghost_data_b64 if _k2 else None
+        # Clean the fixture rows so later sections' global counts stay exact.
+        for _r in krows2:
+            db.session.delete(_r)
+        db.session.query(_SR2).filter_by(
+            username='smokedriver', vehicle_id=16).delete()
+        db.session.commit()
+    check('bests: 1 ms slower snapshot follow-up still stamps run_id (unit)',
+          _k_ms == 600000 and _k_run == _sr_tt_id,
+          f'ms={_k_ms} run={_k_run}')
+    check('bests: later slower attempt does not re-point an older record (unit)',
+          _k2_ms == 600000 and _k2_run == _sr_tt_id and _k2_gh == 'cG9zdA==',
+          f'ms={_k2_ms} run={_k2_run} gh={_k2_gh}')
+
     # The boot backfill must merge an orphaned placeholder into its existing
     # per-compound sibling (the production 2026-11-21 crash loop) instead of
     # violating the unique key: keep the strictly faster time, one row remains.

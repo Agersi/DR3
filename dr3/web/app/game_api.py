@@ -306,6 +306,13 @@ def api_game_stage_begin():
 # "same run" matching across channels.
 _BEST_TOL_MS = 1000
 
+# One run's two channels file seconds apart — a TT's snapshot-only half waits
+# out the client's 45 s flush — so the same-run follow-up window is generous;
+# a second attempt at the same stage can't file within it (re-entry plus
+# another full run takes minutes). Matches the retransmit-collapse window in
+# api_game_stage_detail.
+_SAME_RUN_WINDOW_S = 120
+
 
 def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
                  category=None, vclass=None, livery_id=None,
@@ -321,11 +328,13 @@ def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
     steps: its PostTime files a compound=0 placeholder row, and the stage-detail
     follow-up resolves it — adopting the placeholder when the times match (its
     ghost/splits are this run's) or merging them into the real row. Within a
-    known compound: a missing row is created; a strictly faster time replaces
-    it (the ghost belongs to the best run, so it is replaced too when carried);
-    an EQUAL-ms submission is the same run arriving over the second channel —
-    it only fills in pieces the first one lacked (ghost / splits / category);
-     a slower time never touches the record. Missing key pieces skip entirely.
+     known compound: a missing row is created; a strictly faster time replaces
+     it (the ghost belongs to the best run, so it is replaced too when carried);
+     a submission at the stored ms — or up to _BEST_TOL_MS above it, filed within
+     _SAME_RUN_WINDOW_S of the record being set (the channels read the same game
+     clock as round vs truncate) — is the same run arriving over the second
+     channel: it only fills in pieces the first one lacked (ghost / splits /
+     category); a genuinely slower attempt never touches the record. Missing key pieces skip entirely.
      run_id (the producing StageRun row) follows the same rules: set on new
      rows, replaced when this run becomes the best, absorbed on the equal-ms
      follow-up — so it always points at the run whose payload is stored."""
@@ -418,26 +427,46 @@ def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
         if run_id is not None:
             entry.run_id = run_id
         entry.submitted_at = utcnow()
-    elif tm == (entry.stage_time_ms or 0):
-        # Same run, second channel: absorb only what the stored row lacks.
-        changed = False
-        if ghost_b64 and not entry.ghost_data_b64:
-            entry.ghost_data_b64 = ghost_b64
-            changed = True
-        if splits_json is not None and entry.splits_json is None:
-            entry.splits_json = splits_json
-            changed = True
-        if category and not entry.category:
-            entry.category = int(category)
-            changed = True
-        # The equal-ms follow-up (stage-detail after the PostTime placeholder,
-        # or a faster-run's snapshot after its PostTime) carries the run id —
-        # replace whatever was stored so the pointer matches the payload.
-        if run_id is not None and entry.run_id != run_id:
-            entry.run_id = run_id
-            changed = True
-        if changed:
-            entry.submitted_at = utcnow()
+    else:
+        # Not strictly faster — the same run over its second channel, or a
+        # slower attempt? Exact ms equality says same run; a hair above (up to
+        # _BEST_TOL_MS) does too WHEN the stored row was filed moments ago:
+        # the channels read the same game clock as round vs truncate, so the
+        # snapshot's ms can sit a millisecond over the PostTime's, and one run's
+        # two channels file seconds apart (a TT's snapshot-only half waits out
+        # the client's 45 s flush). A genuinely different, slightly slower
+        # attempt at the same stage can't file within _SAME_RUN_WINDOW_S of the
+        # record being set — re-entry plus another full run takes minutes — so
+        # without that wall-clock proximity a slower time never touches the
+        # record. (Production 2026-11-26: a TT's PostTime filed comp=1 at
+        # 157707, its snapshot follow-up carried 157708 — neither branch fired
+        # and run_id stayed NULL.)
+        stored_ms = entry.stage_time_ms or 0
+        same_run = tm == stored_ms or (
+            0 < tm - stored_ms <= _BEST_TOL_MS
+            and entry.submitted_at is not None
+            and (utcnow() - entry.submitted_at).total_seconds()
+            <= _SAME_RUN_WINDOW_S)
+        if same_run:
+            # Same run, second channel: absorb only what the stored row lacks.
+            changed = False
+            if ghost_b64 and not entry.ghost_data_b64:
+                entry.ghost_data_b64 = ghost_b64
+                changed = True
+            if splits_json is not None and entry.splits_json is None:
+                entry.splits_json = splits_json
+                changed = True
+            if category and not entry.category:
+                entry.category = int(category)
+                changed = True
+            # The follow-up (stage-detail after the PostTime placeholder, or a
+            # faster-run's snapshot after its PostTime) carries the run id —
+            # replace whatever was stored so the pointer matches the payload.
+            if run_id is not None and entry.run_id != run_id:
+                entry.run_id = run_id
+                changed = True
+            if changed:
+                entry.submitted_at = utcnow()
 
     if vessel is not None and vessel is not entry:
         db.session.delete(vessel)
