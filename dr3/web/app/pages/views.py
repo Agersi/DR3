@@ -108,6 +108,7 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
 
     Each row is a single submitted stage slot (the latest submission for that
     stage), so the front page's recent-times box can page through all of them."""
+    from dr2server.game_data import STAGE_CONDITIONS_LABELS
     from ..countries import flag_url
     from ..results_view import _run_attrs, _spare_tyres, format_ms
     from ..scoring import (
@@ -172,7 +173,8 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
             # count as driven.
             if t <= 0 or not sa:
                 continue
-            a = _run_attrs(runs_of.get((r.event_id, r.username, i)))
+            run = runs_of.get((r.event_id, r.username, i))
+            a = _run_attrs(run)
             d = damage_of.get((r.event_id, r.username, i))
             d0 = None
             if i not in _fresh(r.event_id):
@@ -210,6 +212,11 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
                 'vr': a['vr'],
                 'camera': a['camera'],
                 'assists': a['assists'],
+                # Weather condition of the producing run — footer line of the
+                # tyre-click popup (leaderboard parity); '' when unmapped.
+                'conditions_label': (STAGE_CONDITIONS_LABELS.get(
+                    run.conditions_id, '')
+                    if run is not None and run.conditions_id else ''),
             })
     rows.sort(key=lambda x: x['at'], reverse=True)
     if limit is not None:
@@ -318,6 +325,7 @@ def home_recent_times():
             'vr': row['vr'],
             'camera': row['camera'],
             'assists': row['assists'],
+            'conditions_label': row.get('conditions_label', ''),
         })
     return jsonify({'ok': True, 'rows': rows})
 

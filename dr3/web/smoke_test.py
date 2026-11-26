@@ -1324,7 +1324,8 @@ def main() -> int:
         db.session.add(StageRun(
             username='smokedriver', event_id='smoke-link-event',
             flat_stage_index=0, time_ms=200000, player_finished=True,
-            tyre_compound=2, input_method='wheel', camera_position='chase_close'))
+            tyre_compound=2, input_method='wheel', camera_position='chase_close',
+            conditions_id=5))
         # Damage snapshot for the same slot — feeds the tyre-click popup.
         _link_dmg = {'engine': 0.1, 'clutch': 0.2, 'wheels_wear': 42}
         db.session.add(ClubStageState(
@@ -1391,7 +1392,8 @@ def main() -> int:
           link is not None
           and link['tyres'] == [2] and link['spares'] == 2
           and link['input'] == 'wheel' and link['camera'] == 'chase_close'
-          and link['vr'] is False and link['assists'] is False,
+          and link['vr'] is False and link['assists'] is False
+          and link['conditions_label'] == 'Dusk / Overcast / Dry',
           str(link or rows)[:300])
     check('recent-times row carries tyre damage snapshot from stage states',
           link is not None
