@@ -72,8 +72,8 @@ def main() -> int:
           .find('<td class="num deg-col">0%</td>') != -1, '')
     # stage=13 has a Rally GT car (565) — the vehicle cell carries the class thumbnail.
     _lb_cls = client.get('/leaderboard?stage=13').get_data(as_text=True)
-    check('leaderboard: class image in front of the vehicle name + car page link',
-          '<td class="car-cell car-col"><img class="class-thumb" src="/static/classes/rally-gt.png" alt="" loading="lazy"> <a class="driver-link" href="/vehicles?vehicle=565">Porsche 911 RGT Rally Spec</a></td>' in _lb_cls, '')
+    check('leaderboard: class image in front of the vehicle name + car page link (hover tip = class name)',
+          '<td class="car-cell car-col"><img class="class-thumb" src="/static/classes/rally-gt.png" alt="" loading="lazy" data-tip="Rally GT"> <a class="driver-link" href="/vehicles?vehicle=565">Porsche 911 RGT Rally Spec</a></td>' in _lb_cls, '')
     check('leaderboard: tyre cell carries damage payload + weather for the popup',
           'data-td="' in lb_rows and 'data-cond="' in lb_rows
           and "dmg.className = 'dmg-popup'" in lb_rows
