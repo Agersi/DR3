@@ -838,22 +838,20 @@
         s += '<text x="' + (bx + 88) + '" y="' + ry + '" font-size="10" font-weight="700" text-anchor="end" fill="' + dmgColor(r[1] / 255) + '" dominant-baseline="central">' + Math.round(r[1] / 255 * 100) + '%</text>';
       });
       var wr = wear[c] / 255;
-      s += '<rect x="' + (cx - 16) + '" y="' + (cy - 29) + '" width="32" height="58" rx="12" fill="' + dmgColor(wr) + '" stroke="#697565"/>';
-      s += '<text x="' + cx + '" y="' + (cy - 9) + '" font-size="10" font-weight="700" text-anchor="middle" dominant-baseline="central" style="fill:var(--bg)">' + Math.round(wr * 100) + '%</text>';
-      s += '<text x="' + cx + '" y="' + (cy + 11) + '" font-size="10" text-anchor="middle" dominant-baseline="central" style="fill:var(--startingBlue)">' + Math.round((wear0 ? wear0[c] : 0) / 255 * 100) + '%</text>';
-      var s1 = left ? cx + 19 : cx - 24;
-      var s2 = left ? cx + 25 : cx - 30;
+      s += '<rect x="' + (cx - 16) + '" y="' + (cy - 29) + '" width="32" height="58" rx="12" stroke="#697565"/>';
+      s += '<text x="' + cx + '" y="' + (cy - 9) + '" font-size="13" font-weight="700" text-anchor="middle" dominant-baseline="central" fill="#fff">' + Math.round(wr * 100) + '%</text>';
+      s += '<text x="' + cx + '" y="' + (cy + 11) + '" font-size="13" text-anchor="middle" dominant-baseline="central" style="fill:var(--startingBlue)">' + Math.round((wear0 ? wear0[c] : 0) / 255 * 100) + '%</text>';
+      var s1 = left ? cx + 22 : cx - 27;
       s += '<rect x="' + s1 + '" y="' + (cy - 17) + '" width="5" height="34" rx="2" style="fill:var(--card)" stroke="#697565"/>';
-      s += '<rect x="' + s2 + '" y="' + (cy - 17) + '" width="5" height="34" rx="2" style="fill:var(--card)" stroke="#697565"/>';
       var imp0 = impact0 ? impact0[c] / 255 : 0;
-      if (imp0 > 0.02) {
-        var fh0 = Math.max(2, imp0 * 34);
-        s += '<rect x="' + s1 + '" y="' + (cy + 17 - fh0) + '" width="5" height="' + fh0.toFixed(1) + '" rx="2" style="fill:var(--startingBlue)"/>';
-      }
       var imp = impact[c] / 255;
       if (imp > 0.02) {
         var fh = Math.max(2, imp * 34);
-        s += '<rect x="' + s2 + '" y="' + (cy + 17 - fh) + '" width="5" height="' + fh.toFixed(1) + '" rx="2" fill="' + dmgColor(imp) + '"/>';
+        s += '<rect x="' + s1 + '" y="' + (cy + 17 - fh) + '" width="5" height="' + fh.toFixed(1) + '" rx="2" style="fill:var(--warning)"/>';
+      }
+      if (imp0 > 0.02) {
+        var fh0 = Math.max(2, imp0 * 34);
+        s += '<rect x="' + s1 + '" y="' + (cy + 17 - fh0) + '" width="5" height="' + fh0.toFixed(1) + '" rx="2" style="fill:var(--startingBlue)"/>';
       }
       s += '</g>';
       return s;
