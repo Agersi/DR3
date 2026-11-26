@@ -435,9 +435,9 @@
     } else {
       body = '<div class="dmg-body">' + carSvg(d, d0) + dmgBars(d, d0) + '</div>';
     }
-    // Compound is always known (it's the clicked set); the weather prefix
-    // only appears when the run stored a mapped conditions id.
-    var condLine = '<div class="dmg-cond">' + (cond ? esc(cond) + ' · ' : '') + esc(title) + '</div>';
+    // The line shows only the stored weather condition; it is omitted
+    // entirely when the run has no mapped conditions id.
+    var condLine = cond ? '<div class="dmg-cond">' + esc(cond) + '</div>' : '';
     dmg.innerHTML =
       '<div class="dmg-head"><span class="dmg-title">Tyres: ' + esc(title) + '</span></div>' +
       body + condLine;

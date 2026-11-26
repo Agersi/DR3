@@ -116,7 +116,7 @@ def main() -> int:
     check('leaderboard: diff-col width + centered source + popup weather line (CSS)',
           '#lb-board-table .diff-col { width: 5.5rem; }' in lb_css
           and '#lb-board-table .src-cell { text-align: center; }' in lb_css
-          and '.dmg-cond { margin-top: 0.6rem;' in lb_css
+           and '.dmg-cond { padding-top: 0.45rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.85rem; text-align: center; }' in lb_css
            and '#lb-board-table .car-col { width: 14.5rem; white-space: nowrap; }' in lb_css
            and '#lb-board-table th.car-col { padding-left: 42px; }' in lb_css
            and '#lb-board-table td:nth-child(2) { white-space: nowrap; }' in lb_css
