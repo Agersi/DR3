@@ -64,6 +64,9 @@ RPC_FIELDS: Tuple[str, ...] = (
     "stage_time_ms", "race_status", "recov_to_service",
     "meters_driven", "distance_driven",
     "using_wheel", "using_assists",
+    # official runs only: the end-of-stage component damage snapshot (the
+    # tyre-click popup's data source; TTs send no StageComplete RPC at all)
+    "comp_damage",
     # club path only: the web event id (official/TT runs carry none)
     "event_id",
     # club clean finishes only: telemetry splits (seconds) + the flat stage

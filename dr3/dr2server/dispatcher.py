@@ -3707,6 +3707,9 @@ class RpcDispatcher:
                         "distance_driven": req.distance_driven or None,
                         "using_wheel": bool(req.using_wheel),
                         "using_assists": bool(req.using_assists),
+                        # End-of-stage component damage snapshot (same shape the
+                        # proxy path feeds for official runs).
+                        "comp_damage": dmg_dict,
                         # Club runs carry the web event id; official/TT paths
                         # (httpd._record_proxy_stats) feed without one.
                         "event_id": event_id,

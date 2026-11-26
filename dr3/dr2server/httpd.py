@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import dataclasses
 import http.client
 import json
 import re
@@ -20,6 +21,7 @@ from .account_store import AccountStore
 from .api_client import UpstreamClient
 from .dispatcher import RpcDispatcher
 from .egonet import Int64, Timestamp, UInt16, UInt32, UInt8, decode_stream, encode_stream
+from .models import CompDamage
 from .stage_detail import StageDetailBuffer
 
 
@@ -671,6 +673,13 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "using_wheel": bool(_val("UsingWheel")),
                     "using_assists": bool(_val("UsingAssists")),
                 }
+                # End-of-stage component damage snapshot (the tyre-click popup's
+                # data source for official runs) — plain dict, same shape the
+                # club path stores.
+                dmg = payload.get("CompDamage")
+                if isinstance(dmg, dict):
+                    rpc_fields["comp_damage"] = dataclasses.asdict(
+                        CompDamage.from_egonet(dmg))
                 splits = self.app.dispatcher.take_posttime_splits(vehicle_id)
                 if splits is not None:
                     rpc_fields["splits"] = splits

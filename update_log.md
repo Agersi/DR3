@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.86**
+- The tyre damage popup on the website now shows real data for official dailies, weeklies and monthlies too.
+
 **v0.1.85**
 - Fixed the spelling of the Seat Ibiza RX.
 

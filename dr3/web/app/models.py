@@ -326,6 +326,10 @@ class StageRun(db.Model):
     # Per-segment split times (seconds, sum ~= stage time) from client telemetry —
     # present only on clean club finishes where a matching UDP run was captured.
     splits_json: str | None = db.Column(db.Text)
+    # End-of-stage component damage snapshot (the 16-field CompDamage dict from
+    # the StageComplete RPC) — the tyre-click popup's data source for official
+    # runs; club rows keep reading club_stage_states, TTs never carry one.
+    comp_damage_json: str | None = db.Column(db.Text)
     # Flat stage ordinal within the championship (leg offset + local index) —
     # correlates club rows with results.stages_json entries.
     flat_stage_index: int | None = db.Column(db.Integer)

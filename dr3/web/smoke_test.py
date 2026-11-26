@@ -6,6 +6,7 @@ Uses a throwaway SQLite DB; wipes it first.
 from __future__ import annotations
 
 import base64
+import html as _html
 import json
 import os
 import re
@@ -733,6 +734,107 @@ def main() -> int:
           _b_ms == 155990 and _b_splits == [41.871, 41.021, 39.225, 33.877]
           and _b_gh is None,
           f'ms={_b_ms} splits={_b_splits} gh={_b_gh}')
+
+    # ── stage-detail: official runs carry the end-of-stage damage snapshot ──
+    # The StageComplete RPC half carries CompDamage (club + official; TTs send
+    # no StageComplete at all). A dedicated user keeps every global count pin
+    # intact. Two stages of one challenge: stage 1's start state is stage 0's
+    # snapshot, with the per-tyre state zeroed (a new compound was fitted at
+    # service). Tracks 620/621 are fixture-only.
+    with app.app_context():
+        from app.auth import issue_game_token
+        u3 = create_user('dmgpilot', 'dmg@example.com', 'password123',
+                         email_verified=True)
+        tok3 = issue_game_token(u3).token
+        db.session.commit()
+    headers3 = {'Authorization': f'Bearer {tok3}'}
+    _dmg_a = {'bodywork': 1200, 'brakes': 800, 'clutch': 0.4, 'dampers': 300,
+              'diff_wear': 500, 'diff_impact': 90, 'engine': 0.1, 'exhaust': 0.2,
+              'gearbox': 700, 'lights': 0.0, 'radiator': 0.3, 'springs': 250,
+              'turbo': 400, 'wheels_wear': 1048576, 'wheels_impact': 65536,
+              'quick_repairs': 0}
+    _dmg_b = dict(_dmg_a, bodywork=2400, wheels_wear=2097152, wheels_impact=131072)
+    # Vehicle 566 (not 565): the car page pins exact terminal counts for 565.
+    r = client.post('/api/game/stage-detail', headers=headers3, json={
+        'challenge_id': 920001, 'event_index': 0, 'stage_index': 0,
+        'challenge_type': 1, 'track_id': 620, 'track_model_id': 620,
+        'location_id': 7, 'vehicle_class_id': 78, 'vehicle_id': 566,
+        'player_finished': True, 'stage_time_ms': 132450,
+        'distance_driven': 30120, 'tyre_compound_id': 2,
+        'comp_damage': _dmg_a,
+    })
+    check('stage-detail official run with damage ok',
+          (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+    r = client.post('/api/game/stage-detail', headers=headers3, json={
+        'challenge_id': 920001, 'event_index': 0, 'stage_index': 1,
+        'challenge_type': 1, 'track_id': 621, 'track_model_id': 621,
+        'location_id': 7, 'vehicle_class_id': 78, 'vehicle_id': 566,
+        'player_finished': True, 'stage_time_ms': 140120,
+        'distance_driven': 33480, 'tyre_compound_id': 6,
+        'comp_damage': _dmg_b,
+    })
+    check('stage-detail official run 2 ok',
+          (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+
+    with app.app_context():
+        from app.models import StageRun
+        _da = db.session.query(StageRun).filter_by(
+            username='dmgpilot', challenge_id=920001, stage_index=0).first()
+        _db = db.session.query(StageRun).filter_by(
+            username='dmgpilot', challenge_id=920001, stage_index=1).first()
+    check('stage-detail: official rows store the damage snapshot (source official)',
+          _da is not None and _db is not None
+          and _da.source_type == 'official' and _db.source_type == 'official'
+          and json.loads(_da.comp_damage_json) == _dmg_a
+          and json.loads(_db.comp_damage_json) == _dmg_b,
+          f'a={_da} b={_db}')
+
+    # A later snapshot-only record for the same slot (no damage field) must not
+    # wipe the damage an earlier RPC half already stored.
+    r = client.post('/api/game/stage-detail', headers=headers3, json={
+        'challenge_id': 920002, 'event_index': 0, 'stage_index': 5,
+        'vehicle_id': 566, 'stage_time_ms': 150000, 'distance_driven': 40000,
+        'comp_damage': _dmg_a,
+    })
+    check('stage-detail rpc-only half with damage ok',
+          (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+    r = client.post('/api/game/stage-detail', headers=headers3, json={
+        'challenge_id': 920002, 'event_index': 0, 'stage_index': 5,
+        'challenge_type': 1, 'track_id': 622, 'track_model_id': 622,
+        'location_id': 7, 'vehicle_class_id': 78, 'vehicle_id': 566,
+        'player_finished': True, 'stage_time_ms': 150000,
+        'distance_driven': 40000, 'tyre_compound_id': 2,
+    })
+    check('stage-detail snapshot-after-half ok',
+          (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+    with app.app_context():
+        from app.models import StageRun
+        _dh = db.session.query(StageRun).filter_by(
+            username='dmgpilot', challenge_id=920002, stage_index=5).first()
+    check('stage-detail: snapshot-after-half keeps the stored damage',
+          _dh is not None and _dh.track_id == 622
+          and json.loads(_dh.comp_damage_json) == _dmg_a, f'row={_dh}')
+
+    # Leaderboard: the producing run's snapshot rides on its row — stage 0 has
+    # no start state; stage 1 carries stage 0's snapshot with fresh per-tyre
+    # fields (compound changed at service).
+    lb0 = client.get('/leaderboard?stage=620&car=566').get_data(as_text=True)
+    # The attribute content is HTML-escaped JSON (quotes as &#34;/&quot;), so
+    # unescape before parsing.
+    _td0 = re.search(r'data-td="([^"]*)"', lb0)
+    check('leaderboard: official stage-0 row carries the damage payload',
+          _td0 is not None
+          and json.loads(_html.unescape(_td0.group(1)))
+          == [{'s': 0, 'd': _dmg_a, 'd0': None}],
+          f'td={_td0.group(1) if _td0 else None}')
+    lb1 = client.get('/leaderboard?stage=621&car=566').get_data(as_text=True)
+    _td1 = re.search(r'data-td="([^"]*)"', lb1)
+    check('leaderboard: official stage-1 row carries start state with fresh tyres',
+          _td1 is not None
+          and json.loads(_html.unescape(_td1.group(1)))
+          == [{'s': 0, 'd': _dmg_b,
+               'd0': {**_dmg_a, 'wheels_wear': 0, 'wheels_impact': 0}}],
+          f'td={_td1.group(1) if _td1 else None}')
 
     # Account page: favorite pickers + profile stat visibility checkboxes.
     r = client.get('/account')

@@ -13,6 +13,7 @@ bottom.
 """
 from __future__ import annotations
 
+import json
 import math
 import sys
 from pathlib import Path
@@ -170,6 +171,32 @@ def fresh_tyre_start(d0: dict | None) -> dict | None:
     d['wheels_wear'] = 0
     d['wheels_impact'] = 0
     return d
+
+
+def _packed_wheels_wear(comp_damage_json: str | None) -> int | None:
+    """The snapshot's packed per-wheel wear (all four wheels in one UInt32),
+    or None when the row carries no parseable snapshot."""
+    if not comp_damage_json:
+        return None
+    try:
+        v = json.loads(comp_damage_json).get('wheels_wear')
+        return int(v) if v is not None else None
+    except (ValueError, TypeError):
+        return None
+
+
+def official_tyre_set_changed(prev_run, cur_run) -> bool:
+    """True when a new physical tyre set was fitted before ``cur_run`` — the
+    stage-run-row counterpart of :func:`tyre_set_changed` for official runs
+    (which carry no tyres_remaining channel). A different compound is always a
+    different set; on the same compound, packed wheel wear can only grow while
+    a set stays fitted, so a drop means a fresh one went on."""
+    pc, cc = prev_run.tyre_compound, cur_run.tyre_compound
+    if pc and cc and pc != cc:
+        return True
+    pw = _packed_wheels_wear(prev_run.comp_damage_json)
+    cw = _packed_wheels_wear(cur_run.comp_damage_json)
+    return pw is not None and cw is not None and cw < pw
 
 
 def long_stage_cutoff_km(location: str) -> float | None:

@@ -28,6 +28,7 @@ from .scoring import (
     championship_view,
     fresh_damage_indices,
     fresh_tyre_start,
+    official_tyre_set_changed,
     tyre_set_changed,
     vehicle_meta,
 )
@@ -208,6 +209,28 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
         runs = {r.id: r for r in
                 db.session.query(StageRun).filter(StageRun.id.in_(run_ids)).all()}
 
+    # Official rows: the damage snapshot rides on the producing run row itself
+    # (the StageComplete RPC half); the start state is the previous stage of
+    # the same challenge — same user + challenge_id, stage_index - 1 (None at
+    # stage 0 or when never captured; rendered as zero).  TT rows have no
+    # snapshot at all (the game sends none for time trials).
+    official_prev: dict[tuple, StageRun] = {}
+    off_runs = [r for r in runs.values()
+                if r.source_type == 'official' and r.comp_damage_json]
+    if off_runs:
+        uids = {r.username for r in off_runs}
+        cids = {r.challenge_id for r in off_runs if r.challenge_id is not None}
+        if cids:
+            for cand in db.session.query(StageRun).filter(
+                    StageRun.username.in_(uids),
+                    StageRun.challenge_id.in_(cids),
+                    StageRun.comp_damage_json.isnot(None)).all():
+                k = (cand.username, cand.challenge_id, cand.stage_index)
+                cur = official_prev.get(k)
+                if cur is None or (cand.received_at, cand.id) > \
+                        (cur.received_at, cur.id):
+                    official_prev[k] = cand
+
     need_run = _any_run_filter(degrad_level=degrad_level, input_method=input_method,
                                camera=camera, vr=vr, assists=assists, hardcore=hardcore)
     # One row per driver + car (a single-car board collapses to per-driver).
@@ -289,6 +312,25 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
                     prev_se = stage_entries.get(
                         (slot[0], name, slot[1] - 1))
                     if tyre_set_changed(prev_se, se):
+                        d0 = fresh_tyre_start(d0)
+        elif run is not None and run.source_type == 'official' \
+                and run.comp_damage_json:
+            try:
+                d = json.loads(run.comp_damage_json)
+            except (ValueError, TypeError):
+                d = None
+            if d is not None and run.stage_index > 0 \
+                    and run.challenge_id is not None:
+                prev = official_prev.get(
+                    (run.username, run.challenge_id, run.stage_index - 1))
+                if prev is not None:
+                    try:
+                        d0 = json.loads(prev.comp_damage_json)
+                    except (ValueError, TypeError):
+                        d0 = None
+                    # A set fitted at the service before this stage starts with
+                    # fresh per-tyre state (same rule as the club branch).
+                    if d0 is not None and official_tyre_set_changed(prev, run):
                         d0 = fresh_tyre_start(d0)
         # Source deep link: the club's board at this event — season rounds
         # map the flat ordinal onto their round + local stage; everything else
