@@ -889,15 +889,15 @@ table.board .num { text-align: right; font-variant-numeric: tabular-nums; }
   z-index: 51;
 }
 .dmg-popup.show { opacity: 1; pointer-events: auto; }
-.dmg-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; margin-bottom: 0.45rem; }
+.dmg-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
 .dmg-title { font-family: var(--display); font-size: 0.95rem; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink); }
 .dmg-stage { color: var(--muted); white-space: nowrap; }
-.dmg-body { display: flex; gap: 0.7rem; align-items: center; }
+.dmg-body { display: flex; gap: 0.2rem; align-items: center; }
 .dmg-car { width: 12.8rem; flex: none; }
 .dmg-bars { flex: 1; min-width: 0; }
 .dmg-bar { display: flex; align-items: center; font-size: .7rem; }
 .dmg-bar-start { width: 2rem; flex: none; text-align: right; font-variant-numeric: tabular-nums; color: var(--startingBlue); margin-right: .25rem; font-family: var(--mono); }
-.dmg-bar-label { position: absolute; left: 0px; top: 43%; width: 3.8rem; text-align: center; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: var(--accent); white-space: nowrap; }
+.dmg-bar-label { position: absolute; left: 0px; top: 43%; width: 4.1rem; text-align: center; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: var(--accent); white-space: nowrap; }
 .dmg-bar-track { position: relative; flex: 1; height: 0.75rem; background: rgba(105, 117, 101, 0.35); overflow: hidden; margin-right: .15rem; }
 .dmg-bar-fill { display: block; height: 100%; }
 .dmg-bar-val { width: 2rem; flex: none; text-align: right; font-variant-numeric: tabular-nums; color: var(--accent); font-family: var(--mono); }

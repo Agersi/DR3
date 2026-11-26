@@ -731,8 +731,9 @@ def main() -> int:
                 and '<span class="dmg-bar-start">' in det
                 and 'dmgColor(body.deform)' not in det
                 and 'rx="16" fill="#262b21"' in det
-                and 'width="32" height="58" rx="12"' in det
-                and 'var fh = Math.max(2, imp * 34);' in det
+                 and 'width="32" height="58" rx="12" style="fill:var(--bg)"' in det
+                 and 'font-size="13" font-weight="600"' in det
+                 and 'var fh = Math.max(2, imp * 34);' in det
                  and 'var s1 = left ? cx + 22 : cx - 27;' in det
                  and 'height="34" rx="2" style="fill:var(--card)"' in det
                  and 'style="fill:var(--warning)"' in det
@@ -743,7 +744,9 @@ def main() -> int:
                  and '--startingBlue: #95c8f7;' in board_css
                  and '.dmg-bar { display: flex; align-items: center; font-size: .7rem; }' in board_css
                  and '.dmg-bar-start { width: 2rem; flex: none; text-align: right; font-variant-numeric: tabular-nums; color: var(--startingBlue); margin-right: .25rem; font-family: var(--mono); }' in board_css
-                 and '.dmg-bar-label { position: absolute; left: 0px; top: 43%; width: 3.8rem; text-align: center; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: var(--accent); white-space: nowrap; }' in board_css
+                  and '.dmg-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }' in board_css
+                  and '.dmg-body { display: flex; gap: 0.2rem; align-items: center; }' in board_css
+                  and '.dmg-bar-label { position: absolute; left: 0px; top: 43%; width: 4.1rem; text-align: center; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: var(--accent); white-space: nowrap; }' in board_css
                  and '.dmg-bar-track { position: relative; flex: 1; height: 0.75rem; background: rgba(105, 117, 101, 0.35); overflow: hidden; margin-right: .15rem; }' in board_css
                  and '.dmg-bar-val { width: 2rem; flex: none; text-align: right; font-variant-numeric: tabular-nums; color: var(--accent); font-family: var(--mono); }' in board_css
               and 'No damage data for this stage.' in det

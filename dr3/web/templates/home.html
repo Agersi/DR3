@@ -378,9 +378,9 @@
         s += '<text x="' + (bx + 88) + '" y="' + ry + '" font-size="10" font-weight="700" text-anchor="end" fill="' + dmgColor(r[1] / 255) + '" dominant-baseline="central">' + Math.round(r[1] / 255 * 100) + '%</text>';
       });
       var wr = wear[c] / 255;
-      s += '<rect x="' + (cx - 16) + '" y="' + (cy - 29) + '" width="32" height="58" rx="12" stroke="#697565"/>';
-      s += '<text x="' + cx + '" y="' + (cy - 9) + '" font-size="13" font-weight="700" text-anchor="middle" dominant-baseline="central" fill="#fff">' + Math.round(wr * 100) + '%</text>';
-      s += '<text x="' + cx + '" y="' + (cy + 11) + '" font-size="13" text-anchor="middle" dominant-baseline="central" style="fill:var(--startingBlue)">' + Math.round((wear0 ? wear0[c] : 0) / 255 * 100) + '%</text>';
+      s += '<rect x="' + (cx - 16) + '" y="' + (cy - 29) + '" width="32" height="58" rx="12" style="fill:var(--bg)" stroke="#697565"/>';
+      s += '<text x="' + cx + '" y="' + (cy - 9) + '" font-size="13" font-weight="600" text-anchor="middle" dominant-baseline="central" fill="#fff">' + Math.round(wr * 100) + '%</text>';
+      s += '<text x="' + cx + '" y="' + (cy + 11) + '" font-size="13" font-weight="600" text-anchor="middle" dominant-baseline="central" style="fill:var(--startingBlue)">' + Math.round((wear0 ? wear0[c] : 0) / 255 * 100) + '%</text>';
       var s1 = left ? cx + 22 : cx - 27;
       s += '<rect x="' + s1 + '" y="' + (cy - 17) + '" width="5" height="34" rx="2" style="fill:var(--card)" stroke="#697565"/>';
       var imp0 = impact0 ? impact0[c] / 255 : 0;
