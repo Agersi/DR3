@@ -727,20 +727,22 @@ def main() -> int:
                and "['Diff impact', hiLo(d.diff_impact), d0 ? hiLo(d0.diff_impact) : 0]," in det
                and "['Engine', d.engine, d0 ? d0.engine : 0], ['Clutch', d.clutch, d0 ? d0.clutch : 0]," in det
                and 'viewBox="0 0 330 312"' in det
-               and "var START_C = '#8ec9ff';" in det
-               and '<span class="dmg-bar-start">' in det
-               and 'dmgColor(body.deform)' not in det
-               and 'rx="16" fill="#262b21"' in det
-               and 'width="32" height="58" rx="12"' in det
-               and 'var fh = Math.max(2, imp * 34);' in det
-               and 'var s1 = left ? cx + 19 : cx - 24;' in det
-               and 'height="34" rx="2" style="fill:var(--card)"' in det
-               and 'width="94" height="50" rx="6"' in det
-               and 'font-size="10"' in det
-               and 'style="fill:var(--bg)"' in det
-               and '<span class="dmg-title">Tyres: ' in det
-               and '.dmg-bar-start { width: 2rem; flex: none; text-align: right; color: #8ec9ff; font-variant-numeric: tabular-nums; margin-right: .15rem; }' in board_css
-               and '.dmg-bar-label { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font-size: 0.62rem; letter-spacing: .02em; color: #fff; white-space: nowrap; }' in board_css
+                and 'style="fill:var(--startingBlue)"' in det
+                and '<span class="dmg-bar-start">' in det
+                and 'dmgColor(body.deform)' not in det
+                and 'rx="16" fill="#262b21"' in det
+                and 'width="32" height="58" rx="12"' in det
+                and 'var fh = Math.max(2, imp * 34);' in det
+                and 'var s1 = left ? cx + 19 : cx - 24;' in det
+                and 'height="34" rx="2" style="fill:var(--card)"' in det
+                and 'width="94" height="50" rx="6"' in det
+                and 'font-size="10"' in det
+                and 'style="fill:var(--bg)"' in det
+                and '<span class="dmg-title">Tyres: ' in det
+                and '--startingBlue: #95c8f7;' in board_css
+                and '.dmg-bar-start { width: 2rem; flex: none; text-align: right; font-variant-numeric: tabular-nums; color: var(--startingBlue); margin-right: .15rem; font-family: var(--display); }' in board_css
+                and '.dmg-bar-label { position: absolute; left: 0px; top: 43%; width: 3.8rem; text-align: center; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: var(--accent); white-space: nowrap; }' in board_css
+                and '.dmg-bar-val { width: 2rem; flex: none; text-align: right; font-variant-numeric: tabular-nums; color: var(--accent); font-family: var(--display); }' in board_css
               and 'No damage data for this stage.' in det
               and "var tyre = e.target.closest('.tyre-img');" in det
               and 'if (dmgTarget === tyre) closeDmg(); else openDmg(tyre);' in det

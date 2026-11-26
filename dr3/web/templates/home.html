@@ -347,9 +347,8 @@
   // all share one byte order: b0=RL, b1=RR, b2=FL, b3=FR.
   var CORNER = { FL: 2, FR: 3, RL: 0, RR: 1 };
 
-  // Light blue marks every "starting" value (the state carried in from the
-  // previous stage) so it reads distinct from the ending value.
-  var START_C = '#8ec9ff';
+  // "Starting" values (carried in from the previous stage) use the
+  // --startingBlue palette color so they read distinct from the ending value.
 
   function dmgColor(t) {
     t = Math.max(0, Math.min(1, t));
@@ -374,14 +373,14 @@
       [['Spr', springs[c], springs0 ? springs0[c] : 0], ['Dmp', dampers[c], dampers0 ? dampers0[c] : 0], ['Brk', brakes[c], brakes0 ? brakes0[c] : 0]].forEach(function (r, i) {
         var ry = cy - 16 + i * 16;
         s += '<text x="' + (bx + 8) + '" y="' + ry + '" font-size="11" fill="#afff95" dominant-baseline="central">' + r[0] + '</text>';
-        s += '<text x="' + (bx + 56) + '" y="' + ry + '" font-size="10" text-anchor="end" fill="' + START_C + '" dominant-baseline="central">' + Math.round(r[2] / 255 * 100) + '%</text>';
+        s += '<text x="' + (bx + 56) + '" y="' + ry + '" font-size="10" text-anchor="end" style="fill:var(--startingBlue)" dominant-baseline="central">' + Math.round(r[2] / 255 * 100) + '%</text>';
         s += '<text x="' + (bx + 64) + '" y="' + ry + '" font-size="10" text-anchor="middle" fill="#697565" dominant-baseline="central">\u2192</text>';
         s += '<text x="' + (bx + 88) + '" y="' + ry + '" font-size="10" font-weight="700" text-anchor="end" fill="' + dmgColor(r[1] / 255) + '" dominant-baseline="central">' + Math.round(r[1] / 255 * 100) + '%</text>';
       });
       var wr = wear[c] / 255;
       s += '<rect x="' + (cx - 16) + '" y="' + (cy - 29) + '" width="32" height="58" rx="12" fill="' + dmgColor(wr) + '" stroke="#697565"/>';
       s += '<text x="' + cx + '" y="' + (cy - 9) + '" font-size="10" font-weight="700" text-anchor="middle" dominant-baseline="central" style="fill:var(--bg)">' + Math.round(wr * 100) + '%</text>';
-      s += '<text x="' + cx + '" y="' + (cy + 11) + '" font-size="10" text-anchor="middle" dominant-baseline="central" fill="' + START_C + '">' + Math.round((wear0 ? wear0[c] : 0) / 255 * 100) + '%</text>';
+      s += '<text x="' + cx + '" y="' + (cy + 11) + '" font-size="10" text-anchor="middle" dominant-baseline="central" style="fill:var(--startingBlue)">' + Math.round((wear0 ? wear0[c] : 0) / 255 * 100) + '%</text>';
       var s1 = left ? cx + 19 : cx - 24;
       var s2 = left ? cx + 25 : cx - 30;
       s += '<rect x="' + s1 + '" y="' + (cy - 17) + '" width="5" height="34" rx="2" style="fill:var(--card)" stroke="#697565"/>';
@@ -389,7 +388,7 @@
       var imp0 = impact0 ? impact0[c] / 255 : 0;
       if (imp0 > 0.02) {
         var fh0 = Math.max(2, imp0 * 34);
-        s += '<rect x="' + s1 + '" y="' + (cy + 17 - fh0) + '" width="5" height="' + fh0.toFixed(1) + '" rx="2" fill="' + START_C + '"/>';
+        s += '<rect x="' + s1 + '" y="' + (cy + 17 - fh0) + '" width="5" height="' + fh0.toFixed(1) + '" rx="2" style="fill:var(--startingBlue)"/>';
       }
       var imp = impact[c] / 255;
       if (imp > 0.02) {
