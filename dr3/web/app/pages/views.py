@@ -1153,6 +1153,15 @@ def leaderboard():
     for row in board.get('rows', []):
         vid = row.get('vehicle_id')
         row['car_url'] = url_for('pages.vehicles_index', vehicle=vid) if vid in VEHICLES else ''
+        # Club rows deep-link to the producing club's board (event + round +
+        # local stage) — the club page honors those query args on load.
+        if row.get('source_club_id') and row.get('source_event_id'):
+            row['source_url'] = url_for(
+                'clubs.club_detail', club_id=row['source_club_id'],
+                event=row['source_event_id'], round=row['source_round'],
+                stage=row['source_stage'])
+        else:
+            row['source_url'] = ''
 
     # Distance mode (and an empty times board) carries no split metadata.
     board.setdefault('split_count', 0)

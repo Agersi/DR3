@@ -22,14 +22,16 @@ from .results_view import (
     _spare_tyres,
     format_ms,
     gap_text,
+    mode_of,
 )
 from .scoring import (
+    championship_view,
     fresh_damage_indices,
     fresh_tyre_start,
     tyre_set_changed,
     vehicle_meta,
 )
-from .tables import RX_LOCATIONS
+from .tables import CHAMP_MODE_SEASON, RX_LOCATIONS
 from dr2server.game_data import STAGE_CONDITIONS_LABELS, Location, Track
 from dr2server.stage_limits import split_count_for_limit, stage_limit_ms
 
@@ -236,6 +238,10 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
     # Flat ordinals where damage starts from zero per event (first stage +
     # each rally-season round — rounds are separate in-game events).
     reset_of: dict[str, set[int]] = {}
+    # Club ownership + championship layout per event — a club row's source
+    # chip deep-links to that club's board (event + round + local stage).
+    events_of: dict[str, tuple] = {}
+    rounds_of: dict[str, list[tuple[int, int, int]]] = {}
     if event_ids:
         from .models import ClubStageState, Event
 
@@ -246,7 +252,12 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
                 json.loads(st.comp_damage_json)
         for ev in db.session.query(Event).filter(
                 Event.id.in_(sorted(event_ids))).all():
-            reset_of[ev.id] = fresh_damage_indices(ev.to_dict())
+            ed = ev.to_dict()
+            reset_of[ev.id] = fresh_damage_indices(ed)
+            events_of[ev.id] = (ev.club_id, ed)
+            if mode_of(ed) == CHAMP_MODE_SEASON:
+                rounds_of[ev.id] = [(r['index'], r['offset'], r['count'])
+                                    for r in championship_view(ed)]
 
     raw = []
     for key, e in by_group.items():
@@ -272,6 +283,23 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
                         (slot[0], name, slot[1] - 1))
                     if tyre_set_changed(prev_se, se):
                         d0 = fresh_tyre_start(d0)
+        # Source deep link: the club's board at this event — season rounds
+        # map the flat ordinal onto their round + local stage; everything else
+        # (Multi-Location / legacy) is one combined board, so the flat ordinal
+        # is the stage index.  Unresolvable slots get no link.
+        src = None
+        if slot:
+            owned = events_of.get(slot[0])
+            if owned and owned[0]:
+                flat = slot[1]
+                rnds = rounds_of.get(slot[0])
+                if rnds is not None:
+                    for idx, off, cnt in rnds:
+                        if off <= flat < off + cnt:
+                            src = (owned[0], slot[0], idx, flat - off)
+                            break
+                else:
+                    src = (owned[0], slot[0], 0, flat)
         u = users.get(name)
         splits = None
         if e.splits_json:
@@ -303,6 +331,10 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
             'assists': (bool(run.assists_enabled or run.using_assists) if run
                         else (bool(e.using_assists) if e.using_assists is not None else None)),
             'source': SOURCE_LABELS.get(run.source_type) if run else None,
+            'source_club_id': src[0] if src else None,
+            'source_event_id': src[1] if src else None,
+            'source_round': src[2] if src else None,
+            'source_stage': src[3] if src else None,
             'flag_url': flag_url(u.country or '') if u else '',
             'splits': splits,
             'tyre_damage': ([{'s': 0, 'd': d, 'd0': d0}]
@@ -349,6 +381,10 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
             'camera': r['camera'],
             'assists': r['assists'],
             'source': r['source'],
+            'source_club_id': r['source_club_id'],
+            'source_event_id': r['source_event_id'],
+            'source_round': r['source_round'],
+            'source_stage': r['source_stage'],
             'penalty_text': _penalty_text(r['penalty_ms']),
             'time_text': format_ms(r['time_ms']),
             'diff_str': gap_text(r['time_ms'] - leader) if leader is not None else '',

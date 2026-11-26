@@ -107,7 +107,7 @@
     </div>
     <p class="standings-note" id="standings-note" hidden>Power-stage bonus: the top five finishers of each round's final stage earn +5 / +4 / +3 / +2 / +1, shown in brackets.</p>
 
-    <script type="application/json" id="board-state">{{ {'club_id': club.id, 'selectors': champ_selectors, 'champ_index': default_champ_index, 'event_id': default_event_id, 'round_index': default_round_index, 'mode': 'stage', 'stage': 0, 'script_root': request.script_root, 'board': board, 'standings': standings} | tojson }}</script>
+    <script type="application/json" id="board-state">{{ {'club_id': club.id, 'selectors': champ_selectors, 'champ_index': default_champ_index, 'event_id': default_event_id, 'round_index': default_round_index, 'mode': 'stage', 'stage': default_stage_index, 'script_root': request.script_root, 'board': board, 'standings': standings} | tojson }}</script>
     {% else %}
     <p>No events yet.</p>
     {% endif %}

@@ -408,11 +408,12 @@ def main() -> int:
     # shows up, not the old double-counted user columns.
     check('drivers page: distance comes from stage_runs (#56)',
           '309.9 km' in drv_html, '')
-    # Stages completed is a % (6 of the smoke driver's 9 runs finished — the
-    # board-cum fixture adds two clean rows for the car-resolution check and
-    # the recent-times set-change fixture adds two more).
+    # Stages completed is a % (8 of the smoke driver's 11 runs finished — the
+    # board-cum fixture adds two clean rows for the car-resolution check, the
+    # recent-times set-change fixture adds two more, and the leaderboard deep-
+    # link fixture adds two club runs).
     check('drivers page: stages completed shown as a percentage',
-           '<td class="num">67%</td>' in drv_html, '')
+           '<td class="num">73%</td>' in drv_html, '')
     prof = client.get('/profile/smokedriver').get_data(as_text=True)
     check('profile: per-device distance list (#57)',
           'Input devices' in prof and 'Simucube 2 Pro (100%)' in prof, '')
@@ -420,7 +421,7 @@ def main() -> int:
           '<table class="driving">' in prof
           and '<span class="stat-key">Favorite Car:</span>' in prof
           and '<span class="stat-key">Stages driven:</span>' in prof
-          and '(67% completed)' in prof, '')
+          and '(73% completed)' in prof, '')
     drv_css = client.get('/static/css/style.css').get_data(as_text=True)
     check('profile: driving table CSS (two columns, divider, top lists)',
           '.driving td + td { border-left: 1px solid var(--line); }' in drv_css

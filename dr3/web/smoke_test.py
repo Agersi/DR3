@@ -2636,6 +2636,56 @@ def main() -> int:
               and bss1.get('smokedriver', {}).get('tyre_damage') == [{'s': 0, 'd': D_S1, 'd0': None}],
               f"rows={[(n, r.get('tyre_damage')) for n, r in bss1.items()]}")
 
+        # Deep links from the site leaderboard: a Club-sourced best time links
+        # back to this club's board at the producing event + round + stage —
+        # season rounds map the flat ordinal onto their local stage, multi
+        # events stay on the combined board (round 0, flat index).
+        with app.app_context():
+            from app.game_api import _upsert_best as _ub
+            for eid, flat, track_id in (('evt-smoke-board-multi', 3, '524'),
+                                        ('evt-smoke-board-season', 1, '525')):
+                sr = _CumRun(username='smokedriver', event_id=eid, vehicle_id=565,
+                             flat_stage_index=flat, source_type='club',
+                             time_ms=98000, player_finished=True)
+                db.session.add(sr)
+                db.session.flush()
+                _ub('smokedriver', 565, track_id, '26', 97000, run_id=sr.id)
+            db.session.commit()
+
+        lb_multi = client.get('/leaderboard?stage=524&car=565')
+        check('leaderboard: club best links to the producing club board (multi -> combined stage 4)',
+              lb_multi.status_code == 200
+              and f'<a class="chip" href="/clubs/{club_id}?event=evt-smoke-board-multi&amp;round=0&amp;stage=3">Club</a>' in lb_multi.get_data(as_text=True),
+              'missing multi deep link')
+        lb_season = client.get('/leaderboard?stage=525&car=565')
+        check('leaderboard: club best links to the producing club board (season -> round 2 stage 1)',
+              lb_season.status_code == 200
+              and f'<a class="chip" href="/clubs/{club_id}?event=evt-smoke-board-season&amp;round=1&amp;stage=0">Club</a>' in lb_season.get_data(as_text=True),
+              'missing season deep link')
+
+        for url, want_ev, want_round, want_stage in (
+                (f'/clubs/{club_id}?event=evt-smoke-board-multi&round=0&stage=3',
+                 'evt-smoke-board-multi', 0, 3),
+                (f'/clubs/{club_id}?event=evt-smoke-board-season&round=1&stage=0',
+                 'evt-smoke-board-season', 1, 0)):
+            r = client.get(url)
+            m = re.search(r'id="board-state">(.*?)</script>', r.get_data(as_text=True), re.S)
+            bs = json.loads(m.group(1)) if m else {}
+            check(f'club deep link {url.split("?")[1]} lands on the linked board',
+                  r.status_code == 200 and m is not None
+                  and bs.get('event_id') == want_ev
+                  and bs.get('round_index') == want_round
+                  and bs.get('stage') == want_stage,
+                  f"state={ {k: bs.get(k) for k in ('event_id', 'round_index', 'stage')} }")
+
+        # A club run whose event row is missing (legacy ingest) stays a plain chip.
+        lb_legacy = client.get('/leaderboard?stage=636&car=565')
+        check('leaderboard: club best without a stored event keeps the plain chip',
+              lb_legacy.status_code == 200
+              and '<span class="chip">Club</span>' in lb_legacy.get_data(as_text=True)
+              and '<a class="chip" href="/clubs/' not in lb_legacy.get_data(as_text=True),
+              'expected plain chip only')
+
         api2 = client.get(
             f'/clubs/{club_id}/event-board?event={eid2}&round=0&mode=stage&stage=0')
         check('event-board API: stage mode returns info + rows',

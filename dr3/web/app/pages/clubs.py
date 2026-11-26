@@ -529,9 +529,25 @@ def club_detail(club_id: str):
             'window_end_iso': end_iso,
         })
 
+    # Deep link from the site leaderboard: ?event=<id>&round=<n>&stage=<m>
+    # lands on that championship's board at the exact stage — only honored for
+    # events of this club (the board clamps any out-of-range values itself).
+    def _arg_int(name):
+        raw = (request.args.get(name) or '').strip()
+        return int(raw) if raw.isdigit() else None
+
+    link_event_id = (request.args.get('event') or '').strip()
+    link_round = _arg_int('round')
+    link_stage = _arg_int('stage')
+
     default_event_id = None
     default_round_index = 0
-    if live_event is not None:
+    default_stage_index = 0
+    if link_event_id and any(e['id'] == link_event_id for e in events):
+        default_event_id = link_event_id
+        default_round_index = max(0, link_round) if link_round is not None else 0
+        default_stage_index = max(0, link_stage) if link_stage is not None else 0
+    elif live_event is not None:
         default_event_id = live_event['id']
         default_round_index = current_leg_index(live_event, now)
     else:
@@ -548,7 +564,13 @@ def club_detail(club_id: str):
     if default_event_id is not None:
         default_event = get_event(default_event_id)
         if default_event is not None:
-            board = event_board(default_event, default_round_index, 'stage', now=now)
+            board = event_board(default_event, default_round_index, 'stage',
+                                stage_local_index=default_stage_index, now=now)
+            if board is not None:
+                # The board clamps the round/stage it actually rendered — keep
+                # the embedded client state in sync with that.
+                default_round_index = board['round_index']
+                default_stage_index = board['stage_local_index']
             # Championship points table for the same championship (server-
             # rendered initial state; the JS re-fetches on championship switch).
             standings = championship_points_table(
@@ -564,6 +586,7 @@ def club_detail(club_id: str):
         live_event=live_event, live_ends=live_ends,
         champ_selectors=champ_selectors, board=board, standings=standings,
         default_event_id=default_event_id, default_round_index=default_round_index,
+        default_stage_index=default_stage_index,
         default_champ_index=default_champ_index,
         is_owner=user_is_owner(club, uname),
         is_admin=is_admin,
