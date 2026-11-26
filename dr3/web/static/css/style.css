@@ -479,7 +479,11 @@ td:has(.driver-dot) { display: flex; justify-content: center; align-items: cente
 .chip-ok { background: var(--olive); color: var(--bg); }
 .chip-warn { background: var(--mustard); color: var(--bg); }
 a.chip { text-decoration: none; }
-a.chip:hover { border-color: var(--accent); }
+a.chip:hover {
+  background: var(--card);
+  border-color: var(--accent);
+}
+a.chip.chip-accent:hover { color: var(--text); }
 .chips-row { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; margin: 0.3rem 0 0.8rem; }
 .play-chips { justify-content: space-evenly; margin: 0.8rem 0 0; }
 .club-card .chips-row { justify-content: space-between; }
