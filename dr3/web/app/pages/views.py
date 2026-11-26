@@ -166,10 +166,11 @@ def _recent_stage_times(offset: int = 0, limit: int | None = None) -> list[dict]
         for i, s in enumerate(stages):
             t = int(s.get('time_ms', 0) or 0)
             sa = s.get('submitted_at')
-            # Terminal close-outs (wreck / retirement markers stored at the
-            # stage limit) are not driven stage times — never list them here.
-            if t <= 0 or not sa \
-                    or int(s.get('race_status', 0) or 0) != 0:
+            # A missing submitted_at is the cron round-expiry DNF marker —
+            # those never happened on stage and are not listed; game-flow
+            # close-outs (incl. terminal damage, stored at the stage limit)
+            # count as driven.
+            if t <= 0 or not sa:
                 continue
             a = _run_attrs(runs_of.get((r.event_id, r.username, i)))
             d = damage_of.get((r.event_id, r.username, i))

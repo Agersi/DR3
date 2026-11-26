@@ -245,7 +245,7 @@ def main() -> int:
           and '<a class="driver-link" href="/vehicles?vehicle=1">Vehicle 1</a>' in html, '')
     check('home: recent-times Time + Posted columns use num class (headers, server + JS rows)',
           '<th class="num">Time</th>' in html and '<th class="num">Posted</th>' in html
-          and html.count('<td class="num">') == 8  # 4 server-rendered rows x Time + Posted
+           and html.count('<td class="num">') == 10  # 5 server-rendered rows x Time + Posted (incl. the terminal close-out row)
           and "tr.appendChild(cell(row.time_text, 'num'));" in html
           and "tr.appendChild(cell(row.at_text, 'num'));" in html, '')
     check('home: recent-times Tyres/Spares/Input/Camera columns (data attrs + board-style cell JS)',
