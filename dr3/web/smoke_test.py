@@ -744,6 +744,90 @@ def main() -> int:
         db.session.query(_SR4).filter_by(challenge_id=900006).delete()
         db.session.commit()
 
+    # Wrecked-stage halves racing (v0.1.93+): on a single-stage leg the close-
+    # out half and the wrecked detail half share one buffer key, so when the
+    # StageEnded snapshot lands between their feeds the merged close-out POSTs
+    # first and the detail half (partial splits + flat index) arrives second —
+    # it must gap-fill the stored row instead of being dropped.
+    r = client.post('/api/game/stage-detail', headers=headers, json={
+        'challenge_id': 900007, 'event_index': 0, 'stage_index': 0,
+        'challenge_type': 2, 'track_id': 636, 'track_model_id': 636,
+        'location_id': 4, 'vehicle_class_id': 97, 'vehicle_id': 565,
+        'event_id': 'evt-smoke', 'player_finished': False, 'race_status': 5,
+        'stage_time_ms': 217641, 'distance_driven': 228330,
+        'library_id': 'lib_direct_input', 'metres_cam_head': 9949.0,
+    })
+    check('stage-detail wreck close-out half ok', (r.get_json() or {}).get('ok') is True)
+    r = client.post('/api/game/stage-detail', headers=headers, json={
+        'challenge_id': 900007, 'event_index': 0, 'stage_index': 0,
+        'vehicle_id': 565, 'event_id': 'evt-smoke', 'race_status': 5,
+        'splits': [38.214, 41.902], 'flat_stage_index': 7,
+    })
+    check('stage-detail wreck detail half ok', (r.get_json() or {}).get('ok') is True)
+    with app.app_context():
+        from app.models import StageRun
+        _d4 = (db.session.query(StageRun)
+               .filter_by(username='smokedriver', challenge_id=900007,
+                          stage_index=0).all())
+    check('stage-detail: wreck halves collapsed to one row', len(_d4) == 1,
+          f'n={len(_d4)}')
+    _d4 = _d4[0] if _d4 else None
+    check('stage-detail: late detail half gap-fills splits + flat, keeps close-out data',
+          _d4 is not None
+          and json.loads(_d4.splits_json) == [38.214, 41.902]
+          and _d4.flat_stage_index == 7
+          and _d4.time_ms == 217641
+          and _d4.distance_m == 228330
+          and _d4.camera_position == 'head'
+          and _d4.input_method == 'wheel'
+          and _d4.player_finished is False,
+          f'row={_d4}')
+
+    # Same race in reverse order: the detail half flushes first (time 0), the
+    # merged close-out follows — its real time must land without wiping the
+    # splits/flat already stored. A half with no source info stores 'unknown';
+    # the later half's real type upgrades it.
+    r = client.post('/api/game/stage-detail', headers=headers, json={
+        'challenge_id': 900008, 'event_index': 0, 'stage_index': 0,
+        'vehicle_id': 565, 'splits': [44.103, 39.877], 'flat_stage_index': 3,
+    })
+    check('stage-detail wreck detail half first ok', (r.get_json() or {}).get('ok') is True)
+    r = client.post('/api/game/stage-detail', headers=headers, json={
+        'challenge_id': 900008, 'event_index': 0, 'stage_index': 0,
+        'challenge_type': 2, 'track_id': 636, 'track_model_id': 636,
+        'location_id': 4, 'vehicle_class_id': 97, 'vehicle_id': 565,
+        'event_id': 'evt-smoke', 'player_finished': False, 'race_status': 5,
+        'stage_time_ms': 300000, 'distance_driven': 180240,
+        'library_id': 'lib_direct_input', 'metres_cam_dash': 180240.0,
+    })
+    check('stage-detail wreck close-out second ok', (r.get_json() or {}).get('ok') is True)
+    with app.app_context():
+        from app.models import StageRun
+        _d5 = (db.session.query(StageRun)
+               .filter_by(username='smokedriver', challenge_id=900008,
+                          stage_index=0).all())
+    check('stage-detail: reverse-order wreck halves collapsed to one row', len(_d5) == 1,
+          f'n={len(_d5)}')
+    _d5 = _d5[0] if _d5 else None
+    check('stage-detail: close-out fills time/source, keeps early splits + flat',
+          _d5 is not None
+          and json.loads(_d5.splits_json) == [44.103, 39.877]
+          and _d5.flat_stage_index == 3
+          and _d5.time_ms == 300000
+          and _d5.distance_m == 180240
+          and _d5.camera_position == 'dash'
+          and _d5.input_method == 'wheel'
+          and _d5.source_type == 'club'
+          and _d5.event_id == 'evt-smoke',
+          f'row={_d5}')
+
+    # Wipe both probe slots so later global StageRun count pins stay intact.
+    with app.app_context():
+        from app.models import StageRun as _SR5
+        db.session.query(_SR5).filter(
+            _SR5.challenge_id.in_((900007, 900008))).delete(synchronize_session=False)
+        db.session.commit()
+
     # A clean stage-detail finish files the driver's personal best for car +
     # track + conditions (the PostTime usually lands first with the ghost at the
     # same ms; here it arrives alone, so no ghost — the splits ride along).

@@ -52,7 +52,7 @@ where = "source_type='club'"
 if event_id:
     where += f" AND event_id='{event_id}'"
 if flt == 'dnf':
-    where += " AND (player_finished=0 OR race_status<>0)"
+    where += " AND player_finished=0"
 elif flt == 'flatnull':
     where += " AND flat_stage_index IS NULL"
 

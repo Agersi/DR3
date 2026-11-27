@@ -711,29 +711,6 @@ def api_game_stats_record():
     return jsonify({'ok': True})
 
 
-# Fields only the StageEnded snapshot half carries — used to score how complete
-# a stage-detail record is, so a merged row always beats a half-merged one when
-# the game's retransmitted RPC arrives out of order.
-_DETAIL_RICH_FIELDS = (
-    'track_id', 'track_model_id', 'location_id', 'vehicle_class_id',
-    'input_library', 'input_device', 'input_name',
-    'cam_bonnet_m', 'cam_bumper_m', 'cam_chase_close_m', 'cam_chase_far_m',
-    'cam_dash_m', 'cam_head_m',
-    'g_days_played', 'g_seconds_played', 'g_session_count',
-)
-
-
-def _detail_rich_score(record) -> int:
-    """Count of snapshot-only fields present (non-null, non-zero) on a record."""
-    n = 0
-    for key in _DETAIL_RICH_FIELDS:
-        value = record.get(key) if isinstance(record, dict) else getattr(record, key, None)
-        if value is None or (isinstance(value, (int, float)) and value == 0):
-            continue
-        n += 1
-    return n
-
-
 @game_api_bp.route('/api/game/stage-detail', methods=['POST'])
 @csrf.exempt  # type: ignore[untyped-decorator]
 @game_auth_required
@@ -746,7 +723,10 @@ def api_game_stage_detail():
     plain aggregations. Half-merged records (only one of the two sources ever
     arrived) store whatever they carry — every column but username is optional.
     A retransmitted StageComplete for a stage slot recorded within the last 2
-    minutes collapses into that row instead of adding a duplicate.
+    minutes collapses into that row instead of adding a duplicate; the two
+    halves of one run can also arrive in either order (a wrecked stage's detail
+    half follows its close-out ~15 s later), so repeats merge per field —
+    filling what the stored row lacks without wiping what it has.
     """
     data = request.get_json(silent=True) or {}
     user = g.game_user
@@ -882,8 +862,10 @@ def api_game_stage_detail():
 
     # The game can retransmit a StageComplete (observed at +15 s); when the
     # client buffer's timeout flushes a half row in between, one run arrives
-    # twice. Collapse repeats of the same stage slot within the window into one
-    # row — the more complete record (a merged snapshot+RPC beats any half) wins.
+    # twice — and for a wrecked stage the detail half (splits / flat index) is
+    # emitted AFTER its close-out half, so the halves of one run can land in
+    # either order. Collapse repeats of the same stage slot within the window
+    # into one row by merging per field below.
     existing = None
     if fields['challenge_id'] is not None:
         window_start = utcnow() - timedelta(seconds=120)
@@ -909,13 +891,23 @@ def api_game_stage_detail():
     same_run = existing is not None
     run_row = existing
     if same_run:
-        if _detail_rich_score(fields) > _detail_rich_score(existing):
-            for key, value in fields.items():
-                # A half record (no damage snapshot / no penalty detection)
-                # must not wipe data a more complete earlier record stored.
-                if key in ('comp_damage_json', 'penalties_ms') \
-                        and value is None and getattr(existing, key, None):
-                    continue
+        # Order-independent merge: fill what the stored row lacks, never wipe
+        # what it has. A zero/False from one half means "this half never
+        # carried the value" (the client drops missing pieces), so it must not
+        # overwrite real data the other half stored — and vice versa. Strings
+        # (splits, damage, input library) are adopted only when absent; a
+        # retransmit of identical data is a no-op.
+        for key, value in fields.items():
+            cur = getattr(existing, key, None)
+            if cur is None:
+                setattr(existing, key, value)
+            elif key == 'source_type' and cur == 'unknown' \
+                    and value not in (None, 'unknown'):
+                # The RPC-only half stores source_type='unknown'; let the
+                # datamining half's real type upgrade it.
+                setattr(existing, key, value)
+            elif isinstance(cur, (int, float)) and not cur and value:
+                # int/float covers bools too (0/1): keep the non-zero side.
                 setattr(existing, key, value)
     else:
         run_row = StageRun(username=user.username, **fields)
