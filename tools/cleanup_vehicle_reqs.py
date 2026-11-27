@@ -6,7 +6,7 @@ settings.scoring_type and settings.challenge_mode — so their served challenges
 fall back to the canonical club shape: ChallengeType=2 / ScoringType=2 /
 Mode=1 / Type=1 class requirement / UseInvVehicle=false (the shape that works).
 Type=0 requirements crash club challenges regardless of ChallengeType (see
-docs/PLAN.md item #13 final conclusion), so none of these keys may remain set.
+AGENTS.md backlog "Closed conclusions" - item #13; full text in docs/deploy_history.md), so none of these keys may remain set.
 Idempotent; prints before/after.
 
 Run on the VPS: /opt/dr3/.venv/bin/python /tmp/cleanup_vehicle_reqs.py

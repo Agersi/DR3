@@ -3,7 +3,7 @@
 per-pair differing byte ranges (with values) and the byte ranges constant
 across every stage of the group.
 
-Payload layout established 2026-10-26 (see docs/PLAN.md item #17): u32(3),
+Payload layout established 2026-10-26 (see docs/deploy_history.md, PLAN.md prune - item #17): u32(3),
 u32(1), 2 zero bytes, 6-byte setup-ID region (bytes 10-15; rally setups end
 '6772', RX setups end '746d'), dynamic per-stage byte 17, then float
 parameter regions.

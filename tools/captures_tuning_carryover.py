@@ -5,7 +5,7 @@ StageBegin request, then byte-diff every pair (decompressed payloads).
 
 If a rally->RX transition shows the game's StageBegin blob differing from the
 seeded previous-leg blob across parameter regions, the game replaced the
-setup on RX entry (see docs/PLAN.md item #17 for the 2026-10-24/26 evidence).
+setup on RX entry (see docs/deploy_history.md, PLAN.md prune - item #17, for the 2026-10-24/26 evidence).
 
 Usage:
   python captures_tuning_carryover.py 20261024-035137 20261024-035956 [more...]
