@@ -132,9 +132,11 @@ _LIVERY_FOR_VEHICLE: Dict[int, int] = {
 }
 
 # The game's internal rallycross tyre representation starts at compound 13
-# (observed on RX stages; rally compounds stay below it).  Such values are
-# invalid on rally cars: restoring them into a Progress entry makes the client
-# crash when loading the next stage or opening the Tires UI.
+# (observed on RX stages; rally compounds stay below it).  Tyre values are
+# only valid for their own discipline: restoring a rally value into an RX
+# stage — or an RX value into a rally stage — makes the client crash when
+# loading that stage.  Progress entries must therefore carry the game's
+# internal representation of the TARGET stage's discipline.
 _RX_TYRE_COMPOUND_MIN = 13
 
 _RX_VEHICLE_CLASSES = frozenset({
@@ -920,6 +922,21 @@ class RpcDispatcher:
         except (ValueError, AttributeError):
             return False
 
+    @staticmethod
+    def _leg_for_flat_index(legs: List[Dict[str, Any]],
+                            flat_index: int) -> Dict[str, Any]:
+        """The championship leg containing a flat (championship-wide) stage
+        index; the last leg when the index runs past the end."""
+        if not legs:
+            return {}
+        remaining = max(int(flat_index), 0)
+        for leg in legs:
+            count = len(leg.get("stages", []) or [])
+            if remaining < count:
+                return leg
+            remaining -= count
+        return legs[-1]
+
     def _build_subevent(self, wevt: Dict[str, Any], chal_id: int, ei: int,
                         ev: Dict[str, Any]) -> Optional[Event]:
         """Build one game Event (a championship sub-event); None if the
@@ -1158,6 +1175,7 @@ class RpcDispatcher:
             active_chal_id, layout, active, ep,
             carry_over=(mode == "multi"),
             prev_was_rx=prev_was_rx,
+            target_is_rx=self._leg_is_rx(wevt, events[active]),
             championship_time=(mode == "multi"),
             # Per-leg model: the game always sends EventIndex=0 (the served
             # challenge IS one leg).  Single-challenge model: the entry must
@@ -1242,6 +1260,7 @@ class RpcDispatcher:
         self, challenge_id: int, layout: List[int], active: int,
         ep: Optional[Dict[str, Any]], carry_over: bool = False,
         prev_was_rx: bool = False,
+        target_is_rx: bool = False,
         championship_time: bool = False,
         event_index: int = 0,
     ) -> Optional[Dict[str, Any]]:
@@ -1259,13 +1278,17 @@ class RpcDispatcher:
         game resumes into that car instead of showing the car-select screen
         again.  Rally Season legs are independent and never carry over.
 
-        Tyres are an exception: values reported by an RX stage (compound >=
-        13) are invalid on rally cars and crash the game when restored — in
-        the Tires button after an RX leg, or on stage load when resuming a
-        mid-leg RX stage in a rally car.  In both cases the seed falls back
-        to the same defaults upstream RaceNet seeds multi-rally entries with
-        (TyreCompound 7 / TyresRemaining 2); the game converts to its own RX
-        representation itself when an RX stage loads.
+        Tyres are discipline-relative: the game's internal RX representation
+        (compound >= 13) is valid on RX stages and invalid on rally stages,
+        and rally values are the other way round — restoring the wrong
+        discipline's values makes the client crash when loading the target
+        stage.  A RALLY target therefore falls back to the defaults upstream
+        RaceNet seeds multi-rally entries with (TyreCompound 7 /
+        TyresRemaining 2) whenever the persisted state carries RX values; an
+        RX target keeps the persisted values verbatim, because those ARE the
+        game's own internal representation for the stage (verified 2026-11-27:
+        resuming a mid-leg RX stage in a rally car with rally values crashed
+        the client on load, while the same state served as-is loaded fine).
 
         With ``championship_time`` (Multi-Location Rally), ChampTimeMs is the
         running championship total instead of this leg's own stages (backlog
@@ -1286,9 +1309,11 @@ class RpcDispatcher:
             last = completed[completed_count - 1]
             state_entry = self._last_state_entry(completed)
             vehicle_id, livery_id = self._carry_vehicle(completed)
-            if prev_was_rx:
-                # RX stage tyre values are invalid on rally tracks — seed the
-                # upstream defaults instead (see docstring).
+            if prev_was_rx and not target_is_rx:
+                # Rally target after an RX leg: the persisted state carries
+                # the game's internal RX tyre values, which are invalid on
+                # rally stages — seed the upstream defaults instead (see
+                # docstring).  A back-to-back RX leg keeps them verbatim.
                 tyre_compound, tyres_remaining = 7, 2
             else:
                 tyre_compound = int(state_entry.get("tyre_compound", 0) or 7)
@@ -1323,11 +1348,14 @@ class RpcDispatcher:
         tyre_compound = int(state_entry.get("tyre_compound", 0) or 7)
         tyres_remaining = int(state_entry.get("tyres_remaining", 0) or 2)
         if (tyre_compound >= _RX_TYRE_COMPOUND_MIN
-                and not self._vehicle_is_rx(vehicle_id)):
-            # Mid-leg resume of an RX stage in a rally car: the persisted
-            # state carries the game's internal RX tyre values, which crash
-            # the client on load.  Seed the upstream defaults instead — the
-            # game converts to its own RX representation when the stage loads.
+                and not self._vehicle_is_rx(vehicle_id)
+                and not target_is_rx):
+            # Rally target: the persisted state carries the game's internal
+            # RX tyre values, which are invalid on rally stages — seed the
+            # upstream defaults (see docstring).  An RX target keeps the
+            # persisted values verbatim: they ARE the game's own internal
+            # representation for a rally car on an RX stage, and resuming
+            # with rally values instead crashes the client on load.
             tyre_compound, tyres_remaining = 7, 2
         return self._build_progress_dict(
             challenge_id=challenge_id,
@@ -1757,7 +1785,9 @@ class RpcDispatcher:
             if not completed_stages:
                 continue
 
-            total_stages_in_event = len(evt.get("stages", []))
+            legs = self._events_of(evt)
+            total_stages_in_event = sum(
+                len(leg.get("stages", []) or []) for leg in legs)
             all_done = (
                 total_stages_in_event > 0
                 and len(completed_stages) >= total_stages_in_event
@@ -1776,10 +1806,16 @@ class RpcDispatcher:
             vehicle_id, livery_id = self._carry_vehicle(completed_stages)
             tyre_compound = int(state_entry.get("tyre_compound", 0) or 7)
             tyres_remaining = int(state_entry.get("tyres_remaining", 0) or 2)
+            target_is_rx = self._leg_is_rx(
+                evt, self._leg_for_flat_index(legs, stage_index_out))
             if (tyre_compound >= _RX_TYRE_COMPOUND_MIN
-                    and not self._vehicle_is_rx(vehicle_id)):
-                # Same guard as _multi_event_progress: internal RX tyre
-                # values crash a rally car on stage load / Tires UI.
+                    and not self._vehicle_is_rx(vehicle_id)
+                    and not target_is_rx):
+                # Same rule as _multi_event_progress: the persisted state
+                # carries the game's internal RX tyre values, which are
+                # invalid on RALLY stages — seed the upstream defaults.  An
+                # RX target keeps them verbatim (the game's own
+                # representation for that stage).
                 tyre_compound, tyres_remaining = 7, 2
 
             progress.append(self._build_progress_dict(

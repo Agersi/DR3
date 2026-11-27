@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.88**
+- Fixed a crash that could happen when rejoining an event at a rallycross stage while driving a rally car.
+
 **v0.1.87**
 - The website leaderboard now shows penalties for official dailies, weeklies, monthlies and time trials too.
 
