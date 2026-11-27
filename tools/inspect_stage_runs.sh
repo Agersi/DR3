@@ -25,7 +25,7 @@ if flt == 'results-dnf':
     import json as _json
     cur.execute("""SELECT r.event_id, r.username, r.stages_json
         FROM club_results r JOIN events e ON e.id = r.event_id
-        WHERE e.type='club'""")
+        WHERE e.club_id IS NOT NULL""")
     for ev_id, uname, sj in cur.fetchall():
         try:
             stages = _json.loads(sj) if sj else []
