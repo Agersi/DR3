@@ -3876,6 +3876,20 @@ def main() -> int:
     html = r.get_data(as_text=True)
     check('subpath: root-level routes still resolve', r.status_code == 200, f'status={r.status_code}')
     check('subpath: links are /rally-prefixed', '/rally/login' in html and 'href="/login"' not in html)
+    # SEO URLs must carry the /rally prefix exactly once (SITE_URL already
+    # includes it; SCRIPT_NAME adds it again per-request).
+    html = c2.get('/').get_data(as_text=True)
+    check('subpath: canonical + og URLs never double the /rally prefix',
+          'byagersi.com/rally/rally' not in html
+          and 'rel="canonical" href="https://byagersi.com/rally/"' in html, '')
+    r = c2.get('/robots.txt')
+    check('subpath: robots sitemap URL keeps a single /rally',
+          b'Sitemap: https://byagersi.com/rally/sitemap.xml' in r.data,
+          r.get_data(as_text=True)[:120])
+    r = c2.get('/sitemap.xml')
+    check('subpath: sitemap loc URLs keep a single /rally',
+          b'byagersi.com/rally/rally' not in r.data
+          and b'<loc>https://byagersi.com/rally/</loc>' in r.data, '')
     r = c2.post('/login', data={'username': 'smokedriver', 'password': 'wrongpass'},
                 follow_redirects=False)
     check('subpath: redirects are /rally-prefixed',
@@ -4039,6 +4053,43 @@ def main() -> int:
             event_id='smoke-home-dmg-event', username='homedmglr',
             flat_stage_index=0, comp_damage_json=json.dumps(_hd_dmg)))
         db.session.commit()
+
+    # SEO: meta description / canonical / OG card, noindex on private pages,
+    # robots.txt + sitemap.xml.
+    home_html = client.get('/').get_data(as_text=True)
+    check('seo: home has description, canonical + og card',
+          'name="description"' in home_html and 'rel="canonical"' in home_html
+          and '/static/og-card.png' in home_html
+          and 'property="og:type" content="website"' in home_html
+          and 'name="twitter:card" content="summary_large_image"' in home_html, '')
+    check('seo: footer brand line',
+          'DR3 — A Community Club Server for DiRT Rally 2.0' in home_html, '')
+    check('seo: auth pages noindex, public pages indexable',
+          'noindex' in client.get('/login').get_data(as_text=True)
+          and 'noindex' in client.get('/register').get_data(as_text=True)
+          and 'noindex' not in client.get('/clubs').get_data(as_text=True), '')
+    client.post('/login', data={'username': 'smokedriver', 'password': 'password123'})
+    check('seo: dashboard noindex when logged in',
+          'noindex' in client.get('/dashboard').get_data(as_text=True), '')
+    with app.app_context():
+        _seo_club = _AjClub.query.filter_by(id='club-autojoin-test').first()
+        _seo_club.description = 'Smoke club for testing auto-join.'
+        db.session.commit()
+    cd_html = client.get('/clubs/club-autojoin-test').get_data(as_text=True)
+    check('seo: club page meta description uses the club description',
+          'name="description" content="Smoke club for testing auto-join."' in cd_html, '')
+    r = client.get('/robots.txt')
+    check('seo: robots.txt allows all + points at the sitemap',
+          r.status_code == 200 and b'User-agent: *' in r.data
+          and b'Sitemap:' in r.data and b'/sitemap.xml' in r.data,
+          f'status={r.status_code}')
+    r = client.get('/sitemap.xml')
+    sm = r.get_data(as_text=True)
+    check('seo: sitemap lists main pages, clubs + vehicles',
+          r.status_code == 200 and '<urlset' in sm and '</urlset>' in sm
+          and '/clubs/club-autojoin-test</loc>' in sm
+          and '/leaderboard</loc>' in sm and 'vehicles?vehicle=' in sm,
+          f'status={r.status_code}')
 
     print()
     if failures:

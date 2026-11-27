@@ -13,6 +13,16 @@ def _load_dotenv(path: str) -> None:
             os.environ.setdefault(key.strip(), val.strip())
 
 
+def split_site_url(site_url: str, script_root: str) -> tuple[str, str]:
+    """(base, root) for building absolute URLs. SITE_URL may already end with
+    the subpath that also arrives as SCRIPT_NAME (production runs under
+    /rally) — strip it so the prefix is never doubled."""
+    base = site_url.rstrip('/')
+    if script_root and base.endswith(script_root):
+        base = base[: -len(script_root)]
+    return base, script_root
+
+
 class Config:
     SECRET_KEY: str = os.environ['SECRET_KEY']
     DATABASE_URL: str = os.environ.get(

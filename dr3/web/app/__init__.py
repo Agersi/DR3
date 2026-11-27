@@ -5,7 +5,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from flask import Flask, g
+from flask import Flask, g, request, url_for
 from flask_wtf import CSRFProtect
 from markupsafe import Markup
 
@@ -16,6 +16,21 @@ GITHUB_URL = 'https://github.com/Agersi/DR3'
 TWITCH_URL = 'https://www.twitch.tv/agersi'
 KO_FI_URL = 'https://ko-fi.com/agersi'
 DISCORD_URL = 'https://discord.com/invite/U3h9dWGgGY'
+
+# Default <meta description> / og:description fallback for every page.
+SITE_DESCRIPTION = (
+    'DR3 is a free, open-source community club server for DiRT Rally 2.0 — '
+    'join clubs, run multi-location rallies and rally seasons, and track '
+    'your best stage times.'
+)
+
+# Endpoints whose pages search engines may index; every other endpoint
+# (auth, account, dashboard, championship builder, APIs) renders noindex.
+INDEXABLE_ENDPOINTS = {
+    'pages.home', 'clubs.clubs_list', 'clubs.club_detail', 'pages.leaderboard',
+    'pages.vehicles_index', 'pages.drivers', 'pages.profile', 'pages.install',
+    'pages.about',
+}
 
 
 def _parse_dt(value):
@@ -153,6 +168,25 @@ def create_app() -> Flask:
         """Absolute site base (SITE_URL minus trailing slash) so templates can
         build shareable full URLs without trusting the proxied request host."""
         return {'site_url': app.config['SITE_URL'].rstrip('/')}
+
+    @app.context_processor
+    def inject_seo():
+        """SEO head values: default meta description, canonical URL (SITE_URL
+        + subpath + path), the robots noindex flag for non-indexable
+        endpoints, and the default social share card. Views may override
+        og_image/og_image_width/og_image_height in the template context for
+        richer cards (the vehicle page passes its car photo)."""
+        from .config import split_site_url  # local: Config reads env at import time
+
+        base, root = split_site_url(app.config['SITE_URL'], request.script_root)
+        return {
+            'site_description': SITE_DESCRIPTION,
+            'canonical_url': base + root + request.path,
+            'seo_noindex': request.endpoint not in INDEXABLE_ENDPOINTS,
+            'og_card_url': url_for('static', filename='og-card.png', _external=True),
+            'og_card_width': 1200,
+            'og_card_height': 630,
+        }
 
     from .game_api import game_api_bp
     from .pages import register_page_blueprints

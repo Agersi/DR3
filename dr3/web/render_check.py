@@ -43,7 +43,8 @@ def main() -> int:
                   ('/about', 200), ('/login', 200), ('/register', 200),
                   ('/forgot_password', 200), ('/vehicles', 200), ('/cars', 302), ('/leaderboard', 200),
                   ('/static/css/style.css', 200),
-                  ('/static/logo.png', 200), ('/nope', 404)]
+                  ('/static/logo.png', 200), ('/static/og-card.png', 200),
+                  ('/robots.txt', 200), ('/sitemap.xml', 200), ('/nope', 404)]
     for path, want in anon_pages:
         r = client.get(path)
         check(f'anon GET {path}', r.status_code == want, f'status={r.status_code}')

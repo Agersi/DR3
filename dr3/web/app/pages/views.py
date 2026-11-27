@@ -15,6 +15,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    Response,
     send_file,
     session,
     url_for,
@@ -38,6 +39,7 @@ from ..clubs import (
     set_club_invites,
     set_pending_requests,
 )
+from ..config import split_site_url
 from ..db import db
 from ..events import (
     entries_for_event,
@@ -920,7 +922,20 @@ def vehicles_index():
     if selected is None and groups:
         selected = groups[0][1][0][0]
     data = _car_page_data(selected) if selected is not None else {}
-    return render_template('car.html', car_groups=groups, **data)
+    ctx: dict = {}
+    if selected is not None:
+        # Each ?vehicle= view has unique content — give it its own canonical
+        # URL and use the car photo as the social share image.
+        ctx['canonical_url'] = url_for(
+            'pages.vehicles_index', vehicle=selected, _external=True)
+        img = data.get('image_url') or ''
+        if img:
+            base, root = split_site_url(
+                current_app.config['SITE_URL'], request.script_root)
+            ctx['og_image'] = base + root + img
+            ctx['og_image_width'] = 736
+            ctx['og_image_height'] = 347
+    return render_template('car.html', car_groups=groups, **data, **ctx)
 
 
 @pages_bp.route('/vehicles/<int:vehicle_id>')
@@ -1235,6 +1250,34 @@ def download_client():
 @pages_bp.route('/about')
 def about():
     return render_template('about.html')
+
+
+@pages_bp.route('/robots.txt')
+def robots_txt():
+    base, root = split_site_url(current_app.config['SITE_URL'], request.script_root)
+    body = ('User-agent: *\nAllow: /\n\n'
+            f'Sitemap: {base}{root}/sitemap.xml\n')
+    return Response(body, mimetype='text/plain')
+
+
+@pages_bp.route('/sitemap.xml')
+def sitemap_xml():
+    """Indexable pages: the static ones, every publicly visible club and
+    every catalog vehicle (?vehicle= views carry unique content)."""
+    from ..clubs import club_is_visible_to
+    from ..scoring import VEHICLES
+
+    base, root = split_site_url(current_app.config['SITE_URL'], request.script_root)
+    urls = ['/', '/clubs', '/leaderboard', '/vehicles', '/drivers',
+            '/install', '/about']
+    urls += [f'/clubs/{c.id}' for c in Club.query.all()
+             if club_is_visible_to(c, None)]
+    urls += [f'/vehicles?vehicle={vid}' for vid in sorted(VEHICLES)]
+    items = ''.join(f'<url><loc>{base}{root}{u}</loc></url>' for u in urls)
+    body = ('<?xml version="1.0" encoding="UTF-8"?>'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            f'{items}</urlset>')
+    return Response(body, mimetype='application/xml')
 
 
 @pages_bp.app_errorhandler(404)

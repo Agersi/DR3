@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ club.name }} — DR3{% endblock %}
+{% block meta_description %}{{ (club.description or site_description)|truncate(160) }}{% endblock %}
 {% block content %}
 {% set logged_in = session.get('user_id') %}
 
