@@ -719,6 +719,31 @@ def main() -> int:
           and _d2.camera_position == 'bonnet' and _d2.player_finished is False,
           f'row={_d2}')
 
+    # Wrecked-stage half (v0.1.93): the dispatcher feeds the wrecked stage's
+    # own key with PARTIAL splits — fewer segments than a clean finish, only
+    # the split points the car actually reached — plus its flat ordinal, so
+    # the board row exists and shows completed sectors on a terminal damage.
+    r = client.post('/api/game/stage-detail', headers=headers, json={
+        'challenge_id': 900006, 'event_index': 0, 'stage_index': 1,
+        'vehicle_id': 565, 'event_id': 'evt-smoke', 'race_status': 4,
+        'splits': [38.214, 41.902], 'flat_stage_index': 7,
+    })
+    check('stage-detail wrecked-stage half ok', (r.get_json() or {}).get('ok') is True)
+    with app.app_context():
+        from app.models import StageRun
+        _d3 = (db.session.query(StageRun)
+               .filter_by(username='smokedriver', challenge_id=900006,
+                          stage_index=1).first())
+    check('stage-detail: wrecked row stores partial splits + flat index',
+          _d3 is not None and json.loads(_d3.splits_json) == [38.214, 41.902]
+          and _d3.flat_stage_index == 7 and _d3.player_finished is False,
+          f'row={_d3}')
+    # Wipe the probe row so later global StageRun count pins stay intact.
+    with app.app_context():
+        from app.models import StageRun as _SR4
+        db.session.query(_SR4).filter_by(challenge_id=900006).delete()
+        db.session.commit()
+
     # A clean stage-detail finish files the driver's personal best for car +
     # track + conditions (the PostTime usually lands first with the ghost at the
     # same ms; here it arrives alone, so no ghost — the splits ride along).
@@ -1095,6 +1120,13 @@ def main() -> int:
     check('midleg: closed-out stage flagged DNF', st1.get('race_status') == 5, str(st1)[:200])
     check('midleg: total keeps the limit value only once',
           e0.get('total_time_ms') == 900000, str(e0.get('total_time_ms')))
+    # The wrecked stage was actually driven (its pre-persist moment survives);
+    # the closed-out fill-in stage was never on stage and gets no submitted_at,
+    # so it stays out of recent times.
+    check('midleg: wrecked stage keeps its pre-persist timestamp',
+          bool(st0.get('submitted_at')), str(st0)[:200])
+    check('midleg: closed-out fill-in stage gets no submitted_at (recent-times filter)',
+          not st1.get('submitted_at'), str(st1)[:200])
 
     with app.app_context():
         from app import scoring
@@ -1183,6 +1215,13 @@ def main() -> int:
           st2.get('time_ms', 0) == 0 and 'race_status' not in st2, str(st2)[:200])
     check('skip: total sums both limits once each',
           e0.get('total_time_ms') == 1800000, str(e0.get('total_time_ms')))
+    # The plan's first entry (the wrecked stage) carries a submission moment —
+    # the terminal-damage card source; skipped fill-ins get none and stay out
+    # of recent times.
+    check('skip: wrecked stage carries a submitted_at (driven)',
+          bool(st0.get('submitted_at')), str(st0)[:200])
+    check('skip: skipped fill-in stage gets no submitted_at (recent-times filter)',
+          not st1.get('submitted_at'), str(st1)[:200])
 
     r = client.get('/api/game/my-progress', headers=headers)
     j = r.get_json() or {}
@@ -1338,6 +1377,13 @@ def main() -> int:
           f'{st2} {st3}')
     check('crossleg: total sums all three limits once each',
           e0.get('total_time_ms') == 2700000, str(e0.get('total_time_ms')))
+    # Only the wrecked stage (the plan's first entry) carries a submission
+    # moment; the later-leg fill-ins were never driven.
+    check('crossleg: wrecked stage carries a submitted_at',
+          bool(st1.get('submitted_at')), str(st1)[:200])
+    check('crossleg: later-leg fill-ins get no submitted_at (recent-times filter)',
+          not st2.get('submitted_at') and not st3.get('submitted_at'),
+          f'{st2} {st3}')
 
     r = client.get('/api/game/my-progress', headers=headers)
     j = r.get_json() or {}
@@ -1355,6 +1401,44 @@ def main() -> int:
         db.session.query(Event).filter(
             Event.id.in_([eid2, eid3, eid4, eid5, eid6])).delete()
         db.session.commit()
+
+    # 7f. Terminal-damage split capture (v0.1.93): a wrecked stage leaves an
+    # open telemetry buffer — claimed as a partial run whose per-segment times
+    # resolve only the split points the car actually reached, plus one partial
+    # segment to the wreck clock (no scaling: a DNF has no official total).
+    from dr2server.telemetry import TelemetryListener as _TL
+
+    def _pkt(clock, dist, track_len=1000.0):
+        v = [0.0] * 66
+        v[1] = float(clock)
+        v[2] = float(dist)
+        v[61] = float(track_len)
+        return tuple(v)
+
+    _tl = _TL()
+    # Start-zone dwell, then a drive to 600 m of a 1000 m stage — the clock is
+    # dist/100, so the split points at 250 m and 500 m are crossed at 2.5 s and
+    # 5.0 s; the wreck never reaches the finish zone (990 m+).
+    for _c, _d in ((0.0, 0.0), (0.05, 5.0), (1.0, 100.0), (2.5, 250.0),
+                   (4.0, 400.0), (5.0, 500.0), (6.0, 600.0)):
+        _tl._on_sample(1700000000.0 + _c, _pkt(_c, _d))
+    _prun = _tl.take_open_run()
+    check('telemetry: open buffer claimed as a partial run',
+          _prun is not None and len(_prun.samples) == 7
+          and _prun.total_time_s == 6.0 and _prun.track_length_m == 1000.0,
+          f'run={_prun}')
+    check('telemetry: open buffer claimed once', _tl.take_open_run() is None)
+    segs = _prun.partial_segment_times(4) if _prun else None
+    check('telemetry: partial splits = crossed points to the wreck',
+          segs == [2.5, 2.5], str(segs))
+    # Wreck before the first split point: one partial segment to the wreck clock.
+    _tl2 = _TL()
+    for _c, _d in ((0.0, 0.0), (1.0, 100.0), (2.0, 200.0)):
+        _tl2._on_sample(1700000000.0 + _c, _pkt(_c, _d))
+    _prun2 = _tl2.take_open_run()
+    segs2 = _prun2.partial_segment_times(4) if _prun2 else None
+    check('telemetry: wreck before first split point is one partial segment',
+          segs2 == [2.0], str(segs2))
 
     # 7b. client-version endpoint (source of the client's update banner)
     ver_file = HERE.parent / 'dist' / 'VERSION.txt'

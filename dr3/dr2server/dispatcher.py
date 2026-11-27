@@ -3809,6 +3809,8 @@ class RpcDispatcher:
             except Exception as exc:
                 print(f"[STAGE] api_client.submit_stage() raised: {exc}")
         elif not finished_cleanly:
+            dnf_stages = None
+            dnf_stage_index = None
             if event_id and self.api_client is not None:
                 try:
                     # time_ms=0 is ignored by the web side for markers — the
@@ -3858,6 +3860,51 @@ class RpcDispatcher:
             else:
                 print(f"[STAGE] Not submitting (DNF close-out: race_status={req.race_status}, "
                       f"recov_to_service={bool(req.recov_to_service)})")
+
+            # The close-out half above is keyed on the game's close-out stage
+            # with flat_stage_index=None — invisible to boards. Feed a second
+            # half keyed on the wrecked stage so its board row exists: partial
+            # telemetry splits up to the wreck + the computed flat ordinal that
+            # correlates it with results.stages_json (input/camera/tyre columns
+            # fill from the same row when the game's StageEnded snapshot for
+            # this stage arrives). When k IS the close-out stage both halves
+            # merge into one row.
+            if (self.stage_detail is not None and event_id
+                    and dnf_stage_index is not None):
+                try:
+                    k = int(dnf_stage_index)
+                    ws_splits = None
+                    if self.telemetry is not None:
+                        open_run = self.telemetry.take_open_run()
+                        if open_run is not None and not open_run.has_wrap():
+                            profile = self._stage_split_profile(
+                                event_id, sub_index, k)
+                            if profile is not None:
+                                ws_splits = open_run.partial_segment_times(
+                                    profile[2])
+                    self.stage_detail.merge_rpc(
+                        (req.challenge_id, req.event_index, k),
+                        {
+                            "challenge_id": req.challenge_id,
+                            "event_index": req.event_index,
+                            "stage_index": k,
+                            "vehicle_id": req.vehicle_id or None,
+                            "livery_id": req.livery_id or None,
+                            "race_status": req.race_status if req.race_status else 4,
+                            "meters_driven": req.meters_driven or None,
+                            "distance_driven": req.distance_driven or None,
+                            "using_wheel": bool(req.using_wheel),
+                            "using_assists": bool(req.using_assists),
+                            "comp_damage": dmg_dict,
+                            "event_id": event_id,
+                            "splits": ws_splits,
+                            "flat_stage_index": (self._stage_offset(event_id, sub_index)
+                                                 + k),
+                        })
+                    print(f"[STAGE] wrecked-stage detail fed (stage={k} "
+                          f"splits={'yes' if ws_splits else 'no'})")
+                except Exception as exc:
+                    print(f"[STAGE] wrecked-stage detail feed failed: {exc}")
         elif not event_id:
             print(f"[STAGE] Cannot submit — no event_id available")
 

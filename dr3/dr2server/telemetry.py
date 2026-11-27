@@ -324,6 +324,55 @@ class StageRun:
             return None
         return segs
 
+    def partial_segment_times(self, n: int) -> Optional[List[float]]:
+        """Per-segment times (seconds) for a run that ended BEFORE the finish —
+        a terminal-damage close-out. Resolves as many of the ``n`` evenly-spaced
+        split points as the car actually reached and returns one segment per
+        crossed boundary (1..n long, shorter than a clean finish's list), each
+        anchored at the previous boundary's clock with the first at clock 0.
+        When no split point was reached the whole partial run is a single
+        segment to the wreck clock. No scaling: a DNF has no official total to
+        sum to (the stored time is the stage limit, not the driving time)."""
+        if n <= 0 or len(self.samples) < 2:
+            return None
+        length = self.track_length_m
+        if length <= 0:
+            return None
+        try:
+            ic = TELEMETRY_FIELDS.index(F_STAGE_TIME)
+            idist = TELEMETRY_FIELDS.index(F_DIST)
+        except ValueError:
+            return None
+
+        run = [(s[idist], s[ic]) for s in self.samples]
+
+        def crossing(target_dist: float) -> float:
+            """Stage clock when the car first reaches target_dist (linear
+            interpolation between the two samples straddling it)."""
+            for i in range(1, len(run)):
+                d0, c0 = run[i - 1]
+                d1, c1 = run[i]
+                if d1 >= target_dist >= d0 or (i == 1 and d0 >= target_dist):
+                    if d1 == d0:
+                        return c1
+                    f = max(0.0, min(1.0, (target_dist - d0) / (d1 - d0)))
+                    return c0 + (c1 - c0) * f
+            return run[-1][1]
+
+        maxd = max(d for d, _c in run)
+        pts = [0.0]
+        for i in range(1, n + 1):
+            b = length * i / n
+            if maxd >= b:
+                pts.append(crossing(b))
+        if len(pts) == 1:
+            # No split point reached — one partial segment to the wreck clock.
+            return [float(run[-1][1])]
+        segs = [pts[i + 1] - pts[i] for i in range(len(pts) - 1)]
+        if any(t < 0 for t in segs):
+            return None
+        return segs
+
     def has_wrap(self, threshold: float = 25.0) -> bool:
         """True when distance jumps backwards by more than ``threshold`` metres
         between consecutive samples — the signature of a multi-lap circuit whose
@@ -617,3 +666,30 @@ class TelemetryListener:
             if not self._completed:
                 return None
             return self._completed.pop()
+
+    def take_open_run(self) -> Optional[StageRun]:
+        """Claim and return the run still being built — a stage abandoned
+        before its finish-zone crossing (terminal damage). Its samples cover
+        everything recorded since the start-zone transition; total_time_s is
+        the last sample's stage clock. The buffer is cleared so it can't be
+        claimed twice or leak into the next stage's run. None when no buffer
+        is open (telemetry off, or the wrecked stage never entered its start
+        zone)."""
+        with self._lock:
+            buf = self._buffer
+            if not buf:
+                return None
+            try:
+                ic = TELEMETRY_FIELDS.index(F_STAGE_TIME)
+            except ValueError:
+                return None
+            run = StageRun(
+                start_wall=self._run_start_wall,
+                finish_wall=time.time(),
+                total_time_s=float(buf[-1][ic]),
+                track_length_m=self._track_len,
+                samples=list(buf),
+                penalty_s=self._buffer_penalty_s,
+            )
+            self._buffer = None
+        return run

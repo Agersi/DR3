@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.93**
+- Your completed split times now show on the website even when a stage ends in terminal damage.
+
 **v0.1.92**
 - Fixed a rare case where a car's livery selection could be reset after visiting the garage with a damaged car.
 

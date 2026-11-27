@@ -578,7 +578,9 @@ def api_game_stage_complete():
                     targets.append((p, max(0, t)))
         if not targets:
             # Legacy single-marker shape (older clients / unresolved plan):
-            # flag the close-out stage and, when given, the wrecked one.
+            # flag the close-out stage and, when given, the wrecked one. The
+            # wrecked stage leads — it is the only entry that was actually
+            # driven (see the submitted_at rule below).
             targets.append((pos, 0))
             dnf_local = data.get('dnf_stage_index')
             if dnf_local is not None:
@@ -587,7 +589,7 @@ def api_game_stage_complete():
                 except (TypeError, ValueError):
                     dnf_pos = -1
                 if 0 <= dnf_pos < pos:
-                    targets.append((dnf_pos, 0))
+                    targets.insert(0, (dnf_pos, 0))
         vid = None
         # A service-area retirement happens BEFORE any stage-begin capture, so
         # the entries may have no vehicle data at all — the close-out payload
@@ -596,7 +598,7 @@ def api_game_stage_complete():
         sent_vid = data.get('vehicle_id') or None
         sent_liv = data.get('livery_id') or None
         sent_nat = data.get('nationality_id') or None
-        for p, t in targets:
+        for idx, (p, t) in enumerate(targets):
             while len(stages) <= p:
                 stages.append(
                     {'time_ms': 0, 'penalties_ms': 0, 'submitted_at': None})
@@ -612,11 +614,13 @@ def api_game_stage_complete():
             if not entry.get('nationality_id') and sent_nat:
                 entry['nationality_id'] = sent_nat
             entry['race_status'] = rs
-            # Markers carry no submitted_at of their own, but the home page's
-            # "days without a terminal damage" card only counts entries that
-            # have one — stamp the close-out moment (a real submission's
-            # timestamp is never overwritten).
-            if not entry.get('submitted_at'):
+            # The home page's "days without a terminal damage" card only counts
+            # entries that have a submitted_at — stamp the close-out moment on
+            # the wrecked stage (the plan's first entry; a real pre-persisted
+            # timestamp is never overwritten) but NOT on the skipped fill-in
+            # stages: they were never driven and must not surface in recent
+            # times.
+            if idx == 0 and not entry.get('submitted_at'):
                 entry['submitted_at'] = utcnow().isoformat()
             if t > 0 and not (entry.get('time_ms', 0) or 0):
                 entry['time_ms'] = t
