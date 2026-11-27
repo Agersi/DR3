@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.92**
+- Fixed a rare case where a car's livery selection could be reset after visiting the garage with a damaged car.
+
 **v0.1.91**
 - Reverted the rallycross rejoin changes from the recent versions — behavior is back to how it was before them.
 

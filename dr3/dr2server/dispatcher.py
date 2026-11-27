@@ -322,7 +322,7 @@ class RpcDispatcher:
             "Repairs.PurchaseTuning": self._repairs_fit_tuning,
             "Repairs.PurchaseUpgrade": self._repairs_fit_tuning,
             "Repairs.PerformRepairs": self._repairs_perform,
-            "Repairs.ApplyDamage": self._repairs_set_livery,
+            "Repairs.ApplyDamage": self._repairs_apply_damage,
             # No upstream capture yet for these; the result-0 ack clears the
             # connection-failed screen.  Revisit with a capture if the client
             # rejects the ack for a store purchase / sale.
@@ -2863,6 +2863,16 @@ class RpcDispatcher:
             "CompDamage": comp_damage,
             "NewSellPrice": 0,
         }
+
+    def _repairs_apply_damage(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        # The game syncs a vehicle instance's damage state (VehicleInstId +
+        # CompDamage) when the garage shows a damaged car. Real upstream answers
+        # with an EMPTY vdic and does nothing else (Saved Captures/
+        # Repairs.ApplyDamage.json), so mirror that exactly. Must NOT be routed
+        # through _repairs_set_livery: that handler would read the absent
+        # LiveryId as 0 and reset the car's persisted garage livery on every call.
+        # The damage shown on the website comes from StageComplete.CompDamage.
+        return {"ok": True}
 
     def _get_challenges(self, params: Dict[str, Any]) -> Union[Dict[str, Any], bytes]:
         """Serve the Events page (RaceNetChallenges.GetChallenges).
