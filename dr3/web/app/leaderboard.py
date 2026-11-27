@@ -187,6 +187,7 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
     best still points at a stored run — legacy rows without a run_id are
     dropped whenever any such filter is on.
     """
+    from . import _timeago
     from .db import db
     from .models import StageRun, TimeTrialEntry, User
 
@@ -371,6 +372,7 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
             'car_name': car_name,
             'car_class': car_class,
             'time_ms': e.stage_time_ms or 0,
+            'submitted_at': e.submitted_at,
             'compound': int(e.tyre_compound) if e.tyre_compound else None,
             'spares': _spare_tyres(se),
             # Club rows: the club_results stage entry (time + repair).
@@ -449,6 +451,7 @@ def best_times_board(track, vehicle_id, *, vehicle_ids=None, conditions=None,
                        + [None] * split_count)[:split_count],
             'tyre_damage': r['tyre_damage'],
             'conditions_label': r['conditions_label'],
+            'at_text': _timeago(r['submitted_at']) if r['submitted_at'] else '',
         })
     return {'rows': rows, 'count': len(rows), 'split_count': split_count,
             'split_word': 'Lap' if is_rx else 'Split', 'is_rx': is_rx}

@@ -958,6 +958,22 @@ def main() -> int:
           and '<td class="num pen-col"><span class="ink">—</span></td>' in lb0,
           '')
 
+    # Damage popup timestamp: each board row carries how long ago its best was
+    # set (TimeTrialEntry.submitted_at; refreshed by every new best). Backdate
+    # the producing rows a fixed 3h so the rendered text is deterministic.
+    with app.app_context():
+        from datetime import timedelta
+        from app.models import TimeTrialEntry as _BestAt
+        _at_rows = db.session.query(_BestAt).filter(
+            _BestAt.track == '620', _BestAt.vehicle_id == 566).all()
+        for _e in _at_rows:
+            _e.submitted_at = utcnow() - timedelta(hours=3)
+        db.session.commit()
+    lb_at = client.get('/leaderboard?stage=620&car=566').get_data(as_text=True)
+    check('leaderboard: tyre cell carries the time-set timestamp for the popup',
+          bool(_at_rows) and 'data-at="3h ago"' in lb_at,
+          f'rows={len(_at_rows)}')
+
     # Account page: favorite pickers + profile stat visibility checkboxes.
     r = client.get('/account')
     acc_html = r.get_data(as_text=True)

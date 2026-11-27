@@ -141,7 +141,7 @@
         <td>{{ flag_img(r.flag_url) }}<a class="driver-link" href="{{ url_for('pages.profile', username=r.username) }}">{{ r.display_name }}</a></td>
         <td class="car-cell car-col">{% set cthumb = class_thumb_url(r.car_class) %}{% if cthumb %}<img class="class-thumb" src="{{ cthumb }}" alt="" loading="lazy" data-tip="{{ r.car_class }}"> {% endif %}{% if r.car_url %}<a class="driver-link" href="{{ r.car_url }}">{{ r.car_name }}</a>{% else %}{{ r.car_name }}{% endif %}</td>
         <td class="num deg-col">{% if r.degrad_text %}{{ r.degrad_text }}{% else %}<span class="ink">—</span>{% endif %}</td>
-        <td class="tyre-cell" data-tyres="{{ r.tyres|tojson }}" data-td="{{ r.tyre_damage|tojson|forceescape }}" data-cond="{{ r.conditions_label or '' }}"></td>
+        <td class="tyre-cell" data-tyres="{{ r.tyres|tojson }}" data-td="{{ r.tyre_damage|tojson|forceescape }}" data-cond="{{ r.conditions_label or '' }}" data-at="{{ r.at_text or '' }}"></td>
         <td class="spare-cell num" data-spares="{{ '' if r.spares is none else r.spares }}"></td>
         <td class="input-cell" data-input="{{ r.input or '' }}" data-vr="{{ '1' if r.vr else '' }}" data-assists="{{ '1' if r.assists else '' }}"></td>
         <td class="cam-cell" data-camera="{{ r.camera or '' }}"></td>
@@ -424,7 +424,7 @@
     }).join('') + '</div>';
   }
 
-  function renderDmg(tyres, idx, entry, cond) {
+  function renderDmg(tyres, idx, entry, cond, at) {
     var t = (tyres || [])[idx];
     var title = tyreName(TYRE_FILE[t] || '#_unknown');
     var d = entry && entry.d;
@@ -438,8 +438,9 @@
     // The line shows only the stored weather condition; it is omitted
     // entirely when the run has no mapped conditions id.
     var condLine = cond ? '<div class="dmg-cond">' + esc(cond) + '</div>' : '';
+    var atSpan = at ? '<span class="dmg-stage">Set ' + esc(at) + '</span>' : '';
     dmg.innerHTML =
-      '<div class="dmg-head"><span class="dmg-title">Tyres: ' + esc(title) + '</span></div>' +
+      '<div class="dmg-head"><span class="dmg-title">Tyres: ' + esc(title) + '</span>' + atSpan + '</div>' +
       body + condLine;
   }
 
@@ -463,7 +464,8 @@
       JSON.parse(td.dataset.tyres || '[]'),
       idx,
       (JSON.parse(td.dataset.td || '[]'))[idx],
-      td.dataset.cond || ''
+      td.dataset.cond || '',
+      td.dataset.at || ''
     );
     dmgTarget = el;
     dmg.classList.add('show');
