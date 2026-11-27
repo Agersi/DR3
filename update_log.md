@@ -2,8 +2,11 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.90**
+- Fixed a crash that could happen when rejoining an event at a rallycross stage while driving a rally car (supersedes the 0.1.88/0.1.89 attempts — update to this version).
+
 **v0.1.89**
-- Fixed a crash that could happen when rejoining an event at a rallycross stage while driving a rally car (supersedes the 0.1.88 attempt — update to this version).
+- Improved how saved progress is restored for rallycross stages (further fix in 0.1.90).
 
 **v0.1.88**
 - Improved how saved progress is restored for rallycross stages (further fix in 0.1.89).

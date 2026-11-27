@@ -1335,6 +1335,11 @@ class RpcDispatcher:
                 has_repaired=bool(last.get("has_repaired", False)),
                 repair_penalty_ms=int(last.get("repair_penalty_ms", 0) or 0),
                 vehicle_damage=self._damage_from_dict(last.get("vehicle_damage")),
+                # GetClubs entries must carry VehicleMud too: a rejoin entry
+                # WITHOUT it zeroed the game's mud state and crashed an RX
+                # stage load (verified 2026-11-27 — the only field missing vs
+                # the proven-working StageComplete shape).
+                vehicle_mud=self._mud_from_dict(state_entry.get("vehicle_mud")),
                 tyre_compound=tyre_compound,
                 tyres_remaining=tyres_remaining,
                 tuning_bytes=self._decode_tuning_b64(
@@ -1389,6 +1394,9 @@ class RpcDispatcher:
             has_repaired=bool(last.get("has_repaired", False)),
             repair_penalty_ms=int(last.get("repair_penalty_ms", 0) or 0),
             vehicle_damage=self._damage_from_dict(last.get("vehicle_damage")),
+            # VehicleMud presence is required for a clean rejoin (see the
+            # carry-over branch above).
+            vehicle_mud=self._mud_from_dict(state_entry.get("vehicle_mud")),
             tyre_compound=tyre_compound,
             tyres_remaining=tyres_remaining,
             tuning_bytes=self._decode_tuning_b64(
@@ -1611,8 +1619,11 @@ class RpcDispatcher:
             "QuickRepairs": UInt16(int(d.get("quick_repairs", 0))),
         }
 
-    # VehicleMud field order MUST match upstream exactly — only included in
-    # StageComplete responses (not StageBegin, not Clubs.GetClubs).
+    # VehicleMud field order MUST match upstream exactly.  Included in
+    # StageComplete responses AND Clubs.GetClubs Progress entries: a rejoin
+    # entry without it zeroed the game's mud state and crashed an RX stage
+    # load (verified 2026-11-27 — byte-for-byte the only difference vs the
+    # proven-working StageComplete shape).  Still omitted from StageBegin.
     @staticmethod
     def _mud_from_dict(d: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         d = d or {}
@@ -1654,8 +1665,10 @@ class RpcDispatcher:
         upstream RaceNetChallenges.StageBegin/StageComplete responses (1606-byte
         and 822-byte bodies decoded on 2026-04-27 from 159.153.126.42).
 
-        ``vehicle_mud`` is only populated for StageComplete-style responses;
-        StageBegin and Clubs.GetClubs Progress entries omit it.
+        ``vehicle_mud`` is populated for StageComplete responses and
+        Clubs.GetClubs Progress entries (a rejoin entry without it crashes an
+        RX stage load — see the note on :meth:`_mud_from_dict`); StageBegin
+        omits it.
 
         ``event_index`` is 0 for every per-leg / single-event challenge (the
         served challenge covers one leg); a #39 single-challenge entry points
@@ -1854,6 +1867,9 @@ class RpcDispatcher:
                 has_repaired=bool(last_stage.get("has_repaired", False)),
                 repair_penalty_ms=int(last_stage.get("repair_penalty_ms", 0) or 0),
                 vehicle_damage=self._damage_from_dict(last_stage.get("vehicle_damage")),
+                # VehicleMud presence is required for a clean rejoin (see
+                # _multi_event_progress).
+                vehicle_mud=self._mud_from_dict(state_entry.get("vehicle_mud")),
                 tyre_compound=tyre_compound,
                 tyres_remaining=tyres_remaining,
                 tuning_bytes=self._decode_tuning_b64(
