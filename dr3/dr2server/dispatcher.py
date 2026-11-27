@@ -1286,9 +1286,15 @@ class RpcDispatcher:
         RaceNet seeds multi-rally entries with (TyreCompound 7 /
         TyresRemaining 2) whenever the persisted state carries RX values; an
         RX target keeps the persisted values verbatim, because those ARE the
-        game's own internal representation for the stage (verified 2026-11-27:
-        resuming a mid-leg RX stage in a rally car with rally values crashed
-        the client on load, while the same state served as-is loaded fine).
+        game's own internal representation for the stage.
+
+        A State=1 RESUME of an RX stage still crashes a rally car even with
+        as-is tyre values (verified 2026-11-27 on v0.1.88: compound 13 served
+        verbatim, crash before the start screen), so every in-progress entry
+        whose target stage is RX and whose vehicle is not an RX car is served
+        with State=0 (between stages) instead — the game then fires a fresh
+        StageBegin for that stage, which is the proven mid-leg flow.  The
+        driver loses only the partial progress of that one stage.
 
         With ``championship_time`` (Multi-Location Rally), ChampTimeMs is the
         running championship total instead of this leg's own stages (backlog
@@ -1321,7 +1327,6 @@ class RpcDispatcher:
             return self._build_progress_dict(
                 challenge_id=challenge_id,
                 target_stage_index=0,
-                state=1,
                 vehicle_id=vehicle_id,
                 livery_id=livery_id,
                 meters_driven=0,
@@ -1335,6 +1340,12 @@ class RpcDispatcher:
                 tuning_bytes=self._decode_tuning_b64(
                     state_entry.get("tuning_setup_b64", "") or ""),
                 attempts_left=self._attempts_left_for(ep),
+                # A State=1 entry into an RX leg would resume-crash a rally
+                # car (see the mid-leg branch below) — between-stages shape
+                # so the game starts stage 0 fresh in the carried car.
+                state=(0 if (target_is_rx
+                             and not self._vehicle_is_rx(vehicle_id))
+                       else 1),
                 event_index=event_index,
             )
 
@@ -1357,6 +1368,13 @@ class RpcDispatcher:
             # representation for a rally car on an RX stage, and resuming
             # with rally values instead crashes the client on load.
             tyre_compound, tyres_remaining = 7, 2
+        if (state == 1 and target_is_rx
+                and not self._vehicle_is_rx(vehicle_id)):
+            # A State=1 resume of an RX stage crashes a rally car even with
+            # as-is tyre values (verified 2026-11-27 on v0.1.88) — serve the
+            # between-stages shape so the game fires a fresh StageBegin for
+            # that stage instead of resuming into it.
+            state = 0
         return self._build_progress_dict(
             challenge_id=challenge_id,
             target_stage_index=target_stage_index,
@@ -1817,6 +1835,13 @@ class RpcDispatcher:
                 # RX target keeps them verbatim (the game's own
                 # representation for that stage).
                 tyre_compound, tyres_remaining = 7, 2
+            if (state_out == 1 and target_is_rx
+                    and not self._vehicle_is_rx(vehicle_id)):
+                # Same State=0 pivot as _multi_event_progress: a State=1
+                # resume of an RX stage crashes a rally car even with as-is
+                # tyre values (verified 2026-11-27 on v0.1.88) — fresh
+                # StageBegin for that stage instead.
+                state_out = 0
 
             progress.append(self._build_progress_dict(
                 challenge_id=chal_id,

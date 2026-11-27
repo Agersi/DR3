@@ -6,9 +6,15 @@ stages and invalid on rally stages, and rally values are the other way round
 target stage.  The progress builders must therefore serve:
 
   * an RX target    -> the persisted values verbatim (they ARE the game's own
-                       internal representation for that stage);
+                        internal representation for that stage);
   * a rally target  -> upstream defaults 7/2 when the persisted state carries
-                       RX values (the original bug #17 carry-over case).
+                        RX values (the original bug #17 carry-over case).
+
+A State=1 RESUME of an RX stage still crashes a rally car even with as-is
+tyre values (verified 2026-11-27 on v0.1.88), so every in-progress entry
+whose target stage is RX and whose vehicle is not an RX car is served with
+State=0 (between stages) instead — the game fires a fresh StageBegin for
+that stage.  Rally targets keep State=1; finished entries keep State=2.
 
 Run:  python tools/check_rx_resume_tyres.py
 Exits non-zero on the first failed expectation.
@@ -98,7 +104,8 @@ def tyre(entry):
 
 # ── A. _build_user_progress: single-leg RX championship, rally car ─────────
 # The 2026-11-27 crash shape: stage 0 done (compound 13 persisted), rejoin at
-# stage 1.  Pre-fix this served 7/2 and the client crashed on load.
+# stage 1.  v0.1.87 served 7/2 State=1 -> crash; v0.1.88 served 13/2 State=1
+# -> still crash; now State=0 so the game starts stage 1 fresh.
 print("A. single-leg RX resume (the 2026-11-27 crash shape)")
 disp = make_dispatcher({"events": [{
     "event_id": "evt-test",
@@ -118,7 +125,7 @@ entries = disp._build_user_progress([evt])
 check("entry count", len(entries), 1)
 e = entries[0]
 check("StageIndex", e["StageIndex"], 1)
-check("State", e["State"], 1)
+check("State (fresh StageBegin, not resume)", e["State"], 0)
 check("(TyreCompound, TyresRemaining)", tyre(e), (13, 2))
 check("AttemptsLeft", e["AttemptsLeft"], 1)
 
@@ -144,7 +151,7 @@ e = disp._multi_event_progress(
     111, layout=[3, 4], active=0, ep=ep,
     carry_over=True, prev_was_rx=False, target_is_rx=True)
 check("StageIndex", e["StageIndex"], 1)
-check("State", e["State"], 1)
+check("State (fresh StageBegin, not resume)", e["State"], 0)
 check("(TyreCompound, TyresRemaining)", tyre(e), (13, 2))
 
 # ── C. carry-over RX leg -> rally leg (original #17 case: seed 7/2) ────────
@@ -158,11 +165,12 @@ check("StageIndex", e["StageIndex"], 0)
 check("State", e["State"], 1)
 check("(TyreCompound, TyresRemaining)", tyre(e), (7, 2))
 
-# ── D. carry-over RX leg -> back-to-back RX leg (as-is) ────────────────────
+# ── D. carry-over RX leg -> back-to-back RX leg (as-is tyres, State=0) ─────
 print("D. multi-leg, carry-over into a second RX leg")
 e = disp._multi_event_progress(
     113, layout=[3, 4], active=1, ep=ep,
     carry_over=True, prev_was_rx=True, target_is_rx=True)
+check("State (fresh start of the leg, not resume)", e["State"], 0)
 check("(TyreCompound, TyresRemaining)", tyre(e), (13, 2))
 
 # ── E. mid-leg resume on a rally leg with RX values persisted (defensive) ──
@@ -173,6 +181,7 @@ e = disp._multi_event_progress(
     114, layout=[3, 4], active=1, ep=ep,
     carry_over=True, prev_was_rx=False, target_is_rx=False)
 check("StageIndex", e["StageIndex"], 1)
+check("State (rally resume untouched)", e["State"], 1)
 check("(TyreCompound, TyresRemaining)", tyre(e), (7, 2))
 
 # ── F. rally -> rally: plain values pass through untouched ─────────────────
@@ -182,6 +191,7 @@ ep = {"completed_stages": [dict(STAGE_STATE, stage_index=i, tyre_compound=4)
 e = disp._multi_event_progress(
     115, layout=[3, 4], active=1, ep=ep,
     carry_over=True, prev_was_rx=False, target_is_rx=False)
+check("State (rally resume untouched)", e["State"], 1)
 check("(TyreCompound, TyresRemaining)", tyre(e), (4, 2))
 
 # ── G. _leg_for_flat_index edge cases ──────────────────────────────────────
