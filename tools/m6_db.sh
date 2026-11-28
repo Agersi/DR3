@@ -10,8 +10,9 @@ sudo mysql <<SQL
 CREATE DATABASE IF NOT EXISTS dr3 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS 'dr3'@'localhost' IDENTIFIED BY '$PW';
 CREATE USER IF NOT EXISTS 'dr3'@'127.0.0.1' IDENTIFIED BY '$PW';
-GRANT ALL PRIVILEGES ON dr3.* TO 'dr3'@'localhost';
-GRANT ALL PRIVILEGES ON dr3.* TO 'dr3'@'127.0.0.1';
+# Least-privilege set (S4): CREATE/INDEX/ALTER needed for boot create_all + additive migrations.
+GRANT SELECT, INSERT, UPDATE, DELETE, ALTER, CREATE, INDEX ON dr3.* TO 'dr3'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE, ALTER, CREATE, INDEX ON dr3.* TO 'dr3'@'127.0.0.1';
 FLUSH PRIVILEGES;
 SQL
 MYSQL_PWD="$PW" mysql -h 127.0.0.1 -u dr3 -e "SELECT 1;" >/dev/null && echo DB_USER_OK
