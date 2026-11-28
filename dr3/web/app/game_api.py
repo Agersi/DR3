@@ -648,31 +648,50 @@ def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
 
 
 # Rallycross best rows are single-lap PostTime records — no stage-run row ever
-# exists for an individual lap, so _upsert_best can never point them at the run
-# that drove it. Tolerance for matching a stored lap against one of the
-# finishing run's per-lap times when stamping its run_id (the game's own
-# PostTime floats, exact to the ms apart from scaling rounding).
-_RX_LAP_MATCH_MS = 250
+# exists for an individual lap, and the stage-detail follow-up carries the
+# STAGE TOTAL (slower than the best lap), so _upsert_best never links them at
+# all: only this stamp can point a row at its run. Tolerance for matching a
+# stored lap against one of the finishing run's per-lap times: the PostTime
+# reads the game clock while the splits come from UDP telemetry, so the two
+# drift apart by hundreds of ms (production 2026-11-28: 59540 vs 59115 = 425 ms
+# on a ~59 s lap; the old 250 ms tolerance missed it and left the row without
+# its source link / spares / damage). Only rows created within _RX_STAMP_WINDOW_S
+# of this flush are eligible — the best-lap PostTime lands DURING the run (max
+# 12 laps ≈ 12 min), so the wider tolerance can't reach back and mis-attribute
+# an older unattributed row to this run. Runs without splits (legacy clients)
+# get a tighter proximity window instead: their best-lap PostTime still lands
+# just before the flush.
+_RX_LAP_MATCH_MS = 1000
+_RX_STAMP_WINDOW_S = 900
+_RX_NO_SPLITS_PROX_S = 300
 
 
 def _stamp_rx_run_id(username: str, vehicle_id: int, track_model_id: int,
-                     conditions: str, laps_s: list | None, run_id: int) -> None:
+                     conditions: str, laps_s: list | None, run_id: int,
+                     tyre_compound: int = 0) -> None:
     """Point every still-unattributed best row in the group at the run that
     drove its stored lap time (within _RX_LAP_MATCH_MS). laps_s are per-lap
     times in seconds (the splits_json convention); rows store ms. Rows already
     pointing at a run are left alone — their payload may belong to an older
     run whose lap merely landed within tolerance of this one."""
-    if not laps_s:
-        return
+    now = utcnow()
+    window = _RX_NO_SPLITS_PROX_S if not laps_s else _RX_STAMP_WINDOW_S
     for row in db.session.query(TimeTrialEntry).filter(
             TimeTrialEntry.username == username,
             TimeTrialEntry.vehicle_id == vehicle_id,
             TimeTrialEntry.track == str(track_model_id)[:8],
             TimeTrialEntry.conditions == str(conditions)[:8],
-            TimeTrialEntry.run_id.is_(None)).all():
-        if any(abs((row.stage_time_ms or 0) - lap * 1000) <= _RX_LAP_MATCH_MS
-               for lap in laps_s):
-            row.run_id = run_id
+            TimeTrialEntry.run_id.is_(None),
+            TimeTrialEntry.submitted_at >= now - timedelta(seconds=window)).all():
+        # The row's compound is the run's (the placeholder adoption in this
+        # same flush resolves it); an unresolved comp=0 row may belong to any.
+        if row.tyre_compound not in (0, int(tyre_compound or 0)):
+            continue
+        if laps_s and not any(
+                abs((row.stage_time_ms or 0) - lap * 1000) <= _RX_LAP_MATCH_MS
+                for lap in laps_s):
+            continue
+        row.run_id = run_id
 
 
 @game_api_bp.route('/api/game/stage-complete', methods=['POST'])
@@ -1137,7 +1156,7 @@ def api_game_stage_detail():
                 user.username, fields['vehicle_id'], fields['track_model_id'],
                 fields['conditions_id'] or '0',
                 json.loads(fields['splits_json']) if fields['splits_json'] else None,
-                run_row.id)
+                run_row.id, fields['tyre_compound'])
     db.session.commit()
 
     return jsonify({'ok': True})

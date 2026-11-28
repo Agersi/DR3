@@ -2037,6 +2037,42 @@ def main() -> int:
     r = client.get('/api/game/time-trial-leaderboard-id?vclass=101&track=10&conditions=5&category=1', headers=headers)
     check('tt leaderboard-id endpoint removed', r.status_code == 404, f'status={r.status_code}')
 
+    # 8b. Rallycross best-row attribution (2026-11-28 regression): the per-lap
+    # PostTime files a compound=0 placeholder with run_id NULL; the stage-detail
+    # follow-up carries the STAGE TOTAL — slower than the stored best lap, so
+    # _upsert_best never links it. Only _stamp_rx_run_id can point the row at
+    # its run, matching the stored lap against the run's telemetry laps with
+    # PostTime-vs-UDP drift tolerance (425 ms observed in production).
+    r = client.post('/api/game/time-trial-submit', headers=headers, json={
+        'vehicle_class_id': 101, 'track_model_id': 639, 'conditions_id': 5,
+        'category': 1, 'vehicle_id': 532, 'livery_id': 4242, 'stage_time_ms': 59540,
+        'nationality_id': 31, 'using_wheel': False, 'using_assists': True,
+        'ghost_data_b64': 'Z3h4', 'splits': [68.614, 59.115],
+    })
+    check('rx lap PostTime ok', (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+    r = client.post('/api/game/stage-detail', headers=headers, json={
+        'event_id': 'smoke-rx-event', 'challenge_type': 2, 'event_index': 0,
+        'stage_index': 0, 'track_model_id': 639, 'stage_conditions_id': 5,
+        'vehicle_id': 532, 'tyre_compound_id': 6, 'stage_time_ms': 128603,
+        'player_finished': True, 'splits': [6.016, 68.614, 59.115],
+    })
+    check('rx stage-detail ok', (r.get_json() or {}).get('ok') is True, str(r.get_json()))
+    with app.app_context():
+        from app.models import StageRun as _SRun
+        _rx = db.session.query(_TTE).filter_by(
+            vehicle_id=532, track='639', conditions='5', username='smokedriver').first()
+        _rx_run = db.session.query(_SRun).filter_by(
+            username='smokedriver', track_model_id=639).first()
+        _rx_ms = _rx.stage_time_ms if _rx else None
+        _rx_comp = _rx.tyre_compound if _rx else None
+        _rx_runid = _rx.run_id if _rx else None
+        _rx_runid_exp = _rx_run.id if _rx_run else None
+    check('rx best row keeps the LAP time, resolves compound from the follow-up',
+          _rx_ms == 59540 and _rx_comp == 6, f'ms={_rx_ms} comp={_rx_comp}')
+    check('rx best row stamped at its run despite 425 ms PostTime-vs-UDP drift',
+          _rx_runid is not None and _rx_runid == _rx_runid_exp,
+          f'run_id={_rx_runid} expected={_rx_runid_exp}')
+
     # 10. game auth (steam link — the token must belong to the account being
     # linked; here smokedriver links his own display name)
     r = client.post('/api/game/auth', headers=headers,
