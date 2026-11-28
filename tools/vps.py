@@ -1,6 +1,9 @@
 """SSH helper for the byagersi.com VPS.
 
-Reads credentials from .env at the project root. Never prints the password.
+Auth: SSH key at tools/keys/dr3_vps_ed25519.key when present (S1, 2026-11-28),
+otherwise falls back to the password from .env with a warning. The server's
+host key is pinned in tools/keys/vps_known_hosts (created on first connect;
+unknown or changed host keys are rejected). Never prints the password.
 
 Usage:  python tools/vps.py "command" ["cmd2" ...]   (each runs, exit codes shown)
         python tools/vps.py --sudo "command"
@@ -14,6 +17,8 @@ import uuid
 import paramiko
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+KEY_PATH = os.path.join(ROOT, "tools", "keys", "dr3_vps_ed25519.key")
+HOST_KEYS_PATH = os.path.join(ROOT, "tools", "keys", "vps_known_hosts")
 
 
 def load_env():
@@ -34,8 +39,22 @@ class Vps:
         self.user, self.host = e["SSH_IP"].split("@")
         self.password = e["SSH_PW"]
         self.client = paramiko.SSHClient()
-        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.client.connect(self.host, username=self.user, password=self.password, timeout=30)
+        pinned = os.path.exists(HOST_KEYS_PATH)
+        if pinned:
+            self.client.load_host_keys(HOST_KEYS_PATH)
+            self.client.set_missing_host_key_policy(paramiko.RejectPolicy())
+        else:
+            self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        connect_kwargs = {"timeout": 30, "allow_agent": False, "look_for_keys": False}
+        if os.path.exists(KEY_PATH):
+            connect_kwargs["pkey"] = paramiko.Ed25519Key.from_private_key_file(KEY_PATH)
+        else:
+            print("vps.py: WARNING - no SSH key at %s; falling back to password auth" % KEY_PATH)
+            connect_kwargs["password"] = self.password
+        self.client.connect(self.host, username=self.user, **connect_kwargs)
+        if not pinned:
+            os.makedirs(os.path.dirname(HOST_KEYS_PATH), exist_ok=True)
+            self.client.save_host_keys(HOST_KEYS_PATH)
 
     def run(self, cmd, timeout=120):
         stdin, stdout, stderr = self.client.exec_command(cmd, timeout=timeout)
