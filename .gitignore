@@ -1,6 +1,7 @@
 # Secrets — never commit
 .env
 build/
+tools/keys/
 
 # Python
 __pycache__/

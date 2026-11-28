@@ -546,6 +546,62 @@ def main() -> int:
           and _m_gh == 'bmV3YmVzdA==' and _m_splits == [59.0],
           f'rows={len(mrows)} ms={_m_ms} comp={_m_comp} gh={_m_gh}')
 
+    # Production 2026-11-28: an old per-compound PB row exists; a new best's
+    # PostTime files a comp=0 placeholder (the nearest-row fallback rejects the
+    # old PB — over a second slower), then the snapshot follow-up (1 ms over,
+    # compound known) updates the old PB in place and orphans the placeholder —
+    # the board keeps showing the faster orphan with blank metadata until the
+    # next boot backfill. The follow-up must take the fresh skewed-ms
+    # placeholder as its vessel: one row, this run's ghost + category, the
+    # PostTime's (faster) ms, run_id stamped.
+    with app.app_context():
+        db.session.add(_Best(vclass='99', track='26', conditions='1', category=1,
+                             username='smokedriver', stage_time_ms=145000,
+                             vehicle_id=17, livery_id=1, tyre_compound=6))
+        db.session.commit()
+        _upsert_best('smokedriver', 17, '26', '1', 130588, category=2, vclass=99,
+                     livery_id=2897, ghost_b64='bmV3cmVu', splits=[37.3, 31.9])
+        _upsert_best('smokedriver', 17, '26', '1', 130589, vclass=99,
+                     livery_id=2897, splits=[37.3, 31.9], tyre_compound=6,
+                     run_id=42)
+        trows = db.session.query(_Best).filter_by(
+            username='smokedriver', vehicle_id=17, track='26', conditions='1').all()
+        _t = trows[0] if trows else None
+        _t_ms = _t.stage_time_ms if _t else None
+        _t_comp = _t.tyre_compound if _t else None
+        _t_gh = _t.ghost_data_b64 if _t else None
+        _t_run = _t.run_id if _t else None
+        _t_cat = _t.category if _t else None
+        # negative: a placeholder filed long ago (its client died between
+        # PostTime and snapshot) must NOT be taken as this run's vessel — it
+        # keeps waiting for the boot backfill.
+        db.session.add(_Best(vclass='99', track='27', conditions='1', category=2,
+                             username='smokedriver', stage_time_ms=130588,
+                             vehicle_id=18, livery_id=1, tyre_compound=0))
+        db.session.add(_Best(vclass='99', track='27', conditions='1', category=1,
+                             username='smokedriver', stage_time_ms=145000,
+                             vehicle_id=18, livery_id=1, tyre_compound=6))
+        db.session.commit()
+        _old_ph = db.session.query(_Best).filter_by(
+            username='smokedriver', vehicle_id=18, tyre_compound=0).first()
+        _old_ph.submitted_at = utcnow() - _td(hours=2)
+        db.session.commit()
+        _upsert_best('smokedriver', 18, '27', '1', 130589, vclass=99,
+                     livery_id=2897, splits=[37.3], tyre_compound=6, run_id=43)
+        urows = db.session.query(_Best).filter_by(
+            username='smokedriver', vehicle_id=18, track='27', conditions='1').all()
+        _u_comps = sorted(r.tyre_compound for r in urows)
+        # Clean the fixture rows so later sections' global counts stay exact.
+        for _r in trows + urows:
+            db.session.delete(_r)
+        db.session.commit()
+    check('bests: fresh skewed-ms placeholder merged into existing PB row (unit)',
+          len(trows) == 1 and _t_ms == 130588 and _t_comp == 6
+          and _t_gh == 'bmV3cmVu' and _t_run == 42 and _t_cat == 2,
+          f'rows={len(trows)} ms={_t_ms} comp={_t_comp} gh={_t_gh} run={_t_run}')
+    check('bests: stale placeholder (crashed run) not taken as vessel (unit)',
+          _u_comps == [0, 6], f'comps={_u_comps}')
+
     # stats-record retired (#56): the endpoint is a no-op (proxied runs now land
     # in stage_runs via /api/game/stage-detail); snapshot the baseline first so
     # the deltas are deterministic regardless of earlier submissions.

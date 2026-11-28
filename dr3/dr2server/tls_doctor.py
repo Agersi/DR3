@@ -23,12 +23,24 @@ This module provides:
 * ``robust_urlopen()`` - the single entry point for outbound HTTPS: try the
   default (OS-store) context first, and on a certificate-verification failure
   log an actionable diagnosis and retry once via the pinned-root context.
+* ``verify_upstream_leaf()`` - cryptographic verification of the real EgoNet
+  upstream's leaf certificate against the embedded Codemasters root CA.
 
 The embedded roots are Let's Encrypt's public root certificates:
   ISRG Root X1: https://letsencrypt.org/certs/isrgrootx1.pem
       sha256 96BCEC06264976F37460779ACF28C5A7CFE8A3C0AAE11A8FFCEE05C0BDDF08C6
   ISRG Root X2: https://letsencrypt.org/certs/isrg-root-x2.pem
       sha256 69729B8E15A86EFC177A57AFB7171DFC64ADD28C2FCA8CF1507E34453CCB1470
+
+and Codemasters' private internal root (``CM_ROOT_CA_PEM``):
+  CN=Codemasters Online Root CA, OU=Codemasters Online,
+  O=Codemasters Software Ltd - self-signed, valid 2010-09-22 .. 2035-09-16.
+  Extracted from the DR2 game binary (``dirtrally2.exe``) with
+  ``tools/extract_cm_root.py``; the game trusts it for its own EgoNet TLS.
+  The upstream leaf is CN-only (no SAN) and signed SHA-1 by this root, so
+  OpenSSL's built-in chain verification rejects it ("CA signature digest
+  algorithm too weak") and CPython exposes no way to lower the security
+  level - hence ``verify_upstream_leaf`` performs the checks itself.
 """
 from __future__ import annotations
 
@@ -42,6 +54,11 @@ import urllib.request
 import urllib.parse
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
+
+from cryptography import x509
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+from cryptography.x509.oid import NameOID
 
 log = logging.getLogger(__name__)
 
@@ -95,6 +112,37 @@ tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
 /q4AaOeMSQ+2b1tbFfLn
 -----END CERTIFICATE-----
 """
+
+# Codemasters' private root CA for the EgoNet backend (prod.egonet.codemasters.com).
+# Extracted from dirtrally2.exe (the DR2 client embeds it for its own TLS); see
+# tools/extract_cm_root.py. Self-signed RSA-2048, valid 2010-09-22 .. 2035-09-16.
+CM_ROOT_CA_PEM = """\
+-----BEGIN CERTIFICATE-----
+MIID5zCCAs+gAwIBAgIJAIIfD20HgCPEMA0GCSqGSIb3DQEBBQUAMIGJMQswCQYD
+VQQGEwJVSzEVMBMGA1UECAwMV2Fyd2lja3NoaXJlMSEwHwYDVQQKDBhDb2RlbWFz
+dGVycyBTb2Z0d2FyZSBMdGQxGzAZBgNVBAsMEkNvZGVtYXN0ZXJzIE9ubGluZTEj
+MCEGA1UEAwwaQ29kZW1hc3RlcnMgT25saW5lIFJvb3QgQ0EwHhcNMTAwOTIyMDgx
+NjA4WhcNMzUwOTE2MDgxNjA4WjCBiTELMAkGA1UEBhMCVUsxFTATBgNVBAgMDFdh
+cndpY2tzaGlyZTEhMB8GA1UECgwYQ29kZW1hc3RlcnMgU29mdHdhcmUgTHRkMRsw
+GQYDVQQLDBJDb2RlbWFzdGVycyBPbmxpbmUxIzAhBgNVBAMMGkNvZGVtYXN0ZXJz
+IE9ubGluZSBSb290IENBMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA
+ncw3VeQt3N8ZJmNGiCa8UJ61qtBWxat2yx9bWfyf2o4VqQtn7Cc79esHkf5Zbjpc
+zqMpxO/c0vZnHWgH1R0TWRDrSqKHuJxgbxT2JFoLAQQKm+uTUOclLvlC00IrINks
+Y6KPYaQDkaLDAQWX42YGqb7CaKna8DwX6Ms4RHLEm5+L0L5GgRk9RfPlphVYCA9r
+tjJIQluYMc0Ny4tzJ6IuCnDjgRfmehWSpBV+UAx8FHFxmOUgone6dhA0pTLtR/lu
+P/S2aISWgQZJ0GWWfQ/mjVpccnWKtZUK0TCVoKTPpGaV4kTDHYq9ylpuNItTww9E
+rXR0/9gWOZHQ49QXd2rnrQIDAQABo1AwTjAdBgNVHQ4EFgQU9vW1MrzNfAbZeTQJ
+gHCzyQQlAZgwHwYDVR0jBBgwFoAU9vW1MrzNfAbZeTQJgHCzyQQlAZgwDAYDVR0T
+BAUwAwEB/zANBgkqhkiG9w0BAQUFAAOCAQEAcOUnPyvrbAdzMSPN9PLnvh34I9jW
+EwU81ks67EBNHaMdghiUhOFZ65vzQLoUYoqQcgzu+i0rAkLZrfviC1TUlv+mdlgK
+ce6eD2VgpQOPrpOG6O/TfmyAhS5mOlA35NMsZqZTpIiTZnZLGHSSu/Shvnk7UDTs
+lTp1yNj6etlY03ABieBsSIDu0UmhNfEY2HgjPaGGiAmcenw2d4U5Z2oCiJVDseeq
+RdlVx/sg4UM8L24/ccqn5uV05cg5aUF5dAlAYLq2wXNgbkpePtmo+/tqdiE3pL+q
+TRW14lealjJNmjUUTO/KHjKOpfPJNCHSGLk/h/UskEvcTUTqwDZATCl4jw==
+-----END CERTIFICATE-----
+"""
+
+UPSTREAM_HOST = "prod.egonet.codemasters.com"
 
 _STORE_SCAN_PS = (
     "foreach ($s in 'LocalMachine\\Root','LocalMachine\\CA',"
@@ -217,6 +265,85 @@ def pinned_root_context() -> ssl.SSLContext:
         ctx.load_verify_locations(cadata=ISRG_ROOT_X1_PEM + ISRG_ROOT_X2_PEM)
         _pinned_ctx = ctx
     return _pinned_ctx
+
+
+_cm_root: Optional[x509.Certificate] = None
+
+
+def _load_cm_root() -> x509.Certificate:
+    global _cm_root
+    if _cm_root is None:
+        _cm_root = x509.load_pem_x509_certificate(CM_ROOT_CA_PEM.encode("ascii"))
+    return _cm_root
+
+
+def verify_upstream_leaf(leaf_der: bytes, expected_host: str = UPSTREAM_HOST) -> None:
+    """Cryptographically verify the EgoNet upstream's leaf certificate.
+
+    OpenSSL (via CPython ssl) cannot verify this chain: CM's internal root
+    signs with SHA-1, which OpenSSL 3 rejects ("CA signature digest algorithm
+    too weak"), and CPython exposes no way to lower the security level. So we
+    perform the checks ourselves against the embedded root - the same one the
+    game binary trusts for its own EgoNet TLS:
+
+      1. issuer-name binding (leaf.issuer == root.subject)
+      2. signature verification with the certificate's own hash algorithm
+      3. validity window
+      4. hostname coverage (SAN preferred; CM's leaf is CN-only, so fall back
+         to the subject CN - the RFC 2818 legacy path)
+
+    Raises ssl.SSLCertVerificationError on any failure; callers treat that as
+    "upstream unreachable" and apply their offline fallback."""
+    root = _load_cm_root()
+    try:
+        leaf = x509.load_der_x509_certificate(leaf_der)
+    except ValueError as exc:
+        raise ssl.SSLCertVerificationError(
+            f"unparseable upstream certificate: {exc}") from exc
+
+    if leaf.issuer != root.subject:
+        raise ssl.SSLCertVerificationError(
+            "upstream certificate is not issued by the embedded Codemasters root")
+
+    hash_algo = leaf.signature_hash_algorithm
+    if hash_algo is None:
+        raise ssl.SSLCertVerificationError(
+            "upstream certificate carries no signature hash algorithm")
+    try:
+        pub = root.public_key()
+        if isinstance(pub, rsa.RSAPublicKey):
+            pub.verify(leaf.signature, leaf.tbs_certificate_bytes,
+                       padding.PKCS1v15(), hash_algo)
+        elif isinstance(pub, ec.EllipticCurvePublicKey):
+            pub.verify(leaf.signature, leaf.tbs_certificate_bytes,
+                       ec.ECDSA(hash_algo))
+        else:
+            raise ssl.SSLCertVerificationError(
+                f"unsupported root key type: {type(pub).__name__}")
+    except InvalidSignature as exc:
+        raise ssl.SSLCertVerificationError(
+            "upstream certificate signature does not verify against the embedded root") from exc
+
+    now = datetime.now(timezone.utc)
+    try:
+        not_before, not_after = leaf.not_valid_before_utc, leaf.not_valid_after_utc
+    except AttributeError:  # cryptography < 42
+        not_before = leaf.not_valid_before.replace(tzinfo=timezone.utc)
+        not_after = leaf.not_valid_after.replace(tzinfo=timezone.utc)
+    if not (not_before <= now <= not_after):
+        raise ssl.SSLCertVerificationError(
+            f"upstream certificate outside validity window "
+            f"({not_before:%Y-%m-%d} .. {not_after:%Y-%m-%d})")
+
+    try:
+        names = leaf.extensions.get_extension_for_class(
+            x509.SubjectAlternativeName).value.get_values_for_name(x509.DNSName)
+    except x509.ExtensionNotFound:
+        names = [v.value for v in leaf.subject.get_attributes_for_oid(NameOID.COMMON_NAME)]
+    if expected_host.lower() not in (n.lower() for n in names):
+        raise ssl.SSLCertVerificationError(
+            f"upstream certificate does not cover {expected_host} "
+            f"(covers: {', '.join(names) or 'nothing'})")
 
 
 def capture_presented_cert(host: str, port: int = 443,

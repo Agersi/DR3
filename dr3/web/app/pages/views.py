@@ -1311,6 +1311,17 @@ def download_client():
     return send_file(zip_path, as_attachment=True, download_name='DR3-windows.zip')
 
 
+@pages_bp.route('/download/DR3-windows.zip.sig')
+def download_client_signature():
+    """Ed25519 signature of the release zip (C3). The client fetches it as
+    <zip_url>.sig and verifies before installing; missing file = unsigned
+    release = 404, which the client treats as "no update"."""
+    sig_path = Path(__file__).resolve().parents[3] / 'dist' / 'DR3-windows.zip.sig'
+    if not sig_path.is_file():
+        return render_template('not_found.html'), 404
+    return send_file(sig_path, mimetype='application/octet-stream')
+
+
 @pages_bp.route('/about')
 def about():
     return render_template('about.html')

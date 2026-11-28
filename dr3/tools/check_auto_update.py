@@ -4,7 +4,11 @@
 - _staged_update picks the newest staged zip that is NEWER than the running
   version and ignores older/non-numeric names;
 - _validate_update_zip accepts only real archives carrying the onedir layout
-  (top-level DR3/ with DR3.exe inside);
+  (top-level DR3/ with DR3.exe inside) AND an INSTALL_MANIFEST.json;
+- _update_url_allowed admits only https URLs on our own domain (+ loopback);
+- _verify_update_signature accepts the Ed25519 release signature and rejects
+  tampered payloads/signatures (the download is fetched as <url>.sig);
+- _install_dir only accepts a bundle named DR3/ with a matching manifest;
 - _download_update's failure path leaves no partial file behind;
 - _apply_update performs the full swap in temp dirs: new contents land in the
   install dir, the previous one is kept as DR3.bak-<ver>, the staged zip and
@@ -33,6 +37,7 @@ import time
 import zipfile
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Optional
 
 
 def _load_dr3_app():
@@ -111,11 +116,35 @@ def check_staged(mod, f):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def _make_update_zip(path: Path, exe_content: bytes) -> None:
+def _make_update_zip(path: Path, exe_content: bytes, version: Optional[str] = None) -> None:
+    """Build a minimal onedir-layout zip WITH a valid INSTALL_MANIFEST.json.
+
+    ``version`` defaults to the tag implied by the file name
+    (DR3-windows-<ver>.zip) so _apply_update's manifest-vs-filename cross
+    check passes."""
+    if version is None:
+        version = path.name[len("DR3-windows-"):-len(".zip")]
+    manifest = {
+        "version": version,
+        "files": ["DR3.exe", "_internal/lib.dll", "INSTALL_MANIFEST.json"],
+    }
     with zipfile.ZipFile(path, "w") as zf:
         zf.writestr("DR3/", b"")
         zf.writestr("DR3/DR3.exe", exe_content)
         zf.writestr("DR3/_internal/lib.dll", b"dll")
+        zf.writestr("DR3/INSTALL_MANIFEST.json", json.dumps(manifest))
+
+
+def _sign_zip(zip_path: Path) -> bytes:
+    """Ed25519-sign the zip with the release private key (tools/keys/)."""
+    from cryptography.hazmat.primitives import serialization
+    key_path = Path(__file__).resolve().parents[2] / "tools" / "keys" / \
+        "dr3_update_ed25519.key"
+    if not key_path.is_file():
+        raise SystemExit(
+            f"{key_path} missing — run tools/generate_update_key.py first")
+    key = serialization.load_pem_private_key(key_path.read_bytes(), password=None)
+    return key.sign(zip_path.read_bytes())
 
 
 def check_validate(mod, f):
@@ -137,6 +166,18 @@ def check_validate(mod, f):
             print("FAIL zip without DR3/DR3.exe accepted")
         else:
             print("OK   wrong-layout zip rejected")
+
+        # C2: a layout-correct zip WITHOUT the ownership manifest is not an
+        # installable bundle.
+        nomani = tmp / "nomani.zip"
+        with zipfile.ZipFile(nomani, "w") as zf:
+            zf.writestr("DR3/", b"")
+            zf.writestr("DR3/DR3.exe", b"exe")
+        if mod._validate_update_zip(nomani):
+            f["n"] += 1
+            print("FAIL zip without INSTALL_MANIFEST.json accepted")
+        else:
+            print("OK   manifest-less zip rejected")
 
         notzip = tmp / "no.zip"
         notzip.write_bytes(b"this is not a zip")
@@ -226,6 +267,21 @@ def check_apply(mod, f):
         print(f"FAIL vanished install dir should give rc=4, got {rc}")
     else:
         print("OK   vanished install dir -> rc=4")
+
+    # C2: a zip whose manifest version disagrees with its file name is a
+    # tampered/mislabelled bundle — rc 10, nothing touched.
+    mismatch_zip = staged / "DR3-windows-8.8.8.zip"
+    _make_update_zip(mismatch_zip, b"new exe", version="7.7.7")
+    install_before = (install / "DR3.exe").read_bytes()
+    rc = mod._apply_update(mismatch_zip, install, parent_pid=0)
+    if rc != 10:
+        f["n"] += 1
+        print(f"FAIL manifest/filename version mismatch should give rc=10, got {rc}")
+    elif (install / "DR3.exe").read_bytes() != install_before:
+        f["n"] += 1
+        print("FAIL rc=10 path still modified the install dir")
+    else:
+        print("OK   manifest/filename version mismatch -> rc=10, dir untouched")
 
     shutil.rmtree(tmp, ignore_errors=True)
 
@@ -430,12 +486,13 @@ def check_cli_source_mode(mod, f):
 def check_gui(mod, f):
     import tkinter as tk
 
-    # Local server: /version.json + a real update zip at the download URL.
+    # Local server: /version.json + a real update zip (with .sig) at the
+    # download URL.
     tmp = Path(tempfile.mkdtemp(prefix="dr3_upd_"))
     docroot = tmp / "www"
     docroot.mkdir()
-    (docroot / "DR3-windows.zip").write_bytes(b"")
-    _make_update_zip(docroot / "DR3-windows.zip", b"gui exe")
+    _make_update_zip(docroot / "DR3-windows.zip", b"gui exe", version="9.9.9")
+    (docroot / "DR3-windows.zip.sig").write_bytes(_sign_zip(docroot / "DR3-windows.zip"))
 
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *a, **kw):
@@ -586,12 +643,126 @@ def check_gui(mod, f):
     shutil.rmtree(tmp, ignore_errors=True)
 
 
+def check_url_allowlist(mod, f):
+    """C3: _update_url_allowed only admits our own domain over https (plus
+    loopback for the local e2e server)."""
+    cases = [
+        ("https://byagersi.com/rally/download/DR3-windows.zip", True),
+        ("http://byagersi.com/download/DR3-windows.zip", False),  # plain http
+        ("https://evil.example.com/DR3-windows.zip", False),      # foreign host
+        ("https://byagersi.com.evil.example/x.zip", False),       # look-alike
+        ("http://127.0.0.1:8080/DR3-windows.zip", True),          # local test
+        ("https://localhost/x.zip", True),
+    ]
+    for url, want in cases:
+        got = mod._update_url_allowed(url)
+        if got is not want:
+            f["n"] += 1
+            print(f"FAIL _update_url_allowed({url!r}) = {got}, want {want}")
+        else:
+            print(f"OK   _update_url_allowed({url!r})")
+
+
+def check_signature(mod, f):
+    """C3: _verify_update_signature accepts our key's signature and rejects
+    tampered payloads, garbled signatures and truncated ones."""
+    tmp = Path(tempfile.mkdtemp(prefix="dr3_upd_"))
+    try:
+        payload = b"release zip bytes"
+        blob = tmp / "blob.bin"
+        blob.write_bytes(payload)
+        good_sig = _sign_zip(blob)
+        if not mod._verify_update_signature(payload, good_sig):
+            f["n"] += 1
+            print("FAIL valid signature rejected")
+        else:
+            print("OK   valid Ed25519 signature accepted")
+        if mod._verify_update_signature(payload + b"x", good_sig):
+            f["n"] += 1
+            print("FAIL tampered payload accepted")
+        else:
+            print("OK   tampered payload rejected")
+        bad = bytearray(good_sig)
+        bad[0] ^= 0x01
+        if mod._verify_update_signature(payload, bytes(bad)):
+            f["n"] += 1
+            print("FAIL bit-flipped signature accepted")
+        else:
+            print("OK   bit-flipped signature rejected")
+        if mod._verify_update_signature(payload, b"\x00" * 64):
+            f["n"] += 1
+            print("FAIL all-zero signature accepted")
+        else:
+            print("OK   all-zero signature rejected")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def check_install_dir_gate(mod, f):
+    """C2: _install_dir only accepts a real bundle — exe named DR3.exe inside
+    a folder named DR3 (case-insensitive) carrying a valid INSTALL_MANIFEST
+    whose version matches the running exe."""
+    tmp = Path(tempfile.mkdtemp(prefix="dr3_upd_"))
+    orig_executable = sys.executable
+    orig_bundle = mod._is_pyinstaller_bundle
+    try:
+        mod._is_pyinstaller_bundle = lambda: True
+        case_no = 0
+
+        def make_bundle(folder_name: str, version: Optional[str]) -> Path:
+            # Unique parent per case — the LEAF name is what the gate checks.
+            nonlocal case_no
+            root = tmp / f"case{case_no}" / folder_name
+            case_no += 1
+            (root / "_internal").mkdir(parents=True)
+            (root / "DR3.exe").write_bytes(b"x")
+            if version is not None:
+                manifest = {
+                    "version": version,
+                    "files": ["DR3.exe", "INSTALL_MANIFEST.json"],
+                }
+                (root / "INSTALL_MANIFEST.json").write_text(
+                    json.dumps(manifest))
+            return root
+
+        def expect(folder_name: str, version: Optional[str], want_ok: bool):
+            root = make_bundle(folder_name, version)
+            sys.executable = str(root / "DR3.exe")
+            got = mod._install_dir()
+            if want_ok and Path(got) != root:
+                f["n"] += 1
+                print(f"FAIL _install_dir accepted {root.name} but returned "
+                      f"{got!r}")
+            elif not want_ok and got is not None:
+                f["n"] += 1
+                print(f"FAIL _install_dir accepted foreign layout "
+                      f"{root.name} (manifest version={version!r})")
+            else:
+                verdict = "accepted" if want_ok else "rejected"
+                detail = "no manifest" if version is None \
+                    else f"manifest v{version}"
+                print(f"OK   {root.name} ({detail}) {verdict}")
+
+        expect("DR3", None, False)            # no manifest at all
+        expect("DR3", "0.0.1", False)         # stale/wrong version
+        expect("MyFolder", mod.VERSION, False)  # wrong folder name
+        expect("dr3", mod.VERSION, True)      # lowercase folder is fine
+        expect("DR3", mod.VERSION, True)      # the real deal
+    finally:
+        sys.executable = orig_executable
+        mod._is_pyinstaller_bundle = orig_bundle
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main() -> int:
     mod = _load_dr3_app()
     f = _failures()
     check_versions(mod, f)
     check_staged(mod, f)
     check_validate(mod, f)
+    check_url_allowlist(mod, f)
+    check_signature(mod, f)
+    check_install_dir_gate(mod, f)
     check_download_failure(mod, f)
     check_apply(mod, f)
     check_cwd_swap(mod, f)

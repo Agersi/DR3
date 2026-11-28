@@ -510,11 +510,26 @@ def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
             # so the exact match above misses. At most one placeholder exists per
             # 4-tuple (the unique key includes compound), so any zero row in this
             # group is this run's — adopt it instead of filing a second row that
-            # would orphan it and later crash the boot backfill. (When a real
-            # row for this compound already exists the placeholder is left alone:
-            # its payload may belong to an older, never-resolved run, and the
-            # boot backfill settles those without risk of mixing payloads.)
+            # would orphan it and later crash the boot backfill.
             vessel = next((r for r in rows if r.tyre_compound == 0), None)
+        elif vessel is None:
+            # A real row for this compound exists, so the blanket fallback above
+            # is off — but this run's own placeholder may still be sitting here:
+            # when its ms sits a hair off the snapshot's (round vs truncate of
+            # the same game clock) the exact match misses it, and updating the
+            # real row in place would orphan it until the next boot backfill
+            # (production 2026-11-28: the board kept showing the faster orphan
+            # with blank metadata). A placeholder within _BEST_TOL_MS of THIS
+            # time, filed within _SAME_RUN_WINDOW_S of this flush, is this run's
+            # — take it as vessel. (An older never-resolved placeholder — its
+            # client died between PostTime and snapshot — is always outside that
+            # window: re-entry plus another full run takes minutes; those keep
+            # waiting for the boot backfill without risk of mixing payloads.)
+            vessel = next((r for r in rows if r.tyre_compound == 0
+                           and abs((r.stage_time_ms or 0) - tm) <= _BEST_TOL_MS
+                           and r.submitted_at is not None
+                           and (utcnow() - r.submitted_at).total_seconds()
+                           <= _SAME_RUN_WINDOW_S), None)
         if vessel is not None:
             if entry is None:
                 # First record of this run with a known compound — adopt the
@@ -529,6 +544,13 @@ def _upsert_best(username, vehicle_id, track, conditions, time_ms, *,
                     ghost_b64 = vessel.ghost_data_b64
                 if splits_json is None and vessel.splits_json:
                     splits_json = vessel.splits_json
+                if not category and vessel.category:
+                    category = vessel.category
+                # The PostTime truncates the game clock where the snapshot
+                # rounds it, so this run's placeholder can carry the strictly
+                # faster ms — keep it as the stored time.
+                if (vessel.stage_time_ms or 0) < tm:
+                    tm = vessel.stage_time_ms
     else:
         # Unknown compound (a PostTime): land on this run's row when it exists
         # (channel inversion), else reuse the 4-tuple's placeholder — at most

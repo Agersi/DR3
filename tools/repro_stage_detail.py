@@ -261,7 +261,8 @@ def test_club_path_flat_index():
     check("club: telemetry splits pass through",
           r.get("splits"), [41.871, 41.021])
 
-    # DNF close-out: finished_cleanly is False -> no splits, no flat index.
+    # DNF close-out: finished_cleanly is False -> no splits, but a flat index
+    # is still recorded so the wrecked stage gets a board row (v0.1.93).
     col2 = Collector()
     buf2 = StageDetailBuffer(col2.send)
     buf2.FLUSH_TIMEOUT_S = 0.3
@@ -272,8 +273,8 @@ def test_club_path_flat_index():
     check("club DNF: rpc half fed too", ok2 and len(col2.records), True)
     r2 = col2.records[0] if ok2 else {}
     check("club DNF: splits not computed", r2.get("splits"), None)
-    check("club DNF: flat index not computed",
-          r2.get("flat_stage_index"), None)
+    check("club DNF: flat index still recorded (board row)",
+          r2.get("flat_stage_index"), 2)
 
 
 def test_httpd_wiring_e2e():

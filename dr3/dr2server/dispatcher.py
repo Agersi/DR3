@@ -5,7 +5,7 @@ import hashlib
 import secrets
 import time
 from datetime import datetime
-from threading import Thread
+from threading import RLock, Thread
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -236,6 +236,12 @@ class RpcDispatcher:
         # runs get no penalty decomposition anywhere else, so this stash is
         # their only route to a stage_runs row. Same key/TTL as splits.
         self._pending_posttime_penalty: Dict[int, tuple] = {}
+        # Guards MULTI-STEP access to the shared maps above/below (iteration,
+        # sweep+set clusters, snapshot swap): ThreadingHTTPServer serves each
+        # game request in its own thread. A single-key dict get/set is atomic
+        # under the GIL and needs no lock; anything that walks a map or updates
+        # it across several statements must hold this.
+        self._state_lock = RLock()
         # Challenge ids served as ONE challenge carrying ALL legs of the
         # championship in Events[] (#39 experiment, gated by the event setting
         # ``single_challenge``).  For these ids the game addresses stages with
@@ -407,8 +413,11 @@ class RpcDispatcher:
         if (lb_id // 10) in self._challenge_event_map \
                 and self._challenge_subevent_map.get(lb_id // 10, 0) == 0:
             return True
-        for cid in self._challenge_event_map:
-            base = cid - self._challenge_subevent_map.get(cid, 0)
+        with self._state_lock:
+            entries = [(cid, self._challenge_subevent_map.get(cid, 0))
+                       for cid in self._challenge_event_map]
+        for cid, sub_off in entries:
+            base = cid - sub_off
             diff = lb_id - (base + 900000)
             if diff >= 0 and diff % 10_000_000 == 0:
                 return True
@@ -689,8 +698,9 @@ class RpcDispatcher:
             print(f"[CLUBS] api_client.get_clubs() raised: {exc}")
             return None
 
-        self._clubs_snapshot = data
-        self._clubs_snapshot_ts = time.time()
+        with self._state_lock:
+            self._clubs_snapshot = data
+            self._clubs_snapshot_ts = time.time()
 
         web_clubs = data.get("clubs", [])
         web_events = data.get("events", [])
@@ -1115,12 +1125,14 @@ class RpcDispatcher:
         single = self._single_challenge(wevt) and mode == "multi"
         if single:
             active_chal_id = base_chal_id
-            self._challenge_event_map[active_chal_id] = wevt_id
-            self._multi_event_challenges.add(active_chal_id)
+            with self._state_lock:
+                self._challenge_event_map[active_chal_id] = wevt_id
+                self._multi_event_challenges.add(active_chal_id)
         else:
             active_chal_id = base_chal_id + active
-            self._challenge_event_map[active_chal_id] = wevt_id
-            self._challenge_subevent_map[active_chal_id] = active
+            with self._state_lock:
+                self._challenge_event_map[active_chal_id] = wevt_id
+                self._challenge_subevent_map[active_chal_id] = active
 
         if single:
             events_out = self._build_events_for_champ(wevt, base_chal_id)
@@ -1743,7 +1755,9 @@ class RpcDispatcher:
                 continue
 
             chal_id = None
-            for k, v in self._challenge_event_map.items():
+            with self._state_lock:
+                map_items = list(self._challenge_event_map.items())
+            for k, v in map_items:
                 if v == evt_id:
                     chal_id = k
                     break
@@ -2155,8 +2169,11 @@ class RpcDispatcher:
             # cutoff: the board is capped at the player's progress inside the
             # rally (see the cutoff logic below).
             if event_id is None:
-                for cid, eid in self._challenge_event_map.items():
-                    base = cid - self._challenge_subevent_map.get(cid, 0)
+                with self._state_lock:
+                    map_items = [(cid, eid, self._challenge_subevent_map.get(cid, 0))
+                                 for cid, eid in self._challenge_event_map.items()]
+                for cid, eid, sub_off in map_items:
+                    base = cid - sub_off
                     diff = lb_id - (base + 900000)
                     if diff < 0 or diff % 10_000_000 != 0:
                         continue
@@ -2174,8 +2191,11 @@ class RpcDispatcher:
             # so recover the base first. Resolve to a FLAT ordinal so the
             # cutoff/pre-persist land on the right stage.
             if event_id is None:
-                for cid, eid in self._challenge_event_map.items():
-                    base = cid - self._challenge_subevent_map.get(cid, 0)
+                with self._state_lock:
+                    map_items = [(cid, eid, self._challenge_subevent_map.get(cid, 0))
+                                 for cid, eid in self._challenge_event_map.items()]
+                for cid, eid, sub_off in map_items:
+                    base = cid - sub_off
                     diff = lb_id - base * 10
                     if diff < 0:
                         continue
@@ -2534,16 +2554,18 @@ class RpcDispatcher:
         _POSTTIME_SPLITS_TTL_S (a quit between PostTime and StageComplete
         leaves nothing to hand over)."""
         now = time.time()
-        stale = [vid for vid, (ts, _) in self._pending_posttime_splits.items()
-                 if now - ts > _POSTTIME_SPLITS_TTL_S]
-        for vid in stale:
-            del self._pending_posttime_splits[vid]
-        self._pending_posttime_splits[vehicle_id] = (now, splits)
+        with self._state_lock:
+            stale = [vid for vid, (ts, _) in self._pending_posttime_splits.items()
+                     if now - ts > _POSTTIME_SPLITS_TTL_S]
+            for vid in stale:
+                del self._pending_posttime_splits[vid]
+            self._pending_posttime_splits[vehicle_id] = (now, splits)
 
     def take_posttime_splits(self, vehicle_id: int) -> Optional[List[float]]:
         """Pop the stashed PostTime splits for this car (None when absent or
         expired — a DNF close-out never had a PostTime to stash)."""
-        entry = self._pending_posttime_splits.pop(vehicle_id, None)
+        with self._state_lock:
+            entry = self._pending_posttime_splits.pop(vehicle_id, None)
         if entry is None:
             return None
         ts, splits = entry
@@ -2555,16 +2577,18 @@ class RpcDispatcher:
         """Remember the PostTime run's measured distance (see
         _stash_posttime_splits) for the stage-detail merge that follows."""
         now = time.time()
-        stale = [vid for vid, (ts, _) in self._pending_posttime_distance.items()
-                 if now - ts > _POSTTIME_SPLITS_TTL_S]
-        for vid in stale:
-            del self._pending_posttime_distance[vid]
-        self._pending_posttime_distance[vehicle_id] = (now, distance_m)
+        with self._state_lock:
+            stale = [vid for vid, (ts, _) in self._pending_posttime_distance.items()
+                     if now - ts > _POSTTIME_SPLITS_TTL_S]
+            for vid in stale:
+                del self._pending_posttime_distance[vid]
+            self._pending_posttime_distance[vehicle_id] = (now, distance_m)
 
     def take_posttime_distance(self, vehicle_id: int) -> Optional[int]:
         """Pop the stashed PostTime run distance for this car (None when absent
         or expired)."""
-        entry = self._pending_posttime_distance.pop(vehicle_id, None)
+        with self._state_lock:
+            entry = self._pending_posttime_distance.pop(vehicle_id, None)
         if entry is None:
             return None
         ts, distance_m = entry
@@ -2576,16 +2600,18 @@ class RpcDispatcher:
         """Remember the PostTime run's detected penalties (see
         _stash_posttime_splits) for the stage-detail merge that follows."""
         now = time.time()
-        stale = [vid for vid, (ts, _) in self._pending_posttime_penalty.items()
-                 if now - ts > _POSTTIME_SPLITS_TTL_S]
-        for vid in stale:
-            del self._pending_posttime_penalty[vid]
-        self._pending_posttime_penalty[vehicle_id] = (now, penalty_ms)
+        with self._state_lock:
+            stale = [vid for vid, (ts, _) in self._pending_posttime_penalty.items()
+                     if now - ts > _POSTTIME_SPLITS_TTL_S]
+            for vid in stale:
+                del self._pending_posttime_penalty[vid]
+            self._pending_posttime_penalty[vehicle_id] = (now, penalty_ms)
 
     def take_posttime_penalty(self, vehicle_id: int) -> Optional[int]:
         """Pop the stashed PostTime run penalties for this car (None when
         absent, expired, or no penalty was detected)."""
-        entry = self._pending_posttime_penalty.pop(vehicle_id, None)
+        with self._state_lock:
+            entry = self._pending_posttime_penalty.pop(vehicle_id, None)
         if entry is None:
             return None
         ts, penalty_ms = entry
@@ -3184,7 +3210,9 @@ class RpcDispatcher:
         StageComplete path owns it), though the best + ghost are still filed."""
         if not track_id:
             return False
-        return any(t == track_id for t in self._open_club_stages.values())
+        with self._state_lock:
+            open_tracks = list(self._open_club_stages.values())
+        return any(t == track_id for t in open_tracks)
 
     def note_official_stage_begin(self, payload: Dict[str, Any]) -> None:
         """Arm the telemetry run clock on a proxied (official) stage begin, so

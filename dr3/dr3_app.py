@@ -7,6 +7,7 @@ PyInstaller compiles this file into a single executable via build_exe.py.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -93,6 +94,9 @@ CONFIG_PATH = DR3_DIR / "config.json"
 CERTS_DIR = DR3_DIR / "certs"
 CERT_PATH = CERTS_DIR / "dr2server-cert.pem"
 KEY_PATH = CERTS_DIR / "dr2server-key.pem"
+# Outgoing cert, saved before a regeneration so the elevated helper can drop
+# its trust entry (self-rotation). Never loaded by the server.
+PREV_CERT_PATH = CERTS_DIR / "dr2server-cert.prev.pem"
 LOG_PATH = DR3_DIR / "debug.log"
 LOGS_DIR = DR3_DIR / "logs"            # archived session logs (backlog #52)
 CAPTURES_DIR = DR3_DIR / "captures"
@@ -249,6 +253,26 @@ VERSION_CHECK_URL = "https://byagersi.com/rally/api/client-version"
 UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000  # re-check while the app is open
 UPDATES_DIR = DR3_DIR / "updates"          # staged auto-updater downloads
 
+# The server JSON's download_url must point at our own domain — anything else
+# is treated as "no update" (a compromised/phishing endpoint must not be able
+# to steer the client at a foreign download).
+UPDATE_DOWNLOAD_HOSTS = frozenset({"byagersi.com"})
+
+# Ed25519 public key (PEM) that release zips are signed with. The private key
+# lives only on the build machine (gitignored tools/keys/, see
+# tools/generate_update_key.py). A download whose signature does not verify
+# against this key is discarded — see _verify_update_signature(). Rotating
+# the key requires shipping a new client.
+UPDATE_PUBLIC_KEY_PEM = b"""-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEA9kSSlpvKZcZlM54yspcaHgHzsVWmvjW7QuZQVqB7+Zg=
+-----END PUBLIC KEY-----
+"""
+
+# build_exe.py writes this file into every bundle: {"version": ..., "files":
+# [relative paths]}. It is the ownership proof that _install_dir() requires
+# before update/uninstall may touch the folder holding DR3.exe.
+INSTALL_MANIFEST_NAME = "INSTALL_MANIFEST.json"
+
 
 # ---------------------------------------------------------------------------
 # Admin helpers
@@ -383,11 +407,30 @@ def _run_admin_helper(op: str) -> int:
             # Hosts first: it's the part the game can't work without. A cert
             # failure is reported separately so the parent can say so.
             add_hosts()
-            if IS_WIN and cert_exists() and not install_cert_trust():
-                return ADMIN_HELPER_CERT_FAILED
+            if IS_WIN:
+                # Self-rotation: setup_and_start saved the outgoing cert before
+                # regenerating — drop its trust entry so the Root store never
+                # accumulates stale DR3 copies. Best-effort: an orphaned entry
+                # is inert without its private key, and install re-trusts below.
+                if PREV_CERT_PATH.exists():
+                    remove_dr3_trust(PREV_CERT_PATH)
+                    try:
+                        PREV_CERT_PATH.unlink()
+                    except OSError:
+                        pass
+                if cert_exists() and not install_cert_trust():
+                    return ADMIN_HELPER_CERT_FAILED
             return ADMIN_HELPER_OK
         if op == "stop":
             remove_hosts()
+            return ADMIN_HELPER_OK
+        if op == "uninstall":
+            # Full cleanup: hosts (idempotent — STOP may have run already) plus
+            # every DR3-issued cert in the Root store. The game needs the cert
+            # while running, so STOP deliberately keeps it; only uninstall drops it.
+            remove_hosts()
+            if IS_WIN and not remove_dr3_trust():
+                return ADMIN_HELPER_CERT_FAILED
             return ADMIN_HELPER_OK
     except Exception:
         # stderr is tee'd into this child's own debug.log (see
@@ -423,9 +466,11 @@ def generate_cert() -> None:
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - timedelta(days=1))
-        .not_valid_after(now + timedelta(days=3650))
+        .not_valid_after(now + timedelta(days=365))
         .add_extension(x509.SubjectAlternativeName([x509.DNSName(h) for h in hosts]), critical=False)
-        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        # Not a CA: this cert only ever serves itself (hosts-redirected domains),
+        # so it must never be usable to sign other certificates.
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
         .sign(key, hashes.SHA256())
     )
     CERT_PATH.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
@@ -440,23 +485,106 @@ def cert_exists() -> bool:
     return CERT_PATH.exists() and KEY_PATH.exists()
 
 
-def install_cert_trust() -> bool:
-    """Install cert into the Windows machine Root store. Returns True on success.
+def cert_needs_regen() -> bool:
+    """True when there is no usable cert: missing, unreadable, expiring
+    within 30 days, or still a legacy CA-flagged cert (pre-v0.1.94). A fresh
+    key+cert pair is cheap to make, and START re-trusts it (self-rotation
+    drops the previous entry from the Root store)."""
+    if not cert_exists():
+        return True
+    try:
+        from cryptography import x509
+        cert = x509.load_pem_x509_certificate(CERT_PATH.read_bytes())
+        exp = getattr(cert, "not_valid_after_utc", None)
+        if exp is None:  # cryptography < 42
+            exp = cert.not_valid_after.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) + timedelta(days=30) >= exp:
+            return True
+        try:
+            bc = cert.extensions.get_extension_for_class(x509.BasicConstraints).value
+        except x509.ExtensionNotFound:
+            return True  # cannot verify constraints -> regenerate
+        return bool(bc.ca)  # legacy CA-flagged cert -> migrate to a non-CA leaf
+    except Exception:
+        return True
 
-    Uses crypt32 directly instead of shelling out to `certutil -addstore Root`,
-    which is a common malware behavior that AV heuristics weigh against us.
-    Must run elevated (the helper child is).
-    """
-    import ssl
+
+def _open_root_store(crypt32):
+    """Open the machine-wide ROOT store (elevated context). Returns a handle or None."""
     import ctypes.wintypes as wt
-
     X509_ASN_ENCODING = 0x1
-    CERT_STORE_ADD_REPLACE_EXISTING = 3
     CERT_STORE_PROV_SYSTEM_W = 10
     # Same store `certutil -addstore Root` targets: HKLM, trusted for every
     # user on the machine (CertOpenSystemStore would pick the elevating
     # admin's per-user store, which isn't necessarily the player's).
     CERT_SYSTEM_STORE_LOCAL_MACHINE = 0x00020000
+
+    crypt32.CertOpenStore.argtypes = [
+        ctypes.c_void_p, wt.DWORD, ctypes.c_void_p, wt.DWORD, wt.LPCWSTR,
+    ]
+    crypt32.CertOpenStore.restype = ctypes.c_void_p
+    crypt32.CertCloseStore.argtypes = [ctypes.c_void_p, wt.DWORD]
+    crypt32.CertCloseStore.restype = wt.BOOL
+
+    return crypt32.CertOpenStore(
+        ctypes.c_void_p(CERT_STORE_PROV_SYSTEM_W), 0, None,
+        CERT_SYSTEM_STORE_LOCAL_MACHINE, "ROOT",
+    )
+
+
+def _cert_thumbprint(pem_path) -> str | None:
+    """Uppercase SHA-1 thumbprint of the PEM cert at pem_path — the name of
+    its registry key under SystemCertificates\\Root\\Certificates. None when
+    the file is missing or unreadable."""
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.primitives import serialization
+        cert = x509.load_pem_x509_certificate(Path(pem_path).read_bytes())
+        return hashlib.sha1(
+            cert.public_bytes(serialization.Encoding.DER)
+        ).hexdigest().upper()
+    except Exception:
+        return None
+
+
+def remove_dr3_trust(cert_pem_path=None) -> bool:
+    """Elevated: drop the DR3 cert (read from disk) from the machine Root store.
+
+    No store enumeration — we always know our own cert's SHA-1 thumbprint, and
+    CertEnumCertificatesInStore proved unreliable on at least one Windows build
+    (access violation while enumerating a non-empty system store). Returns True
+    when the entry is gone (or was never there); False when nothing could be
+    determined or the registry rejected the delete."""
+    import winreg
+
+    tp = _cert_thumbprint(cert_pem_path or CERT_PATH)
+    if not tp:
+        return False
+    key = r"Software\Microsoft\SystemCertificates\Root\Certificates\\" + tp
+    try:
+        winreg.DeleteKey(winreg.HKEY_LOCAL_MACHINE, key)
+        return True
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+
+
+def install_cert_trust() -> bool:
+    """Install the current cert into the Windows machine Root store.
+    Returns True on success. Must run elevated (the helper child is).
+
+    Uses crypt32 directly instead of shelling out to `certutil -addstore Root`,
+    which is a common malware behavior that AV heuristics weigh against us.
+
+    Self-rotation: the caller (admin-helper "start") removes the outgoing cert's
+    trust entry first — see PREV_CERT_PATH — so the Root store never accumulates
+    stale copies of ours."""
+    import ssl
+    import ctypes.wintypes as wt
+
+    X509_ASN_ENCODING = 0x1
+    CERT_STORE_ADD_REPLACE_EXISTING = 3
 
     try:
         der = ssl.PEM_cert_to_DER_cert(CERT_PATH.read_text(encoding="utf-8"))
@@ -464,24 +592,14 @@ def install_cert_trust() -> bool:
         return False
 
     crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
-    crypt32.CertOpenStore.argtypes = [
-        ctypes.c_void_p, wt.DWORD, ctypes.c_void_p, wt.DWORD, wt.LPCWSTR,
-    ]
-    crypt32.CertOpenStore.restype = ctypes.c_void_p
-    crypt32.CertAddEncodedCertificateToStore.argtypes = [
-        ctypes.c_void_p, wt.DWORD, ctypes.c_char_p, wt.DWORD, wt.DWORD, ctypes.c_void_p,
-    ]
-    crypt32.CertAddEncodedCertificateToStore.restype = wt.BOOL
-    crypt32.CertCloseStore.argtypes = [ctypes.c_void_p, wt.DWORD]
-    crypt32.CertCloseStore.restype = wt.BOOL
-
-    store = crypt32.CertOpenStore(
-        ctypes.c_void_p(CERT_STORE_PROV_SYSTEM_W), 0, None,
-        CERT_SYSTEM_STORE_LOCAL_MACHINE, "ROOT",
-    )
+    store = _open_root_store(crypt32)
     if not store:
         return False
     try:
+        crypt32.CertAddEncodedCertificateToStore.argtypes = [
+            ctypes.c_void_p, wt.DWORD, ctypes.c_char_p, wt.DWORD, wt.DWORD, ctypes.c_void_p,
+        ]
+        crypt32.CertAddEncodedCertificateToStore.restype = wt.BOOL
         return bool(crypt32.CertAddEncodedCertificateToStore(
             store, X509_ASN_ENCODING, der, len(der),
             CERT_STORE_ADD_REPLACE_EXISTING, None,
@@ -597,55 +715,90 @@ def install_cert_into_dr2_prefix(cert_path: Path) -> tuple[bool, str]:
 # Hosts file
 # ---------------------------------------------------------------------------
 
-def _read_hosts() -> str:
+def _read_hosts() -> tuple[str, str]:
+    """(content, encoding) — the encoding that actually decoded the file is
+    remembered so writes preserve it (a latin-1 hosts file must not come back
+    as utf-8 and confuse other tools)."""
     try:
-        return HOSTS_FILE.read_text(encoding="utf-8")
+        return HOSTS_FILE.read_text(encoding="utf-8"), "utf-8"
     except FileNotFoundError:
         # A missing hosts file (removed by AV or a "PC optimizer") behaves
         # like an empty one for name resolution; treat it as such so
         # add_hosts recreates it instead of crashing the elevated helper.
-        return ""
+        return "", "utf-8"
     except UnicodeDecodeError:
-        return HOSTS_FILE.read_text(encoding="latin-1")
+        return HOSTS_FILE.read_text(encoding="latin-1"), "latin-1"
+
+
+def _our_redirect_lines() -> set[str]:
+    """Stripped forms of the hostname lines DR3 writes (tab or single space)."""
+    out = set()
+    for d in REDIRECT_DOMAINS:
+        out.add(f"{SERVER_IP}\t{d}")
+        out.add(f"{SERVER_IP} {d}")
+    return out
 
 
 def _strip_block(content: str) -> str:
+    """Remove DR3's hosts block.
+
+    Both markers present  -> drop the whole block (markers included), as before.
+    Otherwise (manually edited / half-removed) -> drop ONLY our own lines:
+    the four hostname redirects and any orphaned marker — never arbitrary
+    content, so a missing END can no longer eat the rest of the file."""
     lines = content.splitlines(keepends=True)
+    has_begin = any(l.strip() == HOSTS_BEGIN for l in lines)
+    has_end = any(l.strip() == HOSTS_END for l in lines)
+    ours = _our_redirect_lines()
     out, inside = [], False
     for line in lines:
         s = line.strip()
-        if s == HOSTS_BEGIN:
-            inside = True; continue
-        if s == HOSTS_END:
-            inside = False; continue
-        if not inside:
-            out.append(line)
+        if s == HOSTS_BEGIN or s == HOSTS_END:
+            # Our own marker line — always dropped (with the block when both
+            # are present, on its own when orphaned).
+            if has_begin and has_end:
+                inside = (s == HOSTS_BEGIN)
+            continue
+        if has_begin and has_end and inside:
+            continue
+        if s in ours:
+            continue
+        out.append(line)
     return "".join(out)
+
+
+def _write_hosts_atomic(text: str, encoding: str) -> None:
+    """Write via a temp file + os.replace so a crash mid-write can never leave
+    a truncated hosts file behind."""
+    data = text.encode(encoding)
+    tmp = HOSTS_FILE.with_name(HOSTS_FILE.name + ".dr3tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, HOSTS_FILE)
 
 
 def hosts_configured() -> bool:
     try:
-        content = _read_hosts()
+        content, _enc = _read_hosts()
     except OSError:
         return False
     return HOSTS_BEGIN in content and REDIRECT_DOMAINS[0] in content
 
 
 def add_hosts() -> None:
-    existing = _read_hosts()
+    existing, enc = _read_hosts()
     cleaned = _strip_block(existing).rstrip("\r\n")
     nl = HOSTS_NEWLINE
     block = [HOSTS_BEGIN] + [f"{SERVER_IP}\t{d}" for d in REDIRECT_DOMAINS] + [HOSTS_END]
     new = (cleaned + nl + nl + nl.join(block) + nl) if cleaned else (nl.join(block) + nl)
-    HOSTS_FILE.write_bytes(new.encode("utf-8"))
+    _write_hosts_atomic(new, enc)
 
 
 def remove_hosts() -> None:
     if not HOSTS_FILE.exists():
         return  # nothing to remove (hosts file missing, e.g. removed by AV)
-    existing = _read_hosts()
+    existing, enc = _read_hosts()
     cleaned = _strip_block(existing)
-    HOSTS_FILE.write_bytes(cleaned.encode("utf-8"))
+    _write_hosts_atomic(cleaned, enc)
 
 
 # ---------------------------------------------------------------------------
@@ -656,17 +809,46 @@ def _is_pyinstaller_bundle() -> bool:
     return hasattr(sys, "_MEIPASS") or getattr(sys, "frozen", False)
 
 
+def _read_install_manifest(bundle_dir: Path) -> Optional[dict]:
+    """Parse the bundle's INSTALL_MANIFEST.json (written by build_exe.py).
+
+    Returns the manifest dict, or None when it is missing, unreadable, or not
+    in the expected shape ({"version": str, "files": [non-empty strs]})."""
+    try:
+        data = json.loads(
+            (bundle_dir / INSTALL_MANIFEST_NAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    files = data.get("files")
+    if not isinstance(files, list) or not files:
+        return None
+    if not all(isinstance(x, str) and x for x in files):
+        return None
+    return data
+
+
 def _install_dir() -> Optional[Path]:
     """The folder holding DR3.exe in an installed (bundled) build.
 
-    None for source runs (`python dr3_app.py`) or any unexpected layout, so
-    uninstall can never point at a repo checkout or a foreign directory."""
+    None for source runs (`python dr3_app.py`) or any layout we cannot prove
+    is our own: the folder must be named DR3 and carry a valid INSTALL_MANIFEST
+    whose version matches the running exe, so update/uninstall can never point
+    at a repo checkout or a foreign directory (e.g. a loose extract on the
+    Desktop)."""
     if not _is_pyinstaller_bundle():
         return None
     exe = Path(sys.executable)
     if exe.name.lower() != "dr3.exe":
         return None
-    return exe.parent
+    install_dir = exe.parent
+    if install_dir.name.lower() != "dr3":
+        return None
+    manifest = _read_install_manifest(install_dir)
+    if manifest is None or str(manifest.get("version", "")) != VERSION:
+        return None
+    return install_dir
 
 
 def _elevation_target_binary() -> Path:
@@ -864,14 +1046,41 @@ def _staged_update() -> Optional[tuple]:
 
 def _validate_update_zip(path: Path) -> bool:
     """A client zip must be a real archive carrying the onedir bundle —
-    top-level ``DR3/`` with ``DR3.exe`` inside (build_exe.py's layout)."""
+    top-level ``DR3/`` with ``DR3.exe`` AND ``INSTALL_MANIFEST.json`` inside
+    (build_exe.py's layout)."""
     import zipfile
     try:
         if not zipfile.is_zipfile(path):
             return False
         with zipfile.ZipFile(path) as zf:
             names = set(zf.namelist())
-        return "DR3/DR3.exe" in names
+        return "DR3/DR3.exe" in names and \
+            f"DR3/{INSTALL_MANIFEST_NAME}" in names
+    except Exception:
+        return False
+
+
+def _update_url_allowed(url: str) -> bool:
+    """C3: only https URLs on our own domain may host client downloads.
+
+    Loopback hosts are tolerated so the local e2e test server can be
+    exercised; production always serves https from byagersi.com."""
+    import urllib.parse
+    parsed = urllib.parse.urlparse(url)
+    host = parsed.hostname or ""
+    if host in ("127.0.0.1", "localhost"):
+        return True
+    return host in UPDATE_DOWNLOAD_HOSTS and parsed.scheme == "https"
+
+
+def _verify_update_signature(zip_bytes: bytes, sig_bytes: bytes) -> bool:
+    """True when ``sig_bytes`` is a valid Ed25519 signature over
+    ``zip_bytes`` by our release key (UPDATE_PUBLIC_KEY_PEM)."""
+    try:
+        from cryptography.hazmat.primitives import serialization
+        public_key = serialization.load_pem_public_key(UPDATE_PUBLIC_KEY_PEM)
+        public_key.verify(sig_bytes, zip_bytes)
+        return True
     except Exception:
         return False
 
@@ -901,6 +1110,17 @@ def _download_update(url: str, version: str, progress_cb) -> Optional[Path]:
                     out.write(chunk)
                     done += len(chunk)
                     progress_cb(done, total)
+        # Signature gate (C3): the release zip must carry a valid Ed25519
+        # signature, fetched as <url>.sig, before it is accepted. A missing or
+        # bad signature is treated exactly like a failed download.
+        try:
+            sig_req = urllib.request.Request(f"{url}.sig", headers={"User-Agent": "DR3"})
+            with robust_urlopen(sig_req, timeout=15) as sig_resp:
+                sig = sig_resp.read()
+        except Exception:
+            return None
+        if not _verify_update_signature(part.read_bytes(), sig):
+            return None
         if not _validate_update_zip(part):
             return None
         part.replace(final)
@@ -981,6 +1201,13 @@ def _apply_update(zip_path: Path, install_dir: Path, parent_pid: int,
         new_root = staging / "DR3"
         if not (new_root / "DR3.exe").is_file():
             return fail(7, "extracted zip is missing DR3/DR3.exe")
+        # The new bundle must carry its own ownership manifest, and it must
+        # agree with the version the zip file name advertises — a mismatch
+        # means the staged file was tampered with or mis-paired.
+        manifest = _read_install_manifest(new_root)
+        if manifest is None or str(manifest.get("version", "")) != ver_str:
+            return fail(10, f"extracted bundle's {INSTALL_MANIFEST_NAME} is "
+                            f"missing or does not match v{ver_str}")
 
         # Keep exactly one backup of the previous install (the VPS keeps
         # .bak-<oldver> zips for the same reason).
@@ -1130,53 +1357,73 @@ TELEMETRY_PORT = 20999
 # ---------------------------------------------------------------------------
 
 
-def _linux_admin_start_script(setcap_target: Path) -> str:
-    """Helper Python script (run via pkexec) that:
-       1. Grants cap_net_bind_service to setcap_target.
-       2. Writes the /etc/hosts block.
-    """
-    return (
-        "import subprocess\n"
-        f"target = {str(setcap_target)!r}\n"
-        "r = subprocess.run(['setcap', 'cap_net_bind_service=+ep', target], capture_output=True, text=True)\n"
-        "print('setcap:', 'ok' if r.returncode == 0 else 'fail ' + (r.stderr or '').strip())\n"
-        f"hosts = {str(HOSTS_FILE)!r}\n"
-        "try:\n"
-        "    content = open(hosts, encoding='utf-8').read()\n"
-        "except UnicodeDecodeError:\n"
-        "    content = open(hosts, encoding='latin-1').read()\n"
-        "lines, out, inside = content.splitlines(True), [], False\n"
-        "for l in lines:\n"
-        "    s = l.strip()\n"
-        f"    if s == {HOSTS_BEGIN!r}: inside = True; continue\n"
-        f"    if s == {HOSTS_END!r}: inside = False; continue\n"
-        "    if not inside: out.append(l)\n"
-        "cleaned = ''.join(out).rstrip('\\n')\n"
-        f"block = '\\n'.join([{HOSTS_BEGIN!r}] + "
-        f"[{SERVER_IP!r} + '\\t' + d for d in {REDIRECT_DOMAINS!r}] + "
-        f"[{HOSTS_END!r}])\n"
-        "new = (cleaned + '\\n\\n' + block + '\\n') if cleaned else (block + '\\n')\n"
-        "open(hosts, 'wb').write(new.encode('utf-8'))\n"
-        "print('hosts: ok')\n"
-    )
+def _linux_admin_script(add: bool, setcap_target: Optional[Path]) -> str:
+    """Python source for the elevated pkexec child — passed via
+    `pkexec python3 -c <script>` (C9), so no world-readable helper file is
+    ever written to disk.
 
+    add=True : grant cap_net_bind_service, then write the hosts block.
+    add=False: remove the hosts block only.
 
-def _linux_admin_stop_script() -> str:
-    return (
-        f"hosts = {str(HOSTS_FILE)!r}\n"
-        "try:\n"
-        "    content = open(hosts, encoding='utf-8').read()\n"
-        "except UnicodeDecodeError:\n"
-        "    content = open(hosts, encoding='latin-1').read()\n"
-        "lines, out, inside = content.splitlines(True), [], False\n"
-        "for l in lines:\n"
-        "    s = l.strip()\n"
-        f"    if s == {HOSTS_BEGIN!r}: inside = True; continue\n"
-        f"    if s == {HOSTS_END!r}: inside = False; continue\n"
-        "    if not inside: out.append(l)\n"
-        "open(hosts, 'wb').write(''.join(out).encode('utf-8'))\n"
-        "print('ok')\n"
-    )
+    Hosts logic mirrors _strip_block()/_write_hosts_atomic() (C7): the block
+    is stripped only when BOTH markers are present, otherwise just our own
+    lines; the file's original encoding is preserved; the write is atomic
+    (temp file + os.replace)."""
+    L: list[str] = []
+    if add and setcap_target is not None:
+        L += [
+            "import subprocess",
+            f"target = {str(setcap_target)!r}",
+            "r = subprocess.run(['setcap', 'cap_net_bind_service=+ep', target], capture_output=True, text=True)",
+            "print('setcap:', 'ok' if r.returncode == 0 else 'fail ' + (r.stderr or '').strip())",
+        ]
+    L += [
+        "import os",
+        f"hosts = {str(HOSTS_FILE)!r}",
+        f"BEGIN, END = {HOSTS_BEGIN!r}, {HOSTS_END!r}",
+        f"DOMAINS = {REDIRECT_DOMAINS!r}",
+        f"IP = {SERVER_IP!r}",
+        "try:",
+        "    content, enc = open(hosts, encoding='utf-8').read(), 'utf-8'",
+        "except FileNotFoundError:",
+        "    content, enc = '', 'utf-8'",
+        "except UnicodeDecodeError:",
+        "    content, enc = open(hosts, encoding='latin-1').read(), 'latin-1'",
+        "lines = content.splitlines(True)",
+        "has_b = any(l.strip() == BEGIN for l in lines)",
+        "has_e = any(l.strip() == END for l in lines)",
+        "ours = {IP + '\\t' + d for d in DOMAINS} | {IP + ' ' + d for d in DOMAINS}",
+        "out, inside = [], False",
+        "for l in lines:",
+        "    s = l.strip()",
+        "    if s == BEGIN or s == END:",
+        "        if has_b and has_e:",
+        "            inside = (s == BEGIN)",
+        "        continue",
+        "    if has_b and has_e and inside:",
+        "        continue",
+        "    if s in ours:",
+        "        continue",
+        "    out.append(l)",
+        "cleaned = ''.join(out)",
+    ]
+    if add:
+        L += [
+            "block = [BEGIN] + [IP + '\\t' + d for d in DOMAINS] + [END]",
+            "c2 = cleaned.rstrip('\\r\\n')",
+            "new = (c2 + '\\n\\n' + '\\n'.join(block) + '\\n') if c2 else ('\\n'.join(block) + '\\n')",
+        ]
+    else:
+        L += ["new = cleaned"]
+    L += [
+        "data = new.encode(enc)",
+        "tmp = hosts + '.dr3tmp'",
+        "with open(tmp, 'wb') as f:",
+        "    f.write(data)",
+        "os.replace(tmp, hosts)",
+        "print('hosts: ok')" if add else "print('ok')",
+    ]
+    return "\n".join(L) + "\n"
 
 
 def tel_status_text(server_up: bool, enabled: bool, holder: dict, listener,
@@ -1354,6 +1601,10 @@ def run_gui():
             remote_tag = str(data.get("version", "")).lstrip("v")
             dl_url = data.get("download_url", "")
             if not remote_tag or not dl_url:
+                return
+            # C3: only our own domain may host client downloads — a foreign
+            # URL (compromised endpoint, MITM) is treated as "no update".
+            if not _update_url_allowed(dl_url):
                 return
             remote = _version_tuple(remote_tag)
             local = _version_tuple(VERSION)
@@ -2342,9 +2593,14 @@ def run_gui():
             try:
                 easy_setup = easy_setup_var.get()
 
-                # Generate cert if missing (needed in both modes — server loads it).
-                if not cert_exists():
+                # Generate cert if missing or near expiry (needed in both modes — server loads it).
+                if not cert_exists() or cert_needs_regen():
                     root.after(0, lambda: log("Generating TLS certificate..."))
+                    if CERT_PATH.exists():
+                        try:  # keep the outgoing cert for trust self-rotation
+                            PREV_CERT_PATH.write_bytes(CERT_PATH.read_bytes())
+                        except OSError:
+                            pass
                     generate_cert()
                     config["cert_path"] = str(CERT_PATH)
                     config["key_path"] = str(KEY_PATH)
@@ -2405,21 +2661,18 @@ def run_gui():
                                 steps.append("/etc/hosts")
                             root.after(0, lambda s=", ".join(steps): log(
                                 f"Authentication required to set up {s}..."))
-                            helper = DR3_DIR / "_admin_start.py"
-                            helper.write_text(_linux_admin_start_script(target_bin), encoding="utf-8")
+                            script = _linux_admin_script(add=True, setcap_target=target_bin)
                             try:
                                 result = subprocess.run(
-                                    ["pkexec", str(helper_python), str(helper)],
+                                    ["pkexec", str(helper_python), "-c", script],
                                     capture_output=True, text=True,
                                     timeout=ELEVATION_TIMEOUT_SECONDS,
                                 )
                             except subprocess.TimeoutExpired:
-                                helper.unlink(missing_ok=True)
                                 root.after(0, lambda: log(
                                     "WARNING: polkit prompt timed out after 5 minutes."))
                                 result = None
                             if result is not None:
-                                helper.unlink(missing_ok=True)
                                 out = (result.stdout or "").strip()
                                 if result.returncode != 0:
                                     err = (result.stderr or out or "no output").strip().splitlines()[-1:] or [""]
@@ -2496,16 +2749,12 @@ def run_gui():
                         root.after(0, lambda: log(
                             "WARNING: no python3 on PATH; cannot remove hosts entries."))
                     else:
-                        helper = DR3_DIR / "_admin_stop.py"
-                        helper.write_text(_linux_admin_stop_script(), encoding="utf-8")
-                        try:
-                            subprocess.run(
-                                ["pkexec", str(helper_python), str(helper)],
-                                capture_output=True, text=True,
-                                timeout=ELEVATION_TIMEOUT_SECONDS,
-                            )
-                        finally:
-                            helper.unlink(missing_ok=True)
+                        script = _linux_admin_script(add=False, setcap_target=None)
+                        subprocess.run(
+                            ["pkexec", str(helper_python), "-c", script],
+                            capture_output=True, text=True,
+                            timeout=ELEVATION_TIMEOUT_SECONDS,
+                        )
             except subprocess.TimeoutExpired:
                 root.after(0, lambda: log(
                     "WARNING: elevation prompt timed out after 5 minutes."))
@@ -2536,19 +2785,13 @@ def run_gui():
         if server_running.is_set():
             log("Press STOP first, then uninstall.")
             return
-        hosts_note = ""
-        if easy_setup_var.get() and hosts_configured():
-            hosts_note = (
-                "\n\nNote: your hosts file still points the game at DR3. "
-                "Press STOP to restore it (or run scripts\\remove_windows_redirect.ps1 "
-                "as administrator)."
-            )
         if not messagebox.askyesno(
                 "DR3",
                 f"This removes:\n\n"
                 f"  {install_dir}\n"
-                f"  {DR3_DIR}   (settings, logs, captures)\n"
-                f"{hosts_note}\n\nUninstall DR3?",
+                f"  {DR3_DIR}   (settings, logs, captures)\n\n"
+                "It also restores the hosts file and removes DR3's certificate "
+                "from the Windows trust store.\n\nUninstall DR3?",
                 icon="warning",
                 default="no",
         ):
@@ -2557,12 +2800,75 @@ def run_gui():
             log("Automatic uninstall is only available on Windows — delete the DR3 folder "
                 f"and {DR3_DIR} manually.")
             return
+        # Drop cert trust + any leftover hosts entries (elevation). Done before
+        # the folders go so a failed cleanup can still be retried from the GUI.
+        try:
+            rc = _windows_elevate_admin_helper("uninstall")
+        except subprocess.TimeoutExpired:
+            log("WARNING: the admin prompt timed out after 5 minutes; the certificate "
+                "may still be in the Windows trust store.")
+            rc = None
+        if rc is not None and rc >= LAUNCH_FAILED_BASE:
+            log(f"WARNING: could not launch the elevated cleanup (Windows error "
+                f"{rc - LAUNCH_FAILED_BASE}); the certificate may still be in the "
+                "Windows trust store.")
+        elif rc == ADMIN_HELPER_CERT_FAILED:
+            log("WARNING: hosts restored, but removing DR3's certificate from the "
+                "Windows trust store failed. You can delete it manually under "
+                "certlm.msc → Trusted Root Certification Authorities.")
+        elif rc is not None and rc != ADMIN_HELPER_OK:
+            log(f"WARNING: cleanup helper exited with code {rc}; hosts or the "
+                "certificate may still be present.")
         # Drop staged auto-updates so no installer child can race the removal.
         shutil.rmtree(UPDATES_DIR, ignore_errors=True)
-        # The exe is still running from install_dir, so a detached cmd removes
-        # both folders shortly after this process exits.
-        script = (f'timeout /t 2 >nul & rmdir /s /q "{install_dir}" '
-                  f'& rmdir /s /q "{DR3_DIR}"')
+        # Delete exactly the files this install owns (per its manifest) — never
+        # rmdir /s an arbitrary folder. Everything unlocked goes now; whatever
+        # is still locked by the running exe (DR3.exe + loaded DLLs) is handed
+        # to a detached child that finishes the job after this process exits.
+        manifest = _read_install_manifest(install_dir)
+        if manifest is None:
+            log("Uninstall aborted — the install folder no longer carries a "
+                f"valid {INSTALL_MANIFEST_NAME}; please delete it manually.")
+            return
+        locked: list[str] = []
+        for rel in manifest["files"]:
+            target = install_dir / rel
+            try:
+                target.relative_to(install_dir)  # refuse any traversal, ever
+            except ValueError:
+                continue
+            try:
+                if target.is_file():
+                    target.unlink()
+            except OSError:
+                locked.append(str(target))
+        # Empty subdirectories, deepest first — rmdir fails on non-empty, so
+        # anything left behind (locked files or foreign content) stays.
+        for dirpath, _dirnames, _filenames in os.walk(install_dir, topdown=False):
+            try:
+                os.rmdir(dirpath)
+            except OSError:
+                pass
+        child_lines = ["timeout /t 2 >nul"]
+        for f in locked:
+            child_lines.append(f'del /q "{f}"')
+        # Directories that held locked files (full chain up to install_dir),
+        # deepest first — empty by the time the child runs.
+        lock_dirs = set()
+        for f in locked:
+            p = Path(f).parent
+            while p != install_dir and p.anchor != p:
+                lock_dirs.add(p)
+                p = p.parent
+        for d in sorted(lock_dirs, key=len, reverse=True):
+            child_lines.append(f'rmdir "{d}"')
+        child_lines.append(f'rmdir "{install_dir}"')
+        for old_bak in install_dir.parent.glob("DR3.bak-*"):
+            if old_bak.is_dir():
+                # Backup folders are always ours (created by _apply_update).
+                child_lines.append(f'rmdir /s /q "{old_bak}"')
+        child_lines.append(f'rmdir /s /q "{DR3_DIR}"')
+        script = " & ".join(child_lines)
         try:
             subprocess.Popen(
                 ["cmd", "/c", script],
@@ -2572,7 +2878,7 @@ def run_gui():
         except Exception as exc:
             log(f"Uninstall failed to start: {exc}")
             return
-        log("Uninstalling — the DR3 folders will be removed in a few seconds.")
+        log("Uninstalling — the DR3 files will be removed in a few seconds.")
         root.destroy()
 
     start_btn.configure(command=on_start)
@@ -2596,7 +2902,8 @@ def run_gui():
             while update_state.get("pending") and time.time() < deadline:
                 time.sleep(0.5)
             if update_state.get("pending") or update_state.get("autoclose_at") is not None:
-                log("Update in progress — skipping auto-start; DR3 will reopen after the install.")
+                root.after(0, lambda: log(
+                    "Update in progress — skipping auto-start; DR3 will reopen after the install."))
                 return
             root.after(0, on_start)
 

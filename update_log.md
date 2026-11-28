@@ -2,6 +2,9 @@
 
 What changed in each version of the DR3 Windows client, newest first.
 
+**v0.1.94**
+- Security and stability improvements to the updater and the local server.
+
 **v0.1.93**
 - Your completed split times now show on the website even when a stage ends in terminal damage.
 

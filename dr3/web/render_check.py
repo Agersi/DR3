@@ -495,6 +495,11 @@ def main() -> int:
     r = client.get('/download/DR3-windows.zip')
     check('anon GET /download/DR3-windows.zip', r.status_code == want_dl, f'status={r.status_code}')
 
+    sig_path = HERE.parent / 'dist' / 'DR3-windows.zip.sig'
+    want_sig = 200 if sig_path.is_file() else 404
+    r = client.get('/download/DR3-windows.zip.sig')
+    check('anon GET /download/DR3-windows.zip.sig', r.status_code == want_sig, f'status={r.status_code}')
+
     # install page: auto-launch panel with the launcher recipe
     html = client.get('/install').get_data(as_text=True)
     check('install: auto-launch panel + launcher bat + Steam launch options',

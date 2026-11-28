@@ -23,6 +23,7 @@ from .dispatcher import RpcDispatcher
 from .egonet import Int64, Timestamp, UInt16, UInt32, UInt8, decode_stream, encode_stream
 from .models import CompDamage
 from .stage_detail import StageDetailBuffer
+from .tls_doctor import verify_upstream_leaf
 
 
 # RPC methods whose captures are never saved — noisy heartbeat/inventory calls
@@ -63,58 +64,31 @@ class _UpstreamHTTPSConnection(http.client.HTTPSConnection):
 
     def connect(self) -> None:
         sock = socket.create_connection((self.host, self.port), self.timeout, self.source_address)
-        self.sock = self._context.wrap_socket(sock, server_hostname=self.sni_hostname)
+        # The context is transport-only (CERT_NONE, no OS trust store): CM's
+        # private root signs with SHA-1, which OpenSSL 3 refuses to chain. So
+        # we complete the handshake without verification, then cryptographically
+        # verify the presented leaf against the embedded Codemasters root -
+        # the same one the game binary trusts for its own EgoNet TLS.
+        wrapped = self._context.wrap_socket(sock, server_hostname=self.sni_hostname)
+        leaf_der = wrapped.getpeercert(binary_form=True)
+        if not leaf_der:
+            raise ssl.SSLError("upstream presented no certificate")
+        verify_upstream_leaf(leaf_der, self.sni_hostname)
+        self.sock = wrapped
 
 
 HTML_HOME = """<!doctype html>
 <html>
   <head>
     <meta charset="utf-8">
-    <title>DR2 Community Server</title>
+    <title>DR3 Local Server</title>
   </head>
   <body>
-    <h1>DR2 Community Server</h1>
-    <p>This is the bootstrap server for backend emulation and request capture.</p>
+    <h1>DR3 Local Server</h1>
+    <p>EgoNet endpoint for the DiRT Rally 2.0 client (localhost only).</p>
     <ul>
-      <li><a href="/register">Register account</a></li>
-      <li><a href="/login">Login test</a></li>
       <li><a href="/api/health">Health</a></li>
     </ul>
-  </body>
-</html>
-"""
-
-HTML_REGISTER = """<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Register</title>
-  </head>
-  <body>
-    <h1>Create Account</h1>
-    <form method="post" action="/api/account/register">
-      <label>Username <input name="username" /></label><br />
-      <label>Email <input name="email" /></label><br />
-      <label>Password <input type="password" name="password" /></label><br />
-      <button type="submit">Register</button>
-    </form>
-  </body>
-</html>
-"""
-
-HTML_LOGIN = """<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Login</title>
-  </head>
-  <body>
-    <h1>Login Test</h1>
-    <form method="post" action="/api/account/login">
-      <label>Username <input name="username" /></label><br />
-      <label>Password <input type="password" name="password" /></label><br />
-      <button type="submit">Login</button>
-    </form>
   </body>
 </html>
 """
@@ -141,6 +115,32 @@ LEADERBOARD_ROUTED_METHODS = frozenset({
 # Clubs screen.  We have no such service, so answer IsLinked=true ourselves —
 # byte-identical to EGO's response for a linked account (see captures).
 ALWAYS_LOCAL_METHODS = frozenset({"RaceNet.CheckAccountLinked"})
+
+# Host header values accepted on the local listener. The game dials the
+# hosts-redirected Codemasters domains, so those are legitimate; localhost /
+# 127.0.0.1 cover manual probing. Anything else is rejected (defense in depth
+# — the socket only ever binds 127.0.0.1).
+ALLOWED_HOSTS = frozenset({
+    "prod.egonet.codemasters.com",
+    "qa.egonet.codemasters.com",
+    "terms.codemasters.com",
+    "aurora.codemasters.local",
+    "localhost",
+    "127.0.0.1",
+})
+
+# Max accepted POST body (bytes). The largest legitimate EgoNet payloads
+# (StageComplete with damage snapshots, inventory calls) are well under 1 MB.
+MAX_POST_BYTES = 8 * 1024 * 1024
+
+# Methods that persist player results upstream. When the upstream connection
+# fails these must answer with an honest X-EgoNet-Result: 1 (the game shows
+# "CONNECTION FAILED" instead of silently dropping the result); every other
+# method keeps its local fallback so the game stays usable offline.
+RESULT_STORING_METHODS = frozenset({
+    "RaceNetChallenges.StageComplete",
+    "TimeTrial.PostTime",
+})
 
 
 class App:
@@ -423,14 +423,27 @@ class RequestHandler(BaseHTTPRequestHandler):
         event = data.get("event")
         return str(event) if event else None
 
+    def _host_allowed(self) -> bool:
+        host = (self.headers.get("Host") or "").split(":", 1)[0].strip().lower()
+        return host in ALLOWED_HOSTS
+
+    @staticmethod
+    def _capture_headers(headers: Any) -> Dict[str, str]:
+        # Session IDs are credentials — never persist them to capture files.
+        return {key: value for key, value in headers.items()
+                if key.lower() != "x-egonet-sessionid"}
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if not self._host_allowed():
+            return self._send_json(
+                {"ok": False, "error": "forbidden host"}, status=HTTPStatus.FORBIDDEN)
         capture_path = self.app.capture(
             {
                 "method": self.command,
                 "path": parsed.path,
                 "query": parse_qs(parsed.query),
-                "headers": dict(self.headers.items()),
+                "headers": self._capture_headers(self.headers),
                 "body_text": "",
                 "decoded_body": {},
             },
@@ -438,23 +451,38 @@ class RequestHandler(BaseHTTPRequestHandler):
         )
         if parsed.path == "/":
             return self._send_html(HTML_HOME)
-        if parsed.path == "/register":
-            return self._send_html(HTML_REGISTER)
-        if parsed.path == "/login":
-            return self._send_html(HTML_LOGIN)
         if parsed.path == "/api/health":
             return self._send_json({"ok": True, "status": "healthy", "capture_file": str(capture_path)})
         self._send_json({"ok": False, "error": "not found", "capture_file": str(capture_path)}, status=HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
-        content_length = int(self.headers.get("Content-Length", "0"))
+        if not self._host_allowed():
+            return self._send_json(
+                {"ok": False, "error": "forbidden host"}, status=HTTPStatus.FORBIDDEN)
+        try:
+            content_length = int(self.headers.get("Content-Length", "0") or 0)
+        except ValueError:
+            content_length = 0
+        if content_length > MAX_POST_BYTES:
+            # Refuse without reading the oversized body (the connection closes
+            # after the response, so the remainder is dropped with the socket).
+            return self._send_json(
+                {"ok": False, "error": "payload too large"},
+                status=HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
         raw_body = self.rfile.read(content_length) if content_length else b""
         # Store raw body so the proxy handler can access it without re-reading
         self._raw_body = raw_body
-        parsed_body = self._decode_body(raw_body)
         header_map = {key.lower(): value for key, value in self.headers.items()}
         egonet_function = header_map.get("x-egonet-function", "")
+        if not egonet_function:
+            # Only the game talks to this listener — every legitimate POST
+            # carries X-EgoNet-Function. Test pages and generic /rpc routes
+            # are gone; reject everything else.
+            return self._send_json(
+                {"ok": False, "error": "not an EgoNet request"},
+                status=HTTPStatus.FORBIDDEN)
+        parsed_body = self._decode_body(raw_body)
         sub_event = (self._datamining_subevent(parsed_body)
                      if egonet_function == "DataMining.DataEvent" else None)
 
@@ -481,7 +509,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "method": self.command,
                 "path": parsed.path,
                 "query": parse_qs(parsed.query),
-                "headers": dict(self.headers.items()),
+                "headers": self._capture_headers(self.headers),
                 "body_text": raw_body.decode("utf-8", errors="replace"),
                 "body_base64": base64.b64encode(raw_body).decode("ascii"),
                 "decoded_body": parsed_body,
@@ -490,85 +518,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             capture_type=capture_type,
         )
 
-        if egonet_function:
-            return self._handle_egonet_rpc(egonet_function, parsed_body, capture_path)
-
-        if parsed.path == "/api/account/register":
-            return self._handle_register(parsed_body, capture_path)
-        if parsed.path == "/api/account/login":
-            return self._handle_login(parsed_body, capture_path)
-        if parsed.path == "/rpc":
-            return self._handle_rpc(parsed_body, None, capture_path)
-        if parsed.path.startswith("/rpc/"):
-            method = parsed.path.split("/rpc/", 1)[1]
-            return self._handle_rpc(parsed_body, method, capture_path)
-
-        # Fallback for clients that post directly to a method-like path.
-        method_name = parsed.path.strip("/").replace("/", ".")
-        if "." in method_name:
-            return self._handle_rpc(parsed_body, method_name, capture_path)
-
-        self._send_json(
-            {"ok": False, "error": "not found", "capture_file": str(capture_path)},
-            status=HTTPStatus.NOT_FOUND,
-        )
+        return self._handle_egonet_rpc(egonet_function, parsed_body, capture_path)
 
     def log_message(self, format: str, *args: Any) -> None:
         # Suppress default HTTP request logging (too noisy)
         pass
-
-    def _handle_register(self, payload: Dict[str, Any], capture_path: Path) -> None:
-        try:
-            account = self.app.account_store.create_account(
-                username=str(payload.get("username", "")),
-                password=str(payload.get("password", "")),
-                email=str(payload.get("email", "")),
-            )
-        except ValueError as exc:
-            self._send_json({"ok": False, "error": str(exc), "capture_file": str(capture_path)}, status=HTTPStatus.BAD_REQUEST)
-            return
-
-        self._send_json(
-            {
-                "ok": True,
-                "account": {
-                    "username": account.username,
-                    "email": account.email,
-                },
-                "capture_file": str(capture_path),
-            }
-        )
-
-    def _handle_login(self, payload: Dict[str, Any], capture_path: Path) -> None:
-        account = self.app.account_store.authenticate(
-            username=str(payload.get("username", "")),
-            password=str(payload.get("password", "")),
-        )
-        if not account:
-            self._send_json({"ok": False, "error": "invalid credentials", "capture_file": str(capture_path)}, status=HTTPStatus.UNAUTHORIZED)
-            return
-
-        self._send_json(
-            {
-                "ok": True,
-                "username": account.username,
-                "profile": account.profile,
-                "capture_file": str(capture_path),
-            }
-        )
-
-    def _handle_rpc(self, payload: Dict[str, Any], path_method: Optional[str], capture_path: Path) -> None:
-        method = path_method or str(payload.get("method", "")).strip()
-        params = payload.get("params", payload)
-        if not method:
-            self._send_json({"ok": False, "error": "missing method", "capture_file": str(capture_path)}, status=HTTPStatus.BAD_REQUEST)
-            return
-        if not isinstance(params, dict):
-            params = {"value": params}
-
-        result = self.app.dispatcher.dispatch(method, params)
-        result["capture_file"] = str(capture_path)
-        self._send_json(result)
 
     def _should_proxy(self, method: str, payload: Dict[str, Any]) -> bool:
         if not self.app.upstream_ip:
@@ -853,7 +807,10 @@ class RequestHandler(BaseHTTPRequestHandler):
         print(f"[PROXY] {method} -> {self.app.upstream_ip}:443{path}")
 
         try:
-            ctx = ssl.create_default_context()
+            # Transport-only context: no OS trust store, no chain verification.
+            # The leaf is verified manually in _UpstreamHTTPSConnection.connect()
+            # against the embedded Codemasters root (see tls_doctor).
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
             conn = _UpstreamHTTPSConnection(
@@ -866,6 +823,16 @@ class RequestHandler(BaseHTTPRequestHandler):
             conn.close()
         except Exception as exc:
             print(f"[PROXY] ERROR forwarding {method}: {exc}")
+            if method in RESULT_STORING_METHODS:
+                # A result that was actually driven must never be silently
+                # dropped. An honest failure makes the game show "CONNECTION
+                # FAILED" instead of believing the time was stored.
+                self._send_bytes(
+                    encode_stream({}),
+                    content_type="application/egonet-stream",
+                    extra_headers={"X-EgoNet-Result": "1"},
+                )
+                return
             result = self.app.dispatcher.dispatch(method, {})
             if isinstance(result, bytes):
                 self._send_bytes(
@@ -923,7 +890,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             if key_lower.startswith("x-egonet-") or key_lower == "content-type":
                 extra_headers[key] = value
 
-        self.send_response(HTTPStatus(resp.status) if 100 <= resp.status <= 599 else HTTPStatus.OK)
+        try:
+            status = HTTPStatus(resp.status) if 100 <= resp.status <= 599 else HTTPStatus.OK
+        except ValueError:
+            status = HTTPStatus.OK
+        self.send_response(status)
         self.send_header("Content-Type", resp_headers.get("Content-Type", resp_headers.get("content-type", "application/egonet-stream")))
         self.send_header("Content-Length", str(len(resp_body)))
         for key, value in extra_headers.items():

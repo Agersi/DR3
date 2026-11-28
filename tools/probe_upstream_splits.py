@@ -96,8 +96,6 @@ class ProbeRequestHandler(httpd.RequestHandler):
 
     _LOCAL_GET = {
         "/": httpd.HTML_HOME,
-        "/register": httpd.HTML_REGISTER,
-        "/login": httpd.HTML_LOGIN,
     }
 
     def do_GET(self) -> None:

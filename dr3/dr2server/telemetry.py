@@ -31,6 +31,7 @@ import os
 import re
 import socket
 import struct
+import sys
 import threading
 import time
 from dataclasses import dataclass, field
@@ -231,10 +232,25 @@ def ensure_game_udp_for_dr3(target_port: int, path: Optional[str] = None,
             break
 
     if own_match is not None:
+        # Normalize that one element in place (same policy as the extradata
+        # fix): a stream on DR3's port must point at loopback — the listener
+        # binds 127.0.0.1, and a non-loopback ip would send the game's copies
+        # to an address nobody local receives. Rewrite the element string,
+        # then splice it back once (no offset re-locating).
+        el = own_match.group(0)
+        action_parts = []
         if own_attrs.get("extradata") != "3":
-            new_text = _set_attr_in_match(text, own_match, "extradata", "3")
-            action = (f"game UDP was already on DR3's port :{target_port} "
-                      f"— set extradata=3")
+            el = _set_attr_in_match(el, re.match(r"<udp\b[^>]*>", el),
+                                    "extradata", "3")
+            action_parts.append("set extradata=3")
+        if own_attrs.get("ip", "127.0.0.1") not in ("127.0.0.1", "localhost"):
+            el = _set_attr_in_match(el, re.match(r"<udp\b[^>]*>", el),
+                                    "ip", "127.0.0.1")
+            action_parts.append("repointed ip to 127.0.0.1")
+        if el != own_match.group(0):
+            new_text = text[:own_match.start()] + el + text[own_match.end():]
+            action = (f"game UDP was already on DR3's port :{target_port} — "
+                      + ", ".join(action_parts))
     else:
         el = ('<udp enabled="true" extradata="3" ip="127.0.0.1" '
               f'port="{target_port}" delay="1" />')
@@ -501,8 +517,16 @@ class TelemetryListener:
             return True
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            sock.bind(("0.0.0.0", self.port))
+            if sys.platform == "win32":
+                # Exclusive bind: a second tool grabbing this UDP port fails
+                # loudly instead of silently receiving a copy of every packet
+                # (SO_REUSEADDR on Windows would allow that).
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            else:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            # Loopback only: the game is local and DR3's own <udp> stream
+            # points at 127.0.0.1 — no reason to expose this port on the LAN.
+            sock.bind(("127.0.0.1", self.port))
             sock.settimeout(0.5)
         except OSError as exc:
             self._log(

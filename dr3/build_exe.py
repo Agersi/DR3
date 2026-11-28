@@ -291,6 +291,7 @@ def build() -> None:
         run_pyinstaller("--onefile", ROOT / "dist" / OUTPUT_NAME)
 
     if IS_WIN:
+        import json as _json
         import shutil
         # Player-facing scripts also at the bundle root (next to DR3.exe) so
         # the website install page can reference DR3\scripts\ without _internal.
@@ -299,6 +300,21 @@ def build() -> None:
             if bundle_scripts.exists():
                 shutil.rmtree(bundle_scripts)
             shutil.copytree(ROOT / "scripts", bundle_scripts)
+
+        # Ownership manifest: the full file list of the bundle. dr3_app.py's
+        # _install_dir() refuses to treat a folder as an install unless this
+        # file is present and its version matches the running exe — that is
+        # what keeps update/uninstall from ever touching a foreign directory.
+        version_text = (ROOT / "VERSION").read_text().strip()
+        bundle_root = ROOT / "dist" / APP_NAME
+        files = sorted(
+            p.relative_to(bundle_root).as_posix()
+            for p in bundle_root.rglob("*") if p.is_file())
+        files.append("INSTALL_MANIFEST.json")
+        (bundle_root / "INSTALL_MANIFEST.json").write_text(
+            _json.dumps({"version": version_text, "files": files}, indent=1),
+            encoding="utf-8")
+        print(f"[build] Manifest {len(files)} files -> INSTALL_MANIFEST.json")
 
         # Zip the onedir folder with DR3/ as the top-level entry so
         # extracting gives users one folder to run from.
@@ -311,10 +327,27 @@ def build() -> None:
 
         # Version marker next to the zip: the site's /api/client-version
         # endpoint serves it for the client's update banner.
-        version_text = (ROOT / "VERSION").read_text().strip()
         (ROOT / "dist" / "VERSION.txt").write_text(
             version_text + "\n", encoding="utf-8")
         print(f"[build] Version  dist/VERSION.txt -> {version_text}")
+
+        # Release signature: Ed25519 over the zip bytes, uploaded beside the
+        # zip as DR3-windows.zip.sig. The client embeds the public key and
+        # verifies before installing — a compromised update endpoint cannot
+        # push a malicious bundle. The private key lives in gitignored
+        # tools/keys/ (see tools/generate_update_key.py) and never leaves
+        # this machine.
+        from cryptography.hazmat.primitives import serialization as _ser
+        key_path = ROOT.parent / "tools" / "keys" / "dr3_update_ed25519.key"
+        if not key_path.is_file():
+            print("[build] ERROR: no update-signing key at tools/keys/dr3_update_ed25519.key")
+            print("        run: python tools/generate_update_key.py  (then paste the")
+            print("        public key into dr3_app.py as UPDATE_PUBLIC_KEY_PEM)")
+            sys.exit(1)
+        sign_key = _ser.load_pem_private_key(key_path.read_bytes(), password=None)
+        sig = sign_key.sign(Path(zip_path).read_bytes())
+        (ROOT / "dist" / f"{ZIP_BASENAME}.zip.sig").write_bytes(sig)
+        print(f"[build] Signed   dist/{ZIP_BASENAME}.zip.sig  (Ed25519, {len(sig)} bytes)")
 
 
 if __name__ == "__main__":
