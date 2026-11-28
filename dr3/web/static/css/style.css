@@ -78,9 +78,11 @@ main { max-width: var(--page-max); width: 100%; margin: 0 auto; padding: 0 1.25r
   background: none; border: none; cursor: pointer;
   color: var(--text); text-decoration: none; font-family: var(--display);
   text-transform: uppercase; letter-spacing: 0.09em; font-size: 0.95rem;
-  padding: 0.25rem 0.1rem; border-bottom: 3px solid transparent;
+  padding: 0.25rem 0.1rem; margin-top: 0; border-radius: 0; box-shadow: none;
+  border-bottom: 3px solid transparent;
 }
-.site-nav button.nav-link:hover { color: var(--text); border-bottom-color: var(--accent); }
+.site-nav button.nav-link:hover { color: var(--text); border-bottom-color: var(--accent); transform: none; box-shadow: none; background: none; }
+.site-nav button.nav-link:active { transform: none; box-shadow: none; background: none; }
 /* The header logout form must not inherit the member-row inline-form margins. */
 .site-nav form.inline { margin: 0; }
 
