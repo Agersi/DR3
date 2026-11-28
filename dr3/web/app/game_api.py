@@ -21,23 +21,24 @@ from .auth import (
     login_required,
 )
 from .db import db
+from .clubs import club_is_visible_to
 from .events import (
+    champ_stage_layout,
     entries_for_event,
     entry_nationality,
     event_is_active,
     event_is_upcoming,
     get_all_events,
     get_event,
-    global_stage_index,
     sort_events,
     upsert_result,
     upsert_stage_state,
     validate_id,
 )
 from .models import Club, ClubMember, GameToken, StageRun, TimeTrialEntry, User, utcnow
-from .scoring import car_label, championship_points, overall_rank_key
+from .scoring import car_label, championship_points, overall_rank_key, vehicle_meta
 from .tables import RX_LOCATIONS, normalize_championship
-from dr2server.game_data import Track
+from dr2server.game_data import VEHICLES, Track, vehicle_class_id_for_label
 
 game_api_bp = Blueprint('game_api', __name__)
 
@@ -55,6 +56,144 @@ def _stable_int_id(string_id: str, base: int = 100000) -> int:
 def _client_version_file() -> Path:
     """VERSION.txt next to the served client zip (dr3/dist/)."""
     return Path(__file__).resolve().parents[2] / 'dist' / 'VERSION.txt'
+
+
+# ── Submission validation ────────────────────────────────
+
+# Well beyond any real stage run — caps stored values so a tampered local
+# server can't poison leaderboards/totals with absurd numbers.
+_STAGE_TIME_CAP_MS = 3_600_000
+_TUNING_B64_MAX_LEN = 65_536
+_DAMAGE_JSON_MAX_LEN = 16_384
+
+# Submissions are accepted inside the event window plus a small grace so
+# player clock skew (or finishing on the closing second) never drops a real
+# run, while submissions for long-finished events are still rejected.
+_SUBMIT_GRACE_S = 300
+
+# Typed per-stage fields: name -> (min, max). Unknown keys in a submission are
+# dropped, never stored — stage-entry JSON is only ever written by us.
+_STAGE_INT_FIELDS = {
+    'vehicle_id': (0, 65_535),
+    'livery_id': (0, 9_999),
+    'nationality_id': (0, 9_999),
+    'tyre_compound': (0, 63),
+    'tyres_remaining': (0, 63),
+    'spare_tyres': (0, 63),
+    'race_status': (0, 15),
+    'meters_driven': (0, 20_000_000),
+    'distance_driven': (0, 20_000_000),
+    'penalties_ms': (0, _STAGE_TIME_CAP_MS),
+    'repair_penalty_ms': (0, _STAGE_TIME_CAP_MS),
+}
+_STAGE_BOOL_FIELDS = ('using_wheel', 'using_assists', 'has_repaired')
+
+
+def _as_int(value):
+    """Lenient int parse for JSON payloads: ints, integral floats and numeric
+    strings. Anything else (bools, garbage) -> None."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _stage_position(event: dict, event_index, stage_index):
+    """Validated flat stage ordinal for a submission, or None when out of the
+    event's bounds. Leg 0 accepts any global index (the leaderboard
+    pre-persist sends the flat index with no leg); later legs must point
+    inside their own leg."""
+    layout = champ_stage_layout(event)
+    if not layout:
+        return None
+    ei = _as_int(event_index or 0)
+    si = _as_int(stage_index)
+    if ei is None or si is None or si < 0:
+        return None
+    total = sum(layout)
+    if ei <= 0:
+        return si if si < total else None
+    if ei >= len(layout) or si >= layout[ei]:
+        return None
+    return sum(layout[:ei]) + si
+
+
+def _submission_window_ok(event: dict) -> bool:
+    """Active flag + start/end window, with a clock-skew grace on both ends."""
+    now = utcnow()
+    if not event.get('active'):
+        return False
+    for key, sign in (('start_time', -1), ('end_time', 1)):
+        raw = event.get(key)
+        if not raw:
+            continue
+        try:
+            bound = datetime.fromisoformat(raw)
+        except (TypeError, ValueError):
+            continue
+        if sign < 0 and bound > now + timedelta(seconds=_SUBMIT_GRACE_S):
+            return False
+        if sign > 0 and bound < now - timedelta(seconds=_SUBMIT_GRACE_S):
+            return False
+    return True
+
+
+def _validate_stage_fields(data: dict) -> tuple[dict, str | None]:
+    """Clean the typed stage fields out of a submission. Returns (fields,
+    error); unknown keys are dropped so they can never land in stored JSON."""
+    out: dict = {}
+    for key, (lo, hi) in _STAGE_INT_FIELDS.items():
+        if key not in data or data[key] is None:
+            continue
+        v = _as_int(data[key])
+        if v is None or not lo <= v <= hi:
+            return {}, f'invalid {key}'
+        out[key] = v
+    for key in _STAGE_BOOL_FIELDS:
+        if key not in data or data[key] is None:
+            continue
+        if not isinstance(data[key], bool):
+            return {}, f'invalid {key}'
+        out[key] = data[key]
+    splits = data.get('splits')
+    if splits is not None:
+        if (not isinstance(splits, list) or len(splits) > 512
+                or any(not isinstance(x, (int, float)) or isinstance(x, bool)
+                       or not 0 < x <= 3600 for x in splits)):
+            return {}, 'invalid splits'
+        out['splits'] = list(splits)
+    tuning = data.get('tuning_setup_b64')
+    if tuning is not None:
+        if not isinstance(tuning, str) or len(tuning) > _TUNING_B64_MAX_LEN:
+            return {}, 'invalid tuning_setup_b64'
+        out['tuning_setup_b64'] = tuning
+    for key in ('comp_damage', 'vehicle_mud'):
+        val = data.get(key)
+        if val is None:
+            continue
+        if not isinstance(val, dict) or len(json.dumps(val)) > _DAMAGE_JSON_MAX_LEN:
+            return {}, f'invalid {key}'
+        out[key] = val
+    return out, None
+
+
+def _event_visible_to(event: dict, user) -> bool:
+    """Private clubs hide their events from non-members."""
+    club_id = event.get('club_id')
+    if not club_id:
+        return True
+    club = db.session.get(Club, club_id)
+    if club is None:
+        return True
+    return club_is_visible_to(club, user)
 
 
 @game_api_bp.route('/api/client-version')
@@ -243,9 +382,15 @@ def api_game_garage_set():
     garage = json.loads(user.garage_json or '{}')
     entry = garage.setdefault(str(inst_int), {})
     if data.get('tuning_id') is not None:
-        entry['tuning_id'] = int(data['tuning_id'])
+        tuning_id = _as_int(data['tuning_id'])
+        if tuning_id is None or not 0 <= tuning_id <= 1_000_000:
+            return _api_error('invalid tuning_id')
+        entry['tuning_id'] = tuning_id
     if data.get('livery_id') is not None:
-        entry['livery_id'] = int(data['livery_id'])
+        livery_id = _as_int(data['livery_id'])
+        if livery_id is None or not 0 <= livery_id <= 9_999:
+            return _api_error('invalid livery_id')
+        entry['livery_id'] = livery_id
     user.garage_json = json.dumps(garage)
     db.session.commit()
     return jsonify({'ok': True, 'stored': True, 'garage': garage})
@@ -275,27 +420,35 @@ def api_game_stage_begin():
     if event_club_id and not _is_club_member(event_club_id, user.id):
         return _api_error('not a member of this club', 403)
 
-    stage_index = int(data.get('stage_index', 0))
-    event_index = int(data.get('event_index', 0) or 0)
-    pos = global_stage_index(event, event_index, stage_index)
+    if not _submission_window_ok(event):
+        return _api_error('event is not active', 410)
+
+    pos = _stage_position(
+        event, data.get('event_index', 0), data.get('stage_index', 0))
+    if pos is None:
+        return _api_error('invalid stage position')
+
+    fields, err = _validate_stage_fields(data)
+    if err:
+        return _api_error(err)
 
     r = upsert_result(event_id, user.username)
     in_progress = json.loads(r.in_progress_json or '{}')
     in_progress[str(pos)] = {
-        'vehicle_id': data.get('vehicle_id'),
-        'livery_id': data.get('livery_id'),
-        'tyre_compound': data.get('tyre_compound', 2),
-        'tyres_remaining': data.get('tyres_remaining', 3),
-        'nationality_id': data.get('nationality_id', 0),
+        'vehicle_id': fields.get('vehicle_id'),
+        'livery_id': fields.get('livery_id'),
+        'tyre_compound': fields.get('tyre_compound', 2),
+        'tyres_remaining': fields.get('tyres_remaining', 3),
+        'nationality_id': fields.get('nationality_id', 0),
         # Parsed from the tuning blob by the game server (float at offset 210);
         # None on older clients that don't send it.
-        'spare_tyres': data.get('spare_tyres'),
+        'spare_tyres': fields.get('spare_tyres'),
     }
     r.in_progress_json = json.dumps(in_progress)
     # The tuning blob lives in club_stage_states — it used to be duplicated
     # into both JSON columns, which grew unbounded over a long championship.
     upsert_stage_state(event_id, user.username, pos,
-                       tuning_b64=data.get('tuning_setup_b64', ''))
+                       tuning_b64=fields.get('tuning_setup_b64', ''))
     db.session.commit()
     return jsonify({'ok': True})
 
@@ -526,11 +679,21 @@ def api_game_stage_complete():
     if event_club_id and not _is_club_member(event_club_id, user.id):
         return _api_error('not a member of this club', 403)
 
-    stage_index = int(data.get('stage_index', 0))
-    event_index = int(data.get('event_index', 0) or 0)
-    pos = global_stage_index(event, event_index, stage_index)
-    time_ms = int(data.get('time_ms', 0))
-    vehicle_id = data.get('vehicle_id')
+    if not _submission_window_ok(event):
+        return _api_error('event is not active', 410)
+
+    pos = _stage_position(
+        event, data.get('event_index', 0), data.get('stage_index', 0))
+    if pos is None:
+        return _api_error('invalid stage position')
+    time_ms = _as_int(data.get('time_ms', 0))
+    if time_ms is None or not 0 <= time_ms <= _STAGE_TIME_CAP_MS:
+        return _api_error('invalid time_ms')
+
+    fields, err = _validate_stage_fields(data)
+    if err:
+        return _api_error(err)
+    vehicle_id = fields.get('vehicle_id')
     mark_dnf = bool(data.get('mark_dnf'))
 
     r = upsert_result(event_id, user.username)
@@ -542,8 +705,6 @@ def api_game_stage_complete():
         stages.append({'time_ms': 0, 'penalties_ms': 0, 'submitted_at': None})
     prev_stage_entry = stages[pos] or {}
 
-    # Routing/identity fields that don't belong inside a stage entry.
-    _routing_keys = {'event_id', 'username', 'stage_index', 'event_index'}
     # Heavy per-stage payloads — stored in club_stage_states, never inside the
     # result row's JSON (kept out of every merge so legacy residue can't leak
     # back in either).
@@ -560,22 +721,25 @@ def api_game_stage_complete():
         # its max time: each gets flagged, and any without a stored pre-
         # persisted value is given the limit, so the count-based progress
         # resumes right after the last flagged stage.
-        rs = int(data.get('race_status') or 4)
+        rs = fields.get('race_status') or 4
         dnf_list = data.get('dnf_stages')
         targets: list[tuple[int, int]] = []
+        saw_target = False
         if isinstance(dnf_list, list):
             for item in dnf_list:
-                try:
-                    si = int(item.get('stage_index'))
-                    t = int(item.get('time_ms') or 0)
-                    ei = item.get('event_index')
-                    if ei is None:
-                        ei = event_index
-                    p = global_stage_index(event, int(ei), si)
-                except (TypeError, ValueError):
+                if not isinstance(item, dict):
                     continue
-                if p >= 0:
+                saw_target = True
+                ei = item.get('event_index')
+                p = _stage_position(
+                    event,
+                    ei if ei is not None else data.get('event_index', 0),
+                    item.get('stage_index'))
+                t = _as_int(item.get('time_ms')) or 0
+                if p is not None:
                     targets.append((p, max(0, t)))
+        if saw_target and not targets:
+            return _api_error('invalid dnf_stages')
         if not targets:
             # Legacy single-marker shape (older clients / unresolved plan):
             # flag the close-out stage and, when given, the wrecked one. The
@@ -584,20 +748,18 @@ def api_game_stage_complete():
             targets.append((pos, 0))
             dnf_local = data.get('dnf_stage_index')
             if dnf_local is not None:
-                try:
-                    dnf_pos = global_stage_index(event, event_index, int(dnf_local))
-                except (TypeError, ValueError):
-                    dnf_pos = -1
-                if 0 <= dnf_pos < pos:
+                dnf_pos = _stage_position(
+                    event, data.get('event_index', 0), dnf_local)
+                if dnf_pos is not None and 0 <= dnf_pos < pos:
                     targets.insert(0, (dnf_pos, 0))
         vid = None
         # A service-area retirement happens BEFORE any stage-begin capture, so
         # the entries may have no vehicle data at all — the close-out payload
         # itself carries the car the player was driving; merge it into every
         # flagged entry that lacks one (leaderboards + next-leg carry-over).
-        sent_vid = data.get('vehicle_id') or None
-        sent_liv = data.get('livery_id') or None
-        sent_nat = data.get('nationality_id') or None
+        sent_vid = fields.get('vehicle_id')
+        sent_liv = fields.get('livery_id')
+        sent_nat = fields.get('nationality_id')
         for idx, (p, t) in enumerate(targets):
             while len(stages) <= p:
                 stages.append(
@@ -639,28 +801,40 @@ def api_game_stage_complete():
             **{k: v for k, v in prev_stage_entry.items() if k not in _heavy_keys},
             **{k: v for k, v in in_progress_entry.items()
                if v is not None and k not in _heavy_keys},
-            **{k: v for k, v in data.items()
-               if v is not None and k not in _routing_keys
-               and k not in _heavy_keys},
+            **{k: v for k, v in fields.items() if k not in _heavy_keys},
         }
         stage_entry['time_ms'] = time_ms
         stage_entry['submitted_at'] = utcnow().isoformat()
-        if vehicle_id is not None:
-            stage_entry['vehicle_id'] = vehicle_id
         stage_entry.setdefault('penalties_ms', 0)
         stage_entry.setdefault('race_status', 0)
         vid = vehicle_id if vehicle_id is not None else stage_entry.get('vehicle_id')
         stages[pos] = stage_entry
         # Set-only-provided: a partial submission keeps the stored values.
-        if data.get('comp_damage') is not None:
+        if fields.get('comp_damage') is not None:
             upsert_stage_state(event_id, user.username, pos,
-                               comp_damage=data['comp_damage'])
-        if data.get('vehicle_mud') is not None:
+                               comp_damage=fields['comp_damage'])
+        if fields.get('vehicle_mud') is not None:
             upsert_stage_state(event_id, user.username, pos,
-                               vehicle_mud=data['vehicle_mud'])
-        if data.get('tuning_setup_b64') is not None:
+                               vehicle_mud=fields['vehicle_mud'])
+        if fields.get('tuning_setup_b64') is not None:
             upsert_stage_state(event_id, user.username, pos,
-                               tuning_b64=data['tuning_setup_b64'])
+                               tuning_b64=fields['tuning_setup_b64'])
+
+    # The game enforces the event's class requirement client-side (Type=1
+    # challenge requirement, same mapping the dispatcher serves); a submission
+    # claiming another class can only come from a tampered local server.
+    # Compare by VehicleClassId — the event carries the builder label, the
+    # vehicle its enum id; an unresolvable label skips the check.
+    car_class = event.get('car_class') or ''
+    if car_class and vid is not None:
+        want_id = vehicle_class_id_for_label(car_class)
+        try:
+            _meta = VEHICLES.get(int(vid))
+        except (TypeError, ValueError):
+            _meta = None
+        have_id = int(_meta['class']) if _meta else None
+        if want_id is not None and have_id is not None and want_id != have_id:
+            return _api_error('vehicle class does not match the event', 403)
 
     # The consumed stage-begin captures are merged — drop them so
     # in_progress_json holds only the currently-running stage (it used to
@@ -1049,14 +1223,25 @@ def api_game_leaderboard(event_id: str):
     except ValueError:
         return _api_error('invalid event_id')
 
-    entries = entries_for_event(event_id)
+    user = g.game_user
     event = get_event(event_id)
-    if event:
-        # Never trust stored order — always re-rank bogey-adjusted.
-        entries = sorted(entries, key=overall_rank_key(event))
-    points = championship_points(event, entries) if event else {}
+    if not event or not _event_visible_to(event, user):
+        return _api_error('event not found', 404)
+
+    entries = entries_for_event(event_id)
+    # Never trust stored order — always re-rank bogey-adjusted.
+    entries = sorted(entries, key=overall_rank_key(event))
+    points = championship_points(event, entries)
     out = []
     for i, e in enumerate(entries):
+        stages = e.get('stages', [])
+        if e['username'] != user.username:
+            # Other drivers' heavy payloads are not needed by the client —
+            # keep the response lean and the blobs private.
+            for s in stages:
+                if isinstance(s, dict):
+                    for k in ('tuning_setup_b64', 'comp_damage', 'vehicle_mud'):
+                        s.pop(k, None)
         out.append({
             'rank': i + 1,
             'username': e['username'],
@@ -1065,7 +1250,7 @@ def api_game_leaderboard(event_id: str):
             'total_time_ms': e['total_time_ms'],
             'points': points.get(e['username'], 0),
             'nationality_id': entry_nationality(e),
-            'stages': e.get('stages', []),
+            'stages': stages,
         })
     return jsonify({'ok': True, 'entries': out, 'total': len(out)})
 
@@ -1079,17 +1264,21 @@ def api_game_event(event_id: str):
     except ValueError:
         return _api_error('invalid event_id')
 
+    user = g.game_user
     event = get_event(event_id)
-    if not event:
+    if not event or not _event_visible_to(event, user):
         return _api_error('event not found', 404)
     return jsonify({'ok': True, 'event': event})
 
 
 @game_api_bp.route('/api/game/auth', methods=['POST'])
 @csrf.exempt  # type: ignore[untyped-decorator]
+@game_auth_required
 def api_game_auth():
-    """Link a Steam account to a web account (display_name/username match)."""
+    """Link a Steam account to the CALLER's own web account (the token must
+    belong to the account being linked — no cross-account writes)."""
     data = request.get_json(silent=True) or {}
+    user = g.game_user
     steam_name = str(data.get('steam_name', '')).strip()
     account_id = data.get('account_id')
 
@@ -1097,25 +1286,23 @@ def api_game_auth():
         return _api_error('steam_name is required')
 
     needle = steam_name.lower()
-    user = next(
-        (u for u in User.query.all()
-         if (u.display_name or '').lower() == needle
-         or u.username.lower() == needle),
-        None,
-    )
+    if (user.display_name or '').lower() != needle and user.username.lower() != needle:
+        return _api_error('cannot link to another account', 403)
 
-    if user:
-        if account_id is not None and user.steam_account_id != account_id:
-            user.steam_account_id = account_id
+    if account_id is not None:
+        aid = _as_int(account_id)
+        if aid is None:
+            return _api_error('invalid account_id')
+        if user.steam_account_id != aid:
+            user.steam_account_id = aid
             db.session.commit()
-        return jsonify({
-            'ok': True,
-            'linked': True,
-            'username': user.username,
-            'display_name': user.display_name,
-        })
 
-    return jsonify({'ok': True, 'linked': False, 'steam_name': steam_name})
+    return jsonify({
+        'ok': True,
+        'linked': True,
+        'username': user.username,
+        'display_name': user.display_name,
+    })
 
 
 # ── Cron ─────────────────────────────────────────────────

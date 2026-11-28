@@ -6,6 +6,7 @@ import logging
 import re
 import secrets
 import smtplib
+import ssl
 from email.message import EmailMessage
 from functools import wraps
 from html import escape as _html_escape
@@ -17,7 +18,8 @@ from .models import GameToken, User, generate_game_token, utcnow
 
 log = logging.getLogger(__name__)
 
-PBKDF2_ITERATIONS = 120_000
+PBKDF2_ITERATIONS = 600_000
+LEGACY_PBKDF2_ITERATIONS = 120_000
 
 
 def hash_password(password: str, salt_hex: str) -> str:
@@ -26,8 +28,26 @@ def hash_password(password: str, salt_hex: str) -> str:
 
 
 def check_password(password: str, user: User) -> bool:
-    dk = hashlib.pbkdf2_hmac('sha256', password.encode(), bytes.fromhex(user.salt), PBKDF2_ITERATIONS)
-    return hmac.compare_digest(dk.hex(), user.password_hash)
+    """Verify against the user's stored iteration count. On a match, legacy
+    (120k) hashes are transparently upgraded to the current cost — the caller
+    commits."""
+    iters = user.password_iterations or LEGACY_PBKDF2_ITERATIONS
+    dk = hashlib.pbkdf2_hmac('sha256', password.encode(), bytes.fromhex(user.salt), iters)
+    if not hmac.compare_digest(dk.hex(), user.password_hash):
+        return False
+    if iters != PBKDF2_ITERATIONS:
+        user.password_hash = hash_password(password, user.salt)
+        user.password_iterations = PBKDF2_ITERATIONS
+    return True
+
+
+def revoke_game_tokens(user: User) -> None:
+    """Revoke every active game token (password reset/change — assume the
+    old credentials are compromised). The caller commits."""
+    now = utcnow()
+    for t in user.tokens:
+        if t.revoked_at is None:
+            t.revoked_at = now
 
 
 def create_user(username: str, email: str, password: str, display_name: str | None = None,
@@ -38,11 +58,13 @@ def create_user(username: str, email: str, password: str, display_name: str | No
         email=email,
         password_hash=hash_password(password, salt.hex()),
         salt=salt.hex(),
+        password_iterations=PBKDF2_ITERATIONS,
         display_name=display_name or username,
         country=country,
         bio=bio,
         email_verified=email_verified,
         verify_token=None if email_verified else secrets.token_urlsafe(32),
+        verify_token_created_at=None if email_verified else utcnow(),
     )
     db.session.add(u)
     db.session.commit()
@@ -85,7 +107,8 @@ def send_email(to: str, subject: str, body: str) -> bool:
     try:
         if cfg.get('SMTP_USE_TLS', True):
             server = smtplib.SMTP(cfg['SMTP_HOST'], cfg['SMTP_PORT'], timeout=10)
-            server.starttls()
+            # Verify the SMTP server's certificate (default CAs, hostname check).
+            server.starttls(context=ssl.create_default_context())
         else:
             server = smtplib.SMTP(cfg['SMTP_HOST'], cfg['SMTP_PORT'], timeout=10)
         if cfg.get('SMTP_USER'):

@@ -147,7 +147,10 @@
       {% if session.get('user_id') %}
         <a href="{{ url_for('pages.dashboard') }}">Dashboard</a>
         <a href="{{ url_for('pages.account') }}">Account</a>
-        <a href="{{ url_for('pages.logout') }}">Log out</a>
+        <form method="post" action="{{ url_for('pages.logout') }}" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="nav-link">Log out</button>
+        </form>
       {% else %}
         <a href="{{ url_for('pages.login') }}">Log in</a>
         <a href="{{ url_for('pages.register') }}">Register</a>

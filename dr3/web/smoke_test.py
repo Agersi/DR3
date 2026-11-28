@@ -25,6 +25,12 @@ os.environ['DATABASE_URL'] = f'sqlite:///{DB_PATH}'
 os.environ['CRON_API_KEY'] = 'smoke-cron-key'
 os.environ['DR3_DISABLE_CSRF'] = '1'
 os.environ['AUTO_JOIN_CLUB_ID'] = 'club-autojoin-test'
+# The suite logs in/registers far more than the production brute-force budget
+# allows from one IP — raise the limits (the dedicated rate-limit check lowers
+# them again via app.config for its own requests).
+os.environ['DR3_RL_LOGIN_MAX'] = '100000'
+os.environ['DR3_RL_REGISTER_MAX'] = '100000'
+os.environ['DR3_RL_FORGOT_MAX'] = '100000'
 os.environ.pop('SESSION_COOKIE_SECURE', None)
 
 sys.path.insert(0, str(HERE))
@@ -86,7 +92,7 @@ def main() -> int:
     check('verify email lands on dashboard', '/dashboard' in r.request.path, r.request.path)
 
     # 3. login (fresh session)
-    client.get('/logout')
+    client.post('/logout')
     r = client.post('/login', data={'username': 'smokedriver', 'password': 'password123'},
                     follow_redirects=False)
     check('login redirects to dashboard', r.status_code == 302 and '/dashboard' in r.headers.get('Location', ''),
@@ -152,15 +158,18 @@ def main() -> int:
             'conditions_id': 5, 'conditions': 'Wet',
             'surface_deg': 'Medium', 'service_area': 'Medium',
         }
+        # Two stages so flat indices 0 AND 1 are in-bounds — W1 bounds-checks
+        # submissions against the leg layout (the old code accepted any index).
+        stage2 = dict(stage, name='Smoke Stage 2', track_id=11)
         db.session.add(Event(
             id='smoke-stage-event', schema_version=2, name='Smoke Stage Event',
             type='daily', location='Lydden Hill', car_class='Gravel 1',
             surface='Gravel', conditions='Wet',
-            stages_json=json.dumps([stage]), settings_json=json.dumps({}),
+            stages_json=json.dumps([stage, stage2]), settings_json=json.dumps({}),
             legs_json=json.dumps([{
                 'location': 'Lydden Hill', 'car_class': 'Gravel 1',
                 'surface': 'Gravel', 'duration': {'days': 0, 'hours': 1, 'mins': 0},
-                'stages': [stage],
+                'stages': [stage, stage2],
             }]),
             start_time=now - timedelta(minutes=5), end_time=now + timedelta(hours=1),
             active=True, featured=False, club_id=None, system=False,
@@ -1972,10 +1981,13 @@ def main() -> int:
     r = client.get('/api/game/time-trial-leaderboard-id?vclass=101&track=10&conditions=5&category=1', headers=headers)
     check('tt leaderboard-id endpoint removed', r.status_code == 404, f'status={r.status_code}')
 
-    # 10. game auth (steam link)
-    r = client.post('/api/game/auth', json={'steam_name': 'Smoke Driver', 'account_id': 777})
+    # 10. game auth (steam link — the token must belong to the account being
+    # linked; here smokedriver links his own display name)
+    r = client.post('/api/game/auth', headers=headers,
+                    json={'steam_name': 'Smoke Driver', 'account_id': 777})
     j = r.get_json() or {}
-    check('game auth links by display name', j.get('ok') is True and j.get('linked') is True, str(j))
+    check('game auth self-links by display name',
+          j.get('ok') is True and j.get('linked') is True, str(j))
 
     # 11. bad token rejected (both legacy and new formats)
     r = client.get('/api/game/token-test', headers={'Authorization': 'Bearer df_bad'})
@@ -4090,6 +4102,240 @@ def main() -> int:
           and '/clubs/club-autojoin-test</loc>' in sm
           and '/leaderboard</loc>' in sm and 'vehicles?vehicle=' in sm,
           f'status={r.status_code}')
+
+    # ── Phase 1 hardening (W1–W6) ────────────────────────
+    from datetime import timedelta as _td
+    from app.models import Event as _Ev, GameToken as _GT
+
+    # W6: security headers on every response.
+    r = client.get('/')
+    check('harden W6: security headers present',
+          r.headers.get('X-Content-Type-Options') == 'nosniff'
+          and r.headers.get('X-Frame-Options') == 'DENY'
+          and (r.headers.get('Strict-Transport-Security') or '').startswith('max-age=31536000'),
+          str(dict(r.headers)))
+
+    # W5: logout is POST-only.
+    r = client.get('/logout')
+    check('harden W5: GET /logout rejected (POST only)', r.status_code == 405, f'status={r.status_code}')
+    r = client.post('/logout', follow_redirects=False)
+    check('harden W5: POST /logout redirects home',
+          r.status_code == 302 and '/dashboard' not in r.headers.get('Location', ''),
+          f"loc={r.headers.get('Location')}")
+    client.post('/login', data={'username': 'smokedriver', 'password': 'password123'})
+
+    # W5: login brute-force budget (lowered for these requests only).
+    from app.ratelimit import limiter as _rl
+    saved_max = app.config['RATE_LIMIT_LOGIN_MAX']
+    app.config['RATE_LIMIT_LOGIN_MAX'] = 1
+    r = client.post('/login', data={'username': 'smokedriver', 'password': 'wrongpass999'},
+                    follow_redirects=True)
+    app.config['RATE_LIMIT_LOGIN_MAX'] = saved_max
+    check('harden W5: over-budget login blocked with wait message',
+          'Too many login attempts' in r.get_data(as_text=True), '')
+    _rlk = f'login:selftest:{time.time_ns()}'
+    check('harden W5: fixed-window limiter allows budget then blocks',
+          _rl.hit(_rlk, 2, 900) and _rl.hit(_rlk, 2, 900) and not _rl.hit(_rlk, 2, 900), '')
+
+    # W5: duplicate-email register gives a generic message (no enumeration).
+    r = client.post('/register', data={
+        'username': 'smokenewguy', 'email': 'smoke@example.com',
+        'password': 'password123', 'confirm': 'password123',
+    }, follow_redirects=True)
+    with app.app_context():
+        _dupe = User.query.filter_by(username='smokenewguy').first()
+    check('harden W5: duplicate-email register is generic, no row created',
+          'Unable to create an account' in r.get_data(as_text=True) and _dupe is None, '')
+
+    # W5: expired verify/reset links are rejected.
+    with app.app_context():
+        _vu = create_user('hardenverify', 'hardenverify@example.com', 'password123')
+        _vu.verify_token_created_at = utcnow() - _td(days=8)
+        _rt = create_user('hardenreset', 'hardenreset@example.com', 'password123',
+                          email_verified=True)
+        _rt.reset_token = 'hard-reset-token'
+        _rt.reset_token_created_at = utcnow() - _td(hours=25)
+        db.session.commit()
+        _vlink = _vu.verify_token
+    r = client.get(f'/verify_email/{_vlink}', follow_redirects=True)
+    check('harden W5: expired verify link rejected',
+          'expired' in r.get_data(as_text=True) and '/dashboard' not in r.request.path,
+          r.request.path)
+    r = client.get('/reset_password/hard-reset-token', follow_redirects=True)
+    check('harden W5: expired reset link rejected',
+          'invalid or expired' in r.get_data(as_text=True), '')
+
+    # W1/W3 fixtures: live 2-stage event, long-closed event, private club + event.
+    with app.app_context():
+        _now = utcnow()
+        _hs = {
+            'name': 'Harden Stage', 'track_id': 11, 'distance_km': 8.0,
+            'conditions_id': 5, 'conditions': 'Wet',
+            'surface_deg': 'Medium', 'service_area': 'Medium',
+        }
+        # H2 (RWD) = class id 97; vid 385 (Mini Cooper S) is H1 FWD = 101.
+        _leg = {
+            'location': 'Lydden Hill', 'car_class': 'H2 (RWD)', 'surface': 'Gravel',
+            'duration': {'days': 0, 'hours': 2, 'mins': 0}, 'stages': [_hs, dict(_hs)],
+        }
+        db.session.add(_Ev(
+            id='smoke-harden-event', schema_version=2, name='Harden Event',
+            type='daily', location='Lydden Hill', car_class='H2 (RWD)',
+            surface='Gravel', conditions='Wet',
+            stages_json=json.dumps([_hs, dict(_hs)]), settings_json=json.dumps({}),
+            legs_json=json.dumps([dict(_leg)]),
+            start_time=_now - _td(minutes=5), end_time=_now + _td(hours=1),
+            active=True, featured=False, club_id=None, system=False))
+        db.session.add(_Ev(
+            id='smoke-harden-closed', schema_version=2, name='Harden Closed',
+            type='daily', location='Lydden Hill', car_class='H2 (RWD)',
+            surface='Gravel', conditions='Wet',
+            stages_json=json.dumps([_hs]), settings_json=json.dumps({}),
+            legs_json=json.dumps([{
+                'location': 'Lydden Hill', 'car_class': 'H2 (RWD)', 'surface': 'Gravel',
+                'duration': {'days': 0, 'hours': 2, 'mins': 0}, 'stages': [_hs]}]),
+            start_time=_now - _td(hours=3), end_time=_now - _td(hours=1),
+            active=True, featured=False, club_id=None, system=False))
+        # Owned by a foreign user — smokedriver must be an outsider for the
+        # visibility gate to hide the club's events from him.
+        _owner = create_user('hardenowner', 'hardenowner@example.com', 'password123',
+                             email_verified=True)
+        db.session.add(_AjClub(id='club-private-hard', name='Private Hard',
+                               description='', visibility='private', join_policy='invite',
+                               created_by=_owner.id))
+        db.session.add(_Ev(
+            id='smoke-harden-private', schema_version=2, name='Private Hard Event',
+            type='daily', location='Lydden Hill', car_class='H2 (RWD)',
+            surface='Gravel', conditions='Wet',
+            stages_json=json.dumps([_hs]), settings_json=json.dumps({}),
+            legs_json=json.dumps([{
+                'location': 'Lydden Hill', 'car_class': 'H2 (RWD)', 'surface': 'Gravel',
+                'duration': {'days': 0, 'hours': 2, 'mins': 0}, 'stages': [_hs]}]),
+            start_time=_now - _td(minutes=5), end_time=_now + _td(hours=1),
+            active=True, featured=False, club_id='club-private-hard', system=False))
+        db.session.commit()
+
+    # W1: submission validation.
+    r = client.post('/api/game/stage-complete', headers=headers, json={
+        'event_id': 'smoke-harden-closed', 'username': 'smokedriver',
+        'stage_index': 0, 'event_index': 0, 'time_ms': 123456,
+    })
+    check('harden W1: closed-window submission rejected (410)',
+          r.status_code == 410 and (r.get_json() or {}).get('error') == 'event is not active',
+          str(r.get_json()))
+    r = client.post('/api/game/stage-begin', headers=headers, json={
+        'event_id': 'smoke-harden-event', 'stage_index': 9, 'event_index': 0,
+        'livery_id': 1, 'vehicle_id': 1,
+    })
+    check('harden W1: out-of-bounds stage position rejected',
+          r.status_code == 400 and (r.get_json() or {}).get('error') == 'invalid stage position',
+          str(r.get_json()))
+    r = client.post('/api/game/stage-complete', headers=headers, json={
+        'event_id': 'smoke-harden-event', 'username': 'smokedriver',
+        'stage_index': 0, 'event_index': 0, 'time_ms': 9_000_000_000,
+    })
+    check('harden W1: absurd time_ms rejected',
+          r.status_code == 400 and (r.get_json() or {}).get('error') == 'invalid time_ms',
+          str(r.get_json()))
+    r = client.post('/api/game/stage-complete', headers=headers, json={
+        'event_id': 'smoke-harden-event', 'username': 'smokedriver',
+        'stage_index': 0, 'event_index': 0, 'time_ms': 123456, 'tyre_compound': 'abc',
+    })
+    check('harden W1: non-numeric tyre_compound rejected',
+          r.status_code == 400 and (r.get_json() or {}).get('error') == 'invalid tyre_compound',
+          str(r.get_json()))
+    r = client.post('/api/game/stage-begin', headers=headers, json={
+        'event_id': 'smoke-harden-event', 'stage_index': 0, 'event_index': 0,
+        'livery_id': 1, 'vehicle_id': 1, 'tuning_setup_b64': 'A' * 70_000,
+    })
+    check('harden W1: oversized tuning blob rejected',
+          r.status_code == 400 and (r.get_json() or {}).get('error') == 'invalid tuning_setup_b64',
+          str(r.get_json()))
+    r = client.post('/api/game/stage-complete', headers=headers, json={
+        'event_id': 'smoke-harden-event', 'username': 'smokedriver',
+        'stage_index': 0, 'event_index': 0, 'time_ms': 123456,
+        'mark_dnf': True, 'dnf_stages': [{'stage_index': 99}],
+    })
+    check('harden W1: invalid dnf_stages targets rejected',
+          r.status_code == 400 and (r.get_json() or {}).get('error') == 'invalid dnf_stages',
+          str(r.get_json()))
+    # vid 385 = Mini Cooper S (H1 FWD) vs the event's Gravel 1 class.
+    r = client.post('/api/game/stage-complete', headers=headers, json={
+        'event_id': 'smoke-harden-event', 'username': 'smokedriver',
+        'stage_index': 0, 'event_index': 0, 'time_ms': 123456, 'vehicle_id': 385,
+    })
+    check('harden W1: wrong-class vehicle rejected (403)',
+          r.status_code == 403
+          and (r.get_json() or {}).get('error') == 'vehicle class does not match the event',
+          str(r.get_json()))
+
+    # W3: private-club events hidden from non-members.
+    r = client.get('/api/game/leaderboard/smoke-harden-private', headers=headers)
+    check('harden W3: private-club leaderboard 404 for non-members',
+          r.status_code == 404, f'status={r.status_code}')
+    r = client.get('/api/game/events/smoke-harden-private', headers=headers)
+    check('harden W3: private-club event detail 404 for non-members',
+          r.status_code == 404, f'status={r.status_code}')
+    r = client.post('/api/game/stage-begin', headers=headers, json={
+        'event_id': 'smoke-harden-private', 'stage_index': 0, 'event_index': 0,
+        'livery_id': 1, 'vehicle_id': 1,
+    })
+    check('harden W3: stage-begin on private-club event rejected (403)',
+          r.status_code == 403, f'status={r.status_code}')
+    j = client.get('/api/game/clubs', headers=headers).get_json() or {}
+    check('harden W3: foreign private club not listed for the game client',
+          'club-private-hard' not in [c.get('id') for c in (j.get('clubs') or [])], '')
+
+    # W4: Steam link only touches the caller's own account.
+    r = client.post('/api/game/auth', headers=headers, json={'steam_name': 'SomeOtherGuy'})
+    check('harden W4: linking to another account rejected (403)',
+          r.status_code == 403
+          and (r.get_json() or {}).get('error') == 'cannot link to another account',
+          str(r.get_json()))
+    r = client.post('/api/game/auth', headers=headers,
+                    json={'steam_name': 'smokedriver', 'account_id': 'abc'})
+    check('harden W4: non-numeric account_id rejected',
+          r.status_code == 400 and (r.get_json() or {}).get('error') == 'invalid account_id',
+          str(r.get_json()))
+    r = client.post('/api/game/auth', headers=headers,
+                    json={'steam_name': 'smokedriver', 'account_id': 123456789})
+    with app.app_context():
+        _su = User.query.filter_by(username='smokedriver').first()
+        _linked = _su.steam_account_id
+    check('harden W4: self-link stores the account id',
+          (r.get_json() or {}).get('ok') is True and _linked == 123456789, str(r.get_json()))
+
+    # W5: password change revokes game tokens + issues a fresh one.
+    client2 = app.test_client()
+    with app.app_context():
+        create_user('hardenpw', 'hardenpw@example.com', 'password123', email_verified=True)
+        _pu = User.query.filter_by(username='hardenpw').first()
+        db.session.add(_GT(user_id=_pu.id, token='dr3_hardpw_' + 'b' * 40))
+        db.session.commit()
+    r = client2.post('/login', data={'username': 'hardenpw', 'password': 'password123'},
+                     follow_redirects=False)
+    check('harden W5: password-change user logs in', r.status_code == 302, f'status={r.status_code}')
+    r = client2.post('/account', data={'action': 'password', 'current': 'password123',
+                                       'new': 'newpassword456'}, follow_redirects=True)
+    check('harden W5: password change accepted',
+          'Password changed' in r.get_data(as_text=True), '')
+    with app.app_context():
+        _pu = User.query.filter_by(username='hardenpw').first()
+        _toks = list(_pu.tokens)
+    _active = [t for t in _toks if t.revoked_at is None]
+    check('harden W5: old game token revoked, exactly one fresh active token',
+          any(t.token.startswith('dr3_hardpw_') and t.revoked_at is not None for t in _toks)
+          and len(_active) == 1,
+          str([(t.token[:14], t.revoked_at is not None) for t in _toks]))
+    r = client2.post('/login', data={'username': 'hardenpw', 'password': 'newpassword456'},
+                     follow_redirects=False)
+    check('harden W5: new password works after change', r.status_code == 302, f'status={r.status_code}')
+
+    # W2: penalty parsing survives garbage stored values.
+    from app.results_view import _penalty_ms
+    check('harden W2: penalty parsing ignores non-numeric values',
+          _penalty_ms({'penalties_ms': 'garbage', 'repair_penalty_ms': 123}) == 123
+          and _penalty_ms(None) == 0, '')
 
     print()
     if failures:

@@ -95,6 +95,16 @@ def create_app() -> Flask:
     db.init_app(app)
     csrf.init_app(app)
 
+    @app.after_request
+    def _security_headers(resp):
+        resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
+        resp.headers.setdefault('X-Frame-Options', 'DENY')
+        # HSTS over plain HTTP is ignored by spec; only meaningful on the HTTPS
+        # production vhost. setdefault so a view can override if ever needed.
+        resp.headers.setdefault(
+            'Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+        return resp
+
     @app.template_filter('timeago')
     def timeago_filter(value):
         dt = _parse_dt(value)
@@ -240,6 +250,7 @@ def _create_schema(db) -> None:
     _ensure_draft_permanent_column(db)
     _ensure_user_stat_columns(db)
     _ensure_user_profile_columns(db)
+    _ensure_user_token_columns(db)
     _ensure_tt_splits_column(db)
     _ensure_tt_ghost_column(db)
     _ensure_tt_vehicle_key(db)
@@ -319,6 +330,32 @@ def _ensure_user_profile_columns(db) -> None:
         'show_days_played': 'BOOLEAN NOT NULL DEFAULT 1',
         'show_seconds_played': 'BOOLEAN NOT NULL DEFAULT 1',
         'show_sessions': 'BOOLEAN NOT NULL DEFAULT 1',
+    }
+    for name, ddl in wanted.items():
+        if name in cols:
+            continue
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text(f'ALTER TABLE users ADD COLUMN {name} {ddl}'))
+        except OperationalError as e:
+            # Lost the boot race to another worker adding the same column.
+            if '1060' not in str(e) and 'duplicate column' not in str(e):
+                raise
+
+
+def _ensure_user_token_columns(db) -> None:
+    """Additive migration for databases created before the User token-expiry +
+    PBKDF2 cost columns (verify_token_created_at / reset_token_created_at /
+    password_iterations). create_all only creates missing tables, so pre-existing
+    users tables need the columns added explicitly (works on SQLite and MySQL)."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+
+    cols = {c['name'] for c in db.inspect(db.engine).get_columns('users')}
+    wanted = {
+        'verify_token_created_at': 'DATETIME NULL',
+        'reset_token_created_at': 'DATETIME NULL',
+        'password_iterations': 'INTEGER NULL',
     }
     for name, ddl in wanted.items():
         if name in cols:

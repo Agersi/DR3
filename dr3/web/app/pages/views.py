@@ -4,7 +4,10 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
+from datetime import timedelta
 from pathlib import Path
+
+from sqlalchemy.exc import IntegrityError
 
 from flask import (
     Blueprint,
@@ -22,12 +25,16 @@ from flask import (
 )
 
 from ..auth import (
+    PBKDF2_ITERATIONS,
     check_password,
     create_user,
+    issue_game_token,
     login_required,
+    revoke_game_tokens,
     send_email,
     verified_required,
 )
+from ..ratelimit import limiter
 from ..clubs import (
     auto_join_club,
     clear_cooldown,
@@ -69,6 +76,10 @@ pages_bp = Blueprint('pages', __name__)
 _USERNAME_RE = re.compile(r'^[A-Za-z0-9_]{3,32}$')
 
 
+_VERIFY_TOKEN_TTL = timedelta(days=7)
+_RESET_TOKEN_TTL = timedelta(hours=24)
+
+
 def _verify_link(user: User) -> str:
     base = current_app.config['SITE_URL'].rstrip('/')
     return f"{base}/verify_email/{user.verify_token}"
@@ -77,6 +88,13 @@ def _verify_link(user: User) -> str:
 def _reset_link(user: User) -> str:
     base = current_app.config['SITE_URL'].rstrip('/')
     return f"{base}/reset_password/{user.reset_token}"
+
+
+def _token_expired(created_at, ttl: timedelta) -> bool:
+    """Tokens issued before expiry tracking (created_at NULL) are grandfathered."""
+    if created_at is None:
+        return False
+    return utcnow() - created_at > ttl
 
 
 def _vehicle_class_groups() -> list[tuple[str, list[tuple[int, str]]]]:
@@ -352,12 +370,24 @@ def login():
     if request.method == 'POST':
         username = (request.form.get('username') or '').strip()
         password = request.form.get('password') or ''
+        ip = request.remote_addr or '?'
+        # Brute-force budget: per connection AND per targeted account.
+        login_max = current_app.config['RATE_LIMIT_LOGIN_MAX']
+        login_window = current_app.config['RATE_LIMIT_LOGIN_WINDOW_S']
+        if not limiter.hit(f'login:ip:{ip}', login_max, login_window):
+            flash('Too many login attempts — please wait a few minutes.', 'error')
+            return redirect(url_for('pages.login'))
         user = User.query.filter(
             db.func.lower(User.username) == username.lower()
         ).first()
+        if (user is not None
+                and not limiter.hit(f'login:user:{username.lower()}', login_max, login_window)):
+            flash('Too many login attempts — please wait a few minutes.', 'error')
+            return redirect(url_for('pages.login'))
         if user is None or not check_password(password, user):
             flash('Invalid username or password.', 'error')
             return redirect(url_for('pages.login'))
+        db.session.commit()  # persist any legacy password-hash upgrade
         session['user_id'] = user.id
         return redirect(_login_next())
     return render_template('login.html')
@@ -373,6 +403,13 @@ def register():
         display_name = (request.form.get('display_name') or '').strip() or username
         country = (request.form.get('country') or '').strip()
 
+        if not limiter.hit(
+                f'register:ip:{request.remote_addr or "?"}',
+                current_app.config['RATE_LIMIT_REGISTER_MAX'],
+                current_app.config['RATE_LIMIT_REGISTER_WINDOW_S']):
+            flash('Too many registrations from your connection — please try again later.', 'error')
+            return render_template('register.html', username=username, email=email)
+
         errors = []
         if not _USERNAME_RE.match(username):
             errors.append('Username must be 3-32 characters: letters, numbers, underscore.')
@@ -384,15 +421,20 @@ def register():
             errors.append('Passwords do not match.')
         if User.query.filter(db.func.lower(User.username) == username.lower()).first():
             errors.append('That username is taken.')
-        if User.query.filter_by(email=email).first():
-            errors.append('That email is already registered.')
 
         if errors:
             for e in errors:
                 flash(e, 'error')
             return render_template('register.html', username=username, email=email)
 
-        user = create_user(username, email, password, display_name=display_name, country=country)
+        # No email pre-check — the unique constraint below reports a conflict
+        # without revealing which address is already registered.
+        try:
+            user = create_user(username, email, password, display_name=display_name, country=country)
+        except IntegrityError:
+            db.session.rollback()
+            flash('Unable to create an account with that username or email.', 'error')
+            return render_template('register.html', username=username, email=email)
         auto_club = auto_join_club(user)
         send_email(
             user.email,
@@ -412,8 +454,9 @@ def register():
 @pages_bp.route('/verify_email/<token>')
 def verify_email(token: str):
     user = User.query.filter_by(verify_token=token).first()
-    if user is None or user.email_verified:
-        flash('That verification link is invalid or already used.', 'error')
+    if (user is None or user.email_verified
+            or _token_expired(user.verify_token_created_at, _VERIFY_TOKEN_TTL)):
+        flash('That verification link is invalid, expired or already used.', 'error')
         return redirect(url_for('pages.login'))
     user.email_verified = True
     user.verify_token = None
@@ -427,10 +470,18 @@ def verify_email(token: str):
 def forgot_password():
     if request.method == 'POST':
         email = (request.form.get('email') or '').strip().lower()
+        ip = request.remote_addr or '?'
+        forgot_max = current_app.config['RATE_LIMIT_FORGOT_MAX']
+        forgot_window = current_app.config['RATE_LIMIT_FORGOT_WINDOW_S']
+        if not limiter.hit(f'forgot:ip:{ip}', forgot_max, forgot_window) \
+                or not limiter.hit(f'forgot:email:{email}', forgot_max, forgot_window):
+            flash('Too many reset requests — please try again later.', 'info')
+            return redirect(url_for('pages.login'))
         user = User.query.filter_by(email=email).first()
         if user is not None:
             import secrets
             user.reset_token = secrets.token_urlsafe(32)
+            user.reset_token_created_at = utcnow()
             db.session.commit()
             send_email(
                 user.email,
@@ -445,8 +496,8 @@ def forgot_password():
 @pages_bp.route('/reset_password/<token>', methods=['GET', 'POST'])
 def reset_password(token: str):
     user = User.query.filter_by(reset_token=token).first()
-    if user is None:
-        flash('That reset link is invalid.', 'error')
+    if user is None or _token_expired(user.reset_token_created_at, _RESET_TOKEN_TTL):
+        flash('That reset link is invalid or expired.', 'error')
         return redirect(url_for('pages.login'))
     if request.method == 'POST':
         password = request.form.get('password') or ''
@@ -462,14 +513,19 @@ def reset_password(token: str):
         from ..auth import hash_password
         user.salt = salt.hex()
         user.password_hash = hash_password(password, salt.hex())
+        user.password_iterations = PBKDF2_ITERATIONS
         user.reset_token = None
+        user.reset_token_created_at = None
+        # A password reset assumes the old credentials are compromised — kill
+        # every active game token.
+        revoke_game_tokens(user)
         db.session.commit()
         flash('Password updated. Sign in with your new password.', 'success')
         return redirect(url_for('pages.login'))
     return render_template('reset_password.html')
 
 
-@pages_bp.route('/logout')
+@pages_bp.route('/logout', methods=['POST'])
 def logout():
     session.clear()
     return redirect(url_for('pages.home'))
@@ -518,12 +574,20 @@ def account():
                 salt = _s.token_bytes(16)
                 user.salt = salt.hex()
                 user.password_hash = hash_password(new, salt.hex())
+                user.password_iterations = PBKDF2_ITERATIONS
+                # A changed password invalidates every active game token — the
+                # player gets a fresh one (shown on this page after reload).
+                revoke_game_tokens(user)
+                issue_game_token(user)
                 db.session.commit()
-                flash('Password changed.', 'success')
+                session.clear()  # rotate the session cookie
+                session['user_id'] = user.id
+                flash('Password changed. Your game token was reset — copy the new one below.', 'success')
         elif action == 'resend':
             if not user.email_verified:
                 import secrets as _s
                 user.verify_token = _s.token_urlsafe(32)
+                user.verify_token_created_at = utcnow()
                 db.session.commit()
                 send_email(
                     user.email,

@@ -74,6 +74,13 @@ main { max-width: var(--page-max); width: 100%; margin: 0 auto; padding: 0 1.25r
   padding: 0.25rem 0.1rem; border-bottom: 3px solid transparent;
 }
 .site-nav a:hover { color: var(--text); border-bottom-color: var(--accent); }
+.site-nav button.nav-link {
+  background: none; border: none; cursor: pointer;
+  color: var(--text); text-decoration: none; font-family: var(--display);
+  text-transform: uppercase; letter-spacing: 0.09em; font-size: 0.95rem;
+  padding: 0.25rem 0.1rem; border-bottom: 3px solid transparent;
+}
+.site-nav button.nav-link:hover { color: var(--text); border-bottom-color: var(--accent); }
 
 .checker {
   height: 16px;

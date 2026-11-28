@@ -26,6 +26,15 @@ class User(db.Model):
     created_at: datetime = db.Column(db.DateTime, default=utcnow)
     email_verified: bool = db.Column(db.Boolean, default=False)
     verify_token: str | None = db.Column(db.String(64))
+    # When the pending email-verify / password-reset token was issued (expiry
+    # tracking; NULL on rows predating the column — grandfathered, see
+    # _token_expired in pages/views.py). Migrated additively (see
+    # _ensure_user_token_columns in app/__init__.py).
+    verify_token_created_at: datetime | None = db.Column(db.DateTime)
+    reset_token_created_at: datetime | None = db.Column(db.DateTime)
+    # PBKDF2 iteration count used for password_hash; NULL = legacy 120k,
+    # transparently upgraded on next successful login (see check_password).
+    password_iterations: int | None = db.Column(db.Integer)
     reset_token: str | None = db.Column(db.String(64))
     steam_account_id: int | None = db.Column(db.BigInteger)
     soft_currency: int = db.Column(db.Integer, default=500000)

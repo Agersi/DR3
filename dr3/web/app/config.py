@@ -43,6 +43,15 @@ class Config:
     # CSRF protection is unchanged — only the clock limit is removed.
     WTF_CSRF_TIME_LIMIT: int | None = None
 
+    # Brute-force budgets (per worker, fixed window). Overridable via env so the
+    # e2e suite can raise them; production keeps the defaults.
+    RATE_LIMIT_LOGIN_MAX: int = int(os.environ.get('DR3_RL_LOGIN_MAX', '10'))
+    RATE_LIMIT_LOGIN_WINDOW_S: int = int(os.environ.get('DR3_RL_LOGIN_WINDOW_S', '900'))
+    RATE_LIMIT_REGISTER_MAX: int = int(os.environ.get('DR3_RL_REGISTER_MAX', '5'))
+    RATE_LIMIT_REGISTER_WINDOW_S: int = int(os.environ.get('DR3_RL_REGISTER_WINDOW_S', '3600'))
+    RATE_LIMIT_FORGOT_MAX: int = int(os.environ.get('DR3_RL_FORGOT_MAX', '5'))
+    RATE_LIMIT_FORGOT_WINDOW_S: int = int(os.environ.get('DR3_RL_FORGOT_WINDOW_S', '3600'))
+
     SMTP_HOST: str = os.environ.get('EMAIL_HOST', '')
     SMTP_PORT: int = int(os.environ.get('EMAIL_PORT', '587'))
     SMTP_USER: str = os.environ.get('EMAIL_HOST_USER', '')

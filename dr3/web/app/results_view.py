@@ -498,8 +498,13 @@ def _penalty_ms(stage_entry) -> int:
     system of our own — these are just displayed."""
     if not stage_entry:
         return 0
-    return (int(stage_entry.get('penalties_ms', 0) or 0)
-            + int(stage_entry.get('repair_penalty_ms', 0) or 0))
+    total = 0
+    for key in ('penalties_ms', 'repair_penalty_ms'):
+        try:
+            total += int(stage_entry.get(key, 0) or 0)
+        except (TypeError, ValueError):
+            pass
+    return total
 
 
 def _spare_tyres(stage_entry):
