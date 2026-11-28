@@ -15,10 +15,9 @@ EMAIL_HOST_PASSWORD=__FILL_IN__
 DEFAULT_FROM_EMAIL=noreply@byagersi.com
 EOF
 cp "$TMP" "$ENV"
-# .env stays group-readable by agersi: the existing cron (runs as agersi)
-# reads CRON_API_KEY from it (cron hardening is S3, not done yet).
-chown dr3:agersi "$ENV"
-chmod 640 "$ENV"
+# .env is dr3-only (S3, 2026-11-28): cron runs as root and reads CRON_API_KEY itself.
+chown dr3:dr3 "$ENV"
+chmod 600 "$ENV"
 systemctl restart dr3-web.service
 sleep 3
 echo "service: $(systemctl is-active dr3-web.service)"

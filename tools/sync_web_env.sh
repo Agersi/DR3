@@ -10,7 +10,7 @@ done
 if [ -n "${1:-}" ]; then
   grep -q "^AUTO_JOIN_CLUB_ID=${1}$" /tmp/web.env.new || { echo "AUTOJOIN_MISMATCH: expected ${1}"; exit 1; }
 fi
-install -o agersi -g agersi -m 600 /tmp/web.env.new /opt/dr3/web/.env
+install -o dr3 -g dr3 -m 600 /tmp/web.env.new /opt/dr3/web/.env
 rm -f /tmp/web.env.new
 systemctl restart dr3-web.service
 sleep 4
