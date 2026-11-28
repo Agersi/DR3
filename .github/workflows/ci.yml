@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install locked web deps
+        run: python -m pip install --quiet -r dr3/web/requirements.txt
+
+      - name: Byte-compile all Python sources
+        run: python -m compileall -q dr3
+
+      - name: Smoke test
+        working-directory: dr3/web
+        run: python smoke_test.py
+
+      - name: Render check
+        working-directory: dr3/web
+        run: python render_check.py

@@ -6,6 +6,7 @@ tools/keys/
 # Python
 __pycache__/
 *.pyc
+.vs/
 .venv/
 dr3/.venv-build/
 dr3/web/.venv/

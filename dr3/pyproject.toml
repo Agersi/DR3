@@ -1,11 +1,14 @@
 [project]
 name = "dr3"
-version = "0.1.8"
+dynamic = ["version"]
 description = "DR3 - DiRT Rally 2.0 community server (local player server)"
 requires-python = ">=3.11"
 dependencies = [
     "cryptography>=42.0",
 ]
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
 
 [tool.setuptools]
 packages = ["dr2server"]
