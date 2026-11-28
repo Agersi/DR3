@@ -1,19 +1,24 @@
 #!/bin/bash
 set -e
 ENV=/opt/dr3/web/.env
-grep -v -E '^(EMAIL_HOST|EMAIL_PORT|EMAIL_USE_TLS|EMAIL_HOST_USER|EMAIL_HOST_PASSWORD|DEFAULT_FROM_EMAIL)=' "$ENV" > /tmp/env.new
-cat >> /tmp/env.new <<'EOF'
+TMP=$(mktemp)
+trap 'rm -f "$TMP"' EXIT
+grep -v -E '^(EMAIL_HOST|EMAIL_PORT|EMAIL_USE_TLS|EMAIL_HOST_USER|EMAIL_HOST_PASSWORD|DEFAULT_FROM_EMAIL)=' "$ENV" > "$TMP"
+# The .env loader does NOT strip inline comments — never append a trailing
+# comment to a value line (it becomes part of the value).
+cat >> "$TMP" <<'EOF'
 EMAIL_HOST=smtp-relay.brevo.com
 EMAIL_PORT=587
 EMAIL_USE_TLS=true
 EMAIL_HOST_USER=bf6417001@smtp-brevo.com
-EMAIL_HOST_PASSWORD=__FILL_IN__   # SMTP relay password — keep it out of source control
+EMAIL_HOST_PASSWORD=__FILL_IN__
 DEFAULT_FROM_EMAIL=noreply@byagersi.com
 EOF
-cp /tmp/env.new "$ENV"
-chmod 600 "$ENV"
-chown agersi:agersi "$ENV"
-rm -f /tmp/env.new
+cp "$TMP" "$ENV"
+# .env stays group-readable by agersi: the existing cron (runs as agersi)
+# reads CRON_API_KEY from it (cron hardening is S3, not done yet).
+chown dr3:agersi "$ENV"
+chmod 640 "$ENV"
 systemctl restart dr3-web.service
 sleep 3
 echo "service: $(systemctl is-active dr3-web.service)"

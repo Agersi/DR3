@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
-chmod 600 /opt/dr3/web/.env
-chown agersi:agersi /opt/dr3/web/.env
+# .env stays group-readable by agersi: the existing cron (runs as agersi)
+# reads CRON_API_KEY from it (cron hardening is S3, not done yet).
+chmod 640 /opt/dr3/web/.env
+chown dr3:agersi /opt/dr3/web/.env
 PW=$(grep '^DATABASE_URL=' /opt/dr3/web/.env | sed -E 's#.*//dr3:([^@]+)@.*#\1#')
 if [ -z "$PW" ]; then echo "PARSE_FAIL"; exit 1; fi
 sudo mysql <<SQL

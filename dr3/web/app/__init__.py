@@ -493,7 +493,12 @@ def _ensure_club_stage_states(db) -> None:
     if os.name == 'posix':
         import fcntl
 
-        lock = open('/tmp/dr3_club_stage_states_backfill.lock', 'w')
+        # Private dir under the web root (service-user-owned), not /tmp: a
+        # fixed-name lock in world-writable /tmp is unwritable after a service
+        # user switch and a symlink target for local users.
+        run_dir = Path(__file__).resolve().parent.parent / '.run'
+        run_dir.mkdir(mode=0o700, exist_ok=True)
+        lock = open(run_dir / 'club_stage_states_backfill.lock', 'w')
         fcntl.flock(lock, fcntl.LOCK_EX)
     try:
         for _attempt in range(5):
